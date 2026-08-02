@@ -257,7 +257,7 @@
     height: 14vh;
     z-index: 1;
     pointer-events: none;
-    background: linear-gradient(180deg, transparent, rgba(236, 236, 241, .05), transparent);
+    background: linear-gradient(180deg, transparent, rgba(214, 226, 168, .05), transparent);
     animation: scanroll 8s linear infinite;
   }
   @keyframes scanroll { to { transform: translateY(130vh); } }
@@ -280,12 +280,16 @@
     line-height: 1;
     letter-spacing: .06em;
     padding-left: .06em;
-    /* hollow letters: off-white stroke, no fill */
+    /* hollow letters: pale phosphor stroke, no fill */
     color: transparent;
-    -webkit-text-stroke: 2.5px #ececf1;
-    text-stroke: 2.5px #ececf1;
+    -webkit-text-stroke: 2.5px #e4e8c8;
+    text-stroke: 2.5px #e4e8c8;
     position: relative;
     text-shadow: none;
+    /* phosphor bloom: glow hugs the stroke only, since the fill is hollow */
+    filter:
+      drop-shadow(0 0 4px rgba(228, 232, 200, .85))
+      drop-shadow(0 0 14px rgba(214, 226, 168, .38));
     animation: none;
   }
   .overlay.nes .gamemenu { flex-direction: column; gap: .85rem; align-items: flex-start; }
@@ -301,16 +305,22 @@
     font-weight: 400;
     font-size: clamp(1rem, 2.4vw, 1.25rem);
     letter-spacing: .08em;
-    color: #ececf1;
+    color: #e4e8c8;
     position: relative;
     transition: none;
+    /* phosphor bloom on the menu text */
+    text-shadow:
+      0 0 5px rgba(228, 232, 200, .7),
+      0 0 14px rgba(214, 226, 168, .3);
   }
-  /* hard block highlight — the row inverts, no glow, no ease */
+  /* hard block highlight — the row inverts into a lit phosphor bar */
   .overlay.nes .gamecard:hover,
   .overlay.nes .gamecard:focus-visible {
-    background: #ececf1;
+    background: #e4e8c8;
     color: #000;
     outline: none;
+    text-shadow: none;
+    box-shadow: 0 0 14px rgba(214, 226, 168, .5);
   }
   .overlay.nes .gamecard b {
     display: inline;
@@ -336,7 +346,8 @@
     font-size: .72rem;
     letter-spacing: .5em;
     padding-left: .5em;
-    color: #6a6a74;
+    color: #7d8168;
+    text-shadow: 0 0 6px rgba(214, 226, 168, .35);
   }
   .vertag {
     position: absolute;
@@ -345,7 +356,8 @@
     font-family: Consolas, "Courier New", monospace;
     font-size: .68rem;
     letter-spacing: .3em;
-    color: #4a4a52;
+    color: #5a5e4a;
+    text-shadow: 0 0 6px rgba(214, 226, 168, .3);
   }
   @media (prefers-reduced-motion: reduce) {
     .title, .prompt { animation: none; }
