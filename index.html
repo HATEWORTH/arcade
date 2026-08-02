@@ -4026,8 +4026,11 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
         ctx.globalAlpha = 1;
       }
     }
-    // player hole cards, stack beside them
-    const py0 = H * 0.62;
+    // player hole cards, stack beside them — the hand + buttons group is
+    // centered in the space between the board and the bezel
+    const boardBottom = H / 2 + chh / 2;
+    const groupH = chh + 30 + 38;
+    const py0 = (boardBottom + (H - 18)) / 2 - groupH / 2;
     lcdText('CHIPS ' + C.chips, cx0 - 28, py0 + chh / 2 + 6, 16, LINK, 'right');
     if (HU.button) lcdText('BUTTON', cx0 - 28, py0 + chh / 2 + 26, 11, LDIM, 'right');
     for (let i = 0; i < 2; i++) lcdCard(cx0 + i * (cw + gap), py0, cw, chh, HU.pHole[i], true, false);
