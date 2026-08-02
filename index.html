@@ -1518,8 +1518,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
   T.board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
   // residue map: pieces and cleared rows leave a fading gray ghost tile behind
   let heat = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-  // targeting reticle drifts after the falling piece
-  const ret = { x: innerWidth / 2, y: innerHeight * 0.2 };
   const particles = [];
   const rowFlashes = []; // white bands that bloom over exploding lines
   let t = 0;
@@ -1772,15 +1770,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
         if (heat[r][c] > 0) heat[r][c] = Math.max(0, heat[r][c] - dt * 0.22);
       }
     }
-    // reticle eases toward the falling piece
-    if (T.cur) {
-      const { cell, bx, by } = cellPx();
-      const tx = bx + (T.cur.x + T.cur.m[0].length / 2) * cell;
-      const ty = by + (T.cur.y + T.cur.m.length / 2) * cell;
-      const k = reducedMotion ? 1 : Math.min(1, dt * 5);
-      ret.x += (tx - ret.x) * k;
-      ret.y += (ty - ret.y) * k;
-    }
     T.shake = Math.max(0, T.shake - dt * 30);
   }
 
@@ -1904,16 +1893,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
           }
         }
       }
-      // targeting reticle drifts around the falling piece
-      const rs = cell * 2.1;
-      ctx.globalAlpha = 0.55 * flick;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(ret.x - rs / 2 + 0.5, ret.y - rs / 2 + 0.5, rs, rs);
-      ctx.beginPath();
-      ctx.moveTo(ret.x - 4, ret.y + 0.5); ctx.lineTo(ret.x + 4, ret.y + 0.5);
-      ctx.moveTo(ret.x + 0.5, ret.y - 4); ctx.lineTo(ret.x + 0.5, ret.y + 4);
-      ctx.stroke();
     }
 
     // small edge tags on the panel border
