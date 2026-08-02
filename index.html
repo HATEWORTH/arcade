@@ -1984,6 +1984,19 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     ctx.lineWidth = 1;
     ctx.strokeRect(px0 + 0.5, py0 + 0.5, pw - 1, ph - 1);
 
+    // game title in the left margin, hold'em-style placement
+    if (px0 > 190) {
+      ctx.globalAlpha = 0.95 * flick;
+      ctx.fillStyle = '#679A62';
+      ctx.shadowColor = '#679A62';
+      ctx.shadowBlur = 18;
+      ctx.font = '60px AsgardianWars, "Asgardian Wars", Impact, fantasy';
+      ctx.textAlign = 'center';
+      ctx.fillText('TETRIS', px0 / 2, H * 0.25);
+      ctx.shadowBlur = 0;
+      ctx.textAlign = 'left';
+    }
+
     // faint cell grid over the play area
     ctx.globalAlpha = (0.055 + beat.kick * 0.015) * flick;
     ctx.strokeStyle = '#ffffff';
