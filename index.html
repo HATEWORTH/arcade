@@ -248,16 +248,8 @@
     -webkit-text-stroke: 2.5px #ececf1;
     text-stroke: 2.5px #ececf1;
     position: relative;
-    /* faint phosphor bloom around the outline */
-    text-shadow: 0 0 18px rgba(236, 236, 241, .35);
-    /* gentle CRT shimmer, same spirit as the in-game flicker — no hard strobe */
-    animation: crtflick 3.4s ease-in-out infinite;
-  }
-  @keyframes crtflick {
-    0%, 100% { opacity: 1; }
-    31% { opacity: .93; }
-    47% { opacity: .98; }
-    72% { opacity: .9; }
+    text-shadow: none;
+    animation: none;
   }
   .overlay.nes .gamemenu { flex-direction: column; gap: 1.15rem; align-items: flex-start; }
   .overlay.nes .gamecard,
@@ -294,7 +286,7 @@
   .overlay.nes .gamecard:hover::before,
   .overlay.nes .gamecard:focus-visible::before { opacity: 1; }
   @media (prefers-reduced-motion: reduce) {
-    .title, .prompt, .nestitle { animation: none; }
+    .title, .prompt { animation: none; }
   }
 </style>
 
