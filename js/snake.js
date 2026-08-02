@@ -161,6 +161,16 @@
   addEventListener('arcadecursorunlock', () => {
     if (window.MODE === 'snake' && S.running && !S.paused) togglePause();
   });
+  addEventListener('arcadequit', () => {
+    if (window.MODE === 'snake') quitToMenu();
+  });
+  addEventListener('arcaderestart', () => {
+    if (window.MODE !== 'snake') return;
+    S.paused = false;
+    pauseEl.classList.add('hidden');
+    A.resume();
+    start();
+  });
   function quitToMenu() {
     S.running = false; S.paused = false;
     ARCADE_LOCK.unlock();

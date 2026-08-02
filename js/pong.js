@@ -850,6 +850,16 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   addEventListener('arcadecursorunlock', () => {
     if (window.MODE === 'pong' && game.running && !game.paused) togglePause();
   });
+  addEventListener('arcadequit', () => {
+    if (window.MODE === 'pong') quitToMenu();
+  });
+  addEventListener('arcaderestart', () => {
+    if (window.MODE !== 'pong') return;
+    game.paused = false;
+    pauseOverlay.classList.add('hidden');
+    if (AC) AC.resume();
+    startGame();
+  });
   function togglePause() {
     if (!game.running) return;
     game.paused = !game.paused;

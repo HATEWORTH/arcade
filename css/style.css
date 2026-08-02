@@ -346,6 +346,61 @@
     color: #2a2e22;
     text-shadow: 2px 3px 3px rgba(42, 46, 34, .35);
   }
+  /* pause menu: the splash aesthetic flipped to off-white on dark */
+  .overlay.pausemenu { gap: 2.2rem; font-family: Consolas, "Courier New", monospace; }
+  .pausetitle {
+    margin: 0;
+    font-family: "Gotham Ultra", "Arial Black", "Segoe UI Black", Impact, sans-serif;
+    font-weight: 900;
+    font-size: clamp(3rem, 11vw, 7rem);
+    line-height: 1;
+    letter-spacing: .06em;
+    padding-left: .06em;
+    color: #ececf1;
+    text-shadow: 3px 6px 4px rgba(0, 0, 0, .5);
+  }
+  .overlay.pausemenu .gamemenu { flex-direction: column; gap: .85rem; }
+  .overlay.pausemenu .gamecard,
+  .overlay.pausemenu .gamecard:hover,
+  .overlay.pausemenu .gamecard:focus-visible {
+    border: none;
+    padding: .1em 1.6em;
+    transform: none;
+    font-family: Consolas, "Courier New", monospace;
+    font-weight: 400;
+    font-size: calc(.9rem + 2px);
+    letter-spacing: .08em;
+    background: #ececf1;
+    color: #050507;
+    position: relative;
+    transition: none;
+    text-shadow: none;
+    box-shadow: 3px 5px 4px rgba(0, 0, 0, .45);
+  }
+  .overlay.pausemenu .gamecard:hover,
+  .overlay.pausemenu .gamecard:focus-visible {
+    background: #050507;
+    color: #ececf1;
+    outline: none;
+    box-shadow: 3px 5px 4px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(236, 236, 241, .7);
+  }
+  .overlay.pausemenu .gamecard b {
+    display: inline;
+    font-weight: 700;
+    font-size: inherit;
+    letter-spacing: inherit;
+    margin: 0;
+    color: inherit;
+    text-shadow: none;
+  }
+  .overlay.pausemenu .gamecard::before {
+    content: '*';
+    position: absolute;
+    left: .5em;
+    color: inherit;
+  }
+  .pausesub { color: #9a9aa5; }
+
   .lcdsub {
     color: #565b48;
     text-shadow: 1px 2px 2px rgba(42, 46, 34, .25);

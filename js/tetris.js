@@ -232,6 +232,16 @@
   addEventListener('arcadecursorunlock', () => {
     if (window.MODE === 'tetris' && T.running && !T.paused) togglePause();
   });
+  addEventListener('arcadequit', () => {
+    if (window.MODE === 'tetris') quitToMenu();
+  });
+  addEventListener('arcaderestart', () => {
+    if (window.MODE !== 'tetris') return;
+    T.paused = false;
+    pauseEl.classList.add('hidden');
+    A.resume();
+    start();
+  });
   function quitToMenu() {
     T.running = false; T.paused = false;
     ARCADE_LOCK.unlock();

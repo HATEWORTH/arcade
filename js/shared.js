@@ -41,6 +41,17 @@ window.ARCADE_LOCK = (() => {
   return { cur, lock, unlock, locked };
 })();
 
+// ---- pause menu buttons: dispatch to whichever game is active -----------
+// pointerdown is swallowed so the games' "click resumes" handlers don't
+// fire when the click was meant for a button
+addEventListener('DOMContentLoaded', () => {
+  for (const [id, evt] of [['pauseMenuBtn', 'arcadequit'], ['pauseRestartBtn', 'arcaderestart']]) {
+    const btn = document.getElementById(id);
+    btn.addEventListener('pointerdown', e => e.stopPropagation());
+    btn.addEventListener('click', () => dispatchEvent(new CustomEvent(evt)));
+  }
+});
+
 // ---- shared CRT bezel: the rounded tube frame every screen sits behind --
 window.ARCADE_FX = {
   bezel(ctx) {

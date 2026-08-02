@@ -230,6 +230,16 @@
   addEventListener('arcadecursorunlock', () => {
     if (window.MODE === 'geo' && G.running && !G.paused) togglePause();
   });
+  addEventListener('arcadequit', () => {
+    if (window.MODE === 'geo') quitToMenu();
+  });
+  addEventListener('arcaderestart', () => {
+    if (window.MODE !== 'geo') return;
+    G.paused = false;
+    pauseEl.classList.add('hidden');
+    A.resume();
+    start();
+  });
   function die() {
     G.running = false; G.firing = false;
     ARCADE_LOCK.unlock();

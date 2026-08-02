@@ -41,9 +41,13 @@
   <p class="prompt" id="startPrompt">Click to start</p>
 </div>
 
-<div class="overlay hidden" id="pauseOverlay">
-  <p class="verdict win">PAUSED</p>
-  <p class="sub">Esc or click to resume &middot; Q quits to the menu &middot; M mutes music</p>
+<div class="overlay pausemenu hidden" id="pauseOverlay">
+  <h1 class="pausetitle">PAUSE</h1>
+  <div class="gamemenu">
+    <button class="gamecard" id="pauseMenuBtn"><b>MAIN MENU</b></button>
+    <button class="gamecard" id="pauseRestartBtn"><b>RESTART</b></button>
+  </div>
+  <p class="sub pausesub">Esc or click resumes &middot; M mutes music</p>
 </div>
 
 <div class="overlay strategy hidden" id="tetrisStart">
