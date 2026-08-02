@@ -1966,8 +1966,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
   };
   // residue map: cells the snake vacates leave a fading gray ghost tile
   let heat = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-  // targeting reticle drifts after the food signal
-  const ret = { x: innerWidth / 2, y: innerHeight / 2 };
   const particles = [];
   const cellFlashes = []; // white blooms over eaten signals
   let t = 0;
@@ -2152,15 +2150,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
         if (heat[r][c] > 0) heat[r][c] = Math.max(0, heat[r][c] - dt * 0.22);
       }
     }
-    // reticle eases toward the food signal
-    if (S.food) {
-      const { cell, bx, by } = cellPx();
-      const tx = bx + (S.food.x + 0.5) * cell;
-      const ty = by + (S.food.y + 0.5) * cell;
-      const k = reducedMotion ? 1 : Math.min(1, dt * 5);
-      ret.x += (tx - ret.x) * k;
-      ret.y += (ty - ret.y) * k;
-    }
     S.shake = Math.max(0, S.shake - dt * 30);
   }
 
@@ -2260,16 +2249,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     if (S.food && S.running) {
       const pulse = 0.72 + 0.14 * Math.sin(t * 4) + beat.arp * 0.1;
       drawCell(bx + S.food.x * cell, by + S.food.y * cell, cell, PINK, pulse * flick, 14 + beat.arp * 8);
-      // targeting reticle drifts around the signal
-      const rs = cell * 2.1;
-      ctx.globalAlpha = 0.55 * flick;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(ret.x - rs / 2 + 0.5, ret.y - rs / 2 + 0.5, rs, rs);
-      ctx.beginPath();
-      ctx.moveTo(ret.x - 4, ret.y + 0.5); ctx.lineTo(ret.x + 4, ret.y + 0.5);
-      ctx.moveTo(ret.x + 0.5, ret.y - 4); ctx.lineTo(ret.x + 0.5, ret.y + 4);
-      ctx.stroke();
     }
 
     // catch flash: a white bloom over the eaten signal cell
