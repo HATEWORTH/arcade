@@ -47,19 +47,13 @@
 
   // ---- LCD skin (matches the splash screen) for the poker table ---------
   const LBG = '#c3c8b2', LCARD = '#cfd4be', LINK = '#2a2e22', LDIM = '#565b48';
-  function lcdShadow(on) {
-    if (on) {
-      ctx.shadowColor = 'rgba(42, 46, 34, .38)';
-      ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 5; ctx.shadowBlur = 3;
-    } else {
-      ctx.shadowColor = 'transparent';
-      ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0; ctx.shadowBlur = 0;
-    }
+  // drop shadows retired — this now just guarantees a clean shadow state
+  function lcdShadow() {
+    ctx.shadowColor = 'transparent';
+    ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0; ctx.shadowBlur = 0;
   }
   function lcdText(txt, x, y, size, color, align) {
     ctx.globalAlpha = 1;
-    ctx.shadowColor = 'rgba(42, 46, 34, .28)';
-    ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3; ctx.shadowBlur = 2;
     ctx.fillStyle = color || LINK;
     ctx.font = '600 ' + size + 'px ' + MONO;
     ctx.textAlign = align || 'left';
@@ -428,8 +422,6 @@
     const cw = Math.min(84, W / 11), chh = cw * 1.42, gap = cw * 0.22;
     // big bold title in the old guide slot on the left
     const tg = refGeom();
-    ctx.shadowColor = 'rgba(42, 46, 34, .3)';
-    ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 5; ctx.shadowBlur = 3;
     ctx.fillStyle = LINK;
     ctx.font = '800 60px ' + MONO;
     ctx.textAlign = 'center';
@@ -559,8 +551,6 @@
     const cw = Math.min(92, W / 9), chh = cw * 1.45, gap = cw * 0.28;
     // big bold title in the left slot, like the poker table
     const tg = refGeom();
-    ctx.shadowColor = 'rgba(42, 46, 34, .3)';
-    ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 5; ctx.shadowBlur = 3;
     ctx.fillStyle = LINK;
     ctx.font = '800 44px ' + MONO;
     ctx.textAlign = 'center';
@@ -846,7 +836,6 @@
       g.addColorStop(1, 'rgba(46, 50, 38, 0.24)');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
-      ARCADE_FX.grain(ctx);
       if (C.view === 'poker' && HU.state === 'cpu' && performance.now() >= HU.at) cpuAct();
       if (C.view === 'poker') drawPoker();
       else if (C.view === 'blackjack') drawBlackjack();

@@ -271,8 +271,6 @@
     color: #2a2e22;
     position: relative;
     text-shadow: none;
-    /* the segment floats above the backing layer and casts a fuzzy shadow */
-    filter: drop-shadow(3px 5px 3px rgba(42, 46, 34, .4));
     animation: none;
   }
   .overlay.nes .gamemenu { flex-direction: column; gap: .85rem; align-items: center; }
@@ -292,7 +290,7 @@
     position: relative;
     transition: none;
     text-shadow: none;
-    box-shadow: 3px 5px 4px rgba(42, 46, 34, .35);
+    box-shadow: none;
   }
   /* hover inverts the block: screen-colored box, dark ink text */
   .overlay.nes .gamecard:hover,
@@ -332,7 +330,6 @@
     padding-left: .5em;
     /* solid heavy label in the dark ink */
     color: #2a2e22;
-    text-shadow: 2px 3px 3px rgba(42, 46, 34, .35);
   }
   /* Game & Watch style demo rally: dark segments snapping between
      fixed positions, same ink and floating shadow as the text */
@@ -344,7 +341,6 @@
     letter-spacing: 0;
     white-space: pre;
     color: #2a2e22;
-    text-shadow: 2px 3px 3px rgba(42, 46, 34, .35);
   }
   /* pause menu: the splash aesthetic flipped to off-white on dark */
   .overlay.pausemenu { gap: 2.2rem; font-family: Consolas, "Courier New", monospace; }
@@ -357,7 +353,6 @@
     letter-spacing: .06em;
     padding-left: .06em;
     color: #ececf1;
-    text-shadow: 3px 6px 4px rgba(0, 0, 0, .5);
   }
   .overlay.pausemenu .gamemenu { flex-direction: column; gap: .85rem; }
   .overlay.pausemenu .gamecard,
@@ -375,14 +370,14 @@
     position: relative;
     transition: none;
     text-shadow: none;
-    box-shadow: 3px 5px 4px rgba(0, 0, 0, .45);
+    box-shadow: none;
   }
   .overlay.pausemenu .gamecard:hover,
   .overlay.pausemenu .gamecard:focus-visible {
     background: #050507;
     color: #ececf1;
     outline: none;
-    box-shadow: 3px 5px 4px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(236, 236, 241, .7);
+    box-shadow: inset 0 0 0 1px rgba(236, 236, 241, .7);
   }
   .overlay.pausemenu .gamecard b {
     display: inline;
@@ -403,7 +398,6 @@
 
   .lcdsub {
     color: #565b48;
-    text-shadow: 1px 2px 2px rgba(42, 46, 34, .25);
   }
   .vertag {
     position: absolute;
@@ -413,7 +407,6 @@
     font-size: .68rem;
     letter-spacing: .3em;
     color: #565b48;
-    text-shadow: 1px 2px 2px rgba(42, 46, 34, .25);
   }
   @media (prefers-reduced-motion: reduce) {
     .title, .prompt { animation: none; }
