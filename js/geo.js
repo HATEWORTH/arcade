@@ -250,6 +250,7 @@
   function quitToMenu() {
     G.running = false; G.paused = false;
     ARCADE_LOCK.unlock();
+    A.setStyle('neon');
     A.resume();
     pauseEl.classList.add('hidden');
     endEl.classList.add('hidden');
@@ -259,6 +260,7 @@
 
   document.getElementById('pickGeo').addEventListener('click', () => {
     window.MODE = 'geo';
+    A.setStyle('geo');
     launchEl.classList.add('hidden');
     endEl.classList.add('hidden');
     prime();

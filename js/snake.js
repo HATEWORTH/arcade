@@ -164,6 +164,7 @@
   function quitToMenu() {
     S.running = false; S.paused = false;
     ARCADE_LOCK.unlock();
+    A.setStyle('neon');
     A.resume();
     pauseEl.classList.add('hidden');
     startEl.classList.add('hidden');
@@ -174,6 +175,7 @@
 
   document.getElementById('pickSnake').addEventListener('click', () => {
     window.MODE = 'snake';
+    A.setStyle('snake');
     launchEl.classList.add('hidden');
     endEl.classList.add('hidden');
     prime();
