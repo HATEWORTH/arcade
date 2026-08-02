@@ -365,6 +365,49 @@
 
 <div id="stage"><canvas id="c"></canvas></div>
 
+<script>
+'use strict';
+// ---- shared cursor lock: games capture the pointer, Esc releases it -----
+// While locked, the OS cursor is hidden and events only carry movement
+// deltas, so a virtual cursor position is tracked here for games to read.
+window.ARCADE_LOCK = (() => {
+  const canvas = document.getElementById('c');
+  const cur = { x: innerWidth / 2, y: innerHeight / 2 };
+  let wantLock = false;
+  const locked = () => document.pointerLockElement === canvas;
+  function lock() {
+    wantLock = true;
+    if (!locked()) {
+      try {
+        const p = canvas.requestPointerLock();
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) { /* not available; game stays playable unlocked */ }
+    }
+  }
+  function unlock() {
+    wantLock = false;
+    if (locked()) document.exitPointerLock();
+  }
+  addEventListener('pointermove', e => {
+    if (locked()) {
+      cur.x = Math.max(0, Math.min(innerWidth, cur.x + e.movementX));
+      cur.y = Math.max(0, Math.min(innerHeight, cur.y + e.movementY));
+    } else {
+      cur.x = e.clientX; cur.y = e.clientY;
+    }
+  });
+  // Esc is consumed by the browser when it releases the lock, so games
+  // listen for this event to pause themselves when the cursor escapes
+  document.addEventListener('pointerlockchange', () => {
+    if (!locked() && wantLock) {
+      wantLock = false;
+      dispatchEvent(new CustomEvent('arcadecursorunlock'));
+    }
+  });
+  return { cur, lock, unlock, locked };
+})();
+</script>
+
 <div class="hud hidden" id="pongHud">
   <div class="score you"><div class="bar" id="hpYou"></div><span class="tag">You</span></div>
   <div class="score cpu"><div class="bar" id="hpCpu"></div><span class="tag">CPU</span></div>
@@ -881,7 +924,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     pointer.x = (clientX - cx) / viewScale;
     pointer.y = (clientY - cy) / viewScale;
   }
-  addEventListener('pointermove', e => onMove(e.clientX, e.clientY));
+  addEventListener('pointermove', () => onMove(ARCADE_LOCK.cur.x, ARCADE_LOCK.cur.y));
   addEventListener('touchmove', e => {
     if (e.touches[0]) onMove(e.touches[0].clientX, e.touches[0].clientY);
     e.preventDefault();
@@ -892,19 +935,25 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     startMusic();
     resetMatch();
     game.running = true;
+    ARCADE_LOCK.lock();
     startOverlay.classList.add('hidden');
     endOverlay.classList.add('hidden');
   }
+  addEventListener('arcadecursorunlock', () => {
+    if (window.MODE === 'pong' && game.running && !game.paused) togglePause();
+  });
   function togglePause() {
     if (!game.running) return;
     game.paused = !game.paused;
     player.charging = false;
+    if (game.paused) ARCADE_LOCK.unlock(); else ARCADE_LOCK.lock();
     pauseOverlay.classList.toggle('hidden', !game.paused);
     if (AC) { if (game.paused) AC.suspend(); else AC.resume(); }
   }
   function quitToMenu() {
     game.paused = false;
     game.running = false;
+    ARCADE_LOCK.unlock();
     if (AC) AC.resume();
     pauseOverlay.classList.add('hidden');
     startOverlay.classList.add('hidden');
@@ -925,7 +974,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   });
   addEventListener('pointerdown', e => {
     if (window.MODE !== 'pong') return;
-    onMove(e.clientX, e.clientY);
+    onMove(ARCADE_LOCK.cur.x, ARCADE_LOCK.cur.y);
     if (e.button === 2) {           // right click launches a held serve
       if (game.running && !game.paused) launchServe();
       return;
@@ -967,6 +1016,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   // ---- scoring -----------------------------------------------------------
   function endMatch(youWon) {
     game.running = false;
+    ARCADE_LOCK.unlock();
     verdictEl.textContent = youWon ? 'YOU WIN' : 'GAME OVER';
     verdictEl.className = 'verdict ' + (youWon ? 'win' : 'lose');
     finalScoreEl.innerHTML = 'Core integrity ' + game.hpYou + ' &ndash; ' + game.hpCpu;
@@ -1746,6 +1796,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
 
   function gameOver() {
     T.running = false;
+    ARCADE_LOCK.unlock();
     scoreLineEl.innerHTML = 'Score ' + T.score + ' &middot; ' + T.lines + ' lines &middot; level ' + T.level;
     A.bleep(220, 0.25, 'sawtooth', 0.06);
     setTimeout(() => A.bleep(150, 0.35, 'sawtooth', 0.06), 160);
@@ -1765,6 +1816,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   function start() {
     prime();
     T.running = true;
+    ARCADE_LOCK.lock();
     A.audio(); A.startMusic();
     startEl.classList.add('hidden');
     endEl.classList.add('hidden');
@@ -1772,11 +1824,16 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   function togglePause() {
     if (!T.running) return;
     T.paused = !T.paused;
+    if (T.paused) ARCADE_LOCK.unlock(); else ARCADE_LOCK.lock();
     pauseEl.classList.toggle('hidden', !T.paused);
     if (T.paused) A.suspend(); else A.resume();
   }
+  addEventListener('arcadecursorunlock', () => {
+    if (window.MODE === 'tetris' && T.running && !T.paused) togglePause();
+  });
   function quitToMenu() {
     T.running = false; T.paused = false;
+    ARCADE_LOCK.unlock();
     A.resume();
     pauseEl.classList.add('hidden');
     startEl.classList.add('hidden');
@@ -2178,6 +2235,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
 
   function die() {
     S.running = false;
+    ARCADE_LOCK.unlock();
     const { cell, bx, by } = cellPx();
     // the whole body shatters
     for (const s of S.body) {
@@ -2208,6 +2266,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   function start() {
     prime();
     S.running = true;
+    ARCADE_LOCK.lock();
     A.audio(); A.startMusic();
     startEl.classList.add('hidden');
     endEl.classList.add('hidden');
@@ -2215,11 +2274,16 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   function togglePause() {
     if (!S.running) return;
     S.paused = !S.paused;
+    if (S.paused) ARCADE_LOCK.unlock(); else ARCADE_LOCK.lock();
     pauseEl.classList.toggle('hidden', !S.paused);
     if (S.paused) A.suspend(); else A.resume();
   }
+  addEventListener('arcadecursorunlock', () => {
+    if (window.MODE === 'snake' && S.running && !S.paused) togglePause();
+  });
   function quitToMenu() {
     S.running = false; S.paused = false;
+    ARCADE_LOCK.unlock();
     A.resume();
     pauseEl.classList.add('hidden');
     startEl.classList.add('hidden');
@@ -2719,11 +2783,17 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   function start() {
     prime();
     G.running = true;
+    ARCADE_LOCK.lock();
+    G.aim.x = ARCADE_LOCK.cur.x; G.aim.y = ARCADE_LOCK.cur.y;
     A.audio(); A.startMusic();
     endEl.classList.add('hidden');
   }
+  addEventListener('arcadecursorunlock', () => {
+    if (window.MODE === 'geo' && G.running && !G.paused) togglePause();
+  });
   function die() {
     G.running = false; G.firing = false;
+    ARCADE_LOCK.unlock();
     playerBurst(G.ship.x, G.ship.y);
     gridExplosive(120, G.ship.x, G.ship.y, 300);
     G.shake = 16;
@@ -2736,11 +2806,13 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   function togglePause() {
     if (!G.running) return;
     G.paused = !G.paused;
+    if (G.paused) ARCADE_LOCK.unlock(); else ARCADE_LOCK.lock();
     pauseEl.classList.toggle('hidden', !G.paused);
     if (G.paused) A.suspend(); else A.resume();
   }
   function quitToMenu() {
     G.running = false; G.paused = false;
+    ARCADE_LOCK.unlock();
     A.resume();
     pauseEl.classList.add('hidden');
     endEl.classList.add('hidden');
@@ -2764,8 +2836,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) e.preventDefault();
   });
   addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
-  addEventListener('pointermove', e => {
-    if (window.MODE === 'geo') { G.aim.x = e.clientX; G.aim.y = e.clientY; }
+  addEventListener('pointermove', () => {
+    if (window.MODE === 'geo') { G.aim.x = ARCADE_LOCK.cur.x; G.aim.y = ARCADE_LOCK.cur.y; }
   });
   addEventListener('pointerdown', e => {
     if (window.MODE !== 'geo') return;
