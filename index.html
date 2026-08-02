@@ -283,8 +283,11 @@
     text-shadow: none;
     box-shadow: 3px 5px 4px rgba(42, 46, 34, .35);
   }
+  /* hover inverts the block: screen-colored box, dark ink text */
   .overlay.nes .gamecard:hover,
   .overlay.nes .gamecard:focus-visible {
+    background: #c3c8b2;
+    color: #2a2e22;
     outline: none;
   }
   .overlay.nes .gamecard b {
@@ -306,10 +309,6 @@
   }
   .overlay.nes .gamecard:hover::before,
   .overlay.nes .gamecard:focus-visible::before { opacity: 1; }
-  /* muted RGB inks fill the boxes on hover */
-  .overlay.nes #pickPong:hover, .overlay.nes #pickPong:focus-visible { background: #a4372e; color: #c3c8b2; }
-  .overlay.nes #pickTetris:hover, .overlay.nes #pickTetris:focus-visible { background: #2f4f8f; color: #c3c8b2; }
-  .overlay.nes #pickSnake:hover, .overlay.nes #pickSnake:focus-visible { background: #3c7a41; color: #c3c8b2; }
   .menublock {
     display: flex;
     flex-direction: column;
