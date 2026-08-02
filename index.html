@@ -2218,13 +2218,10 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     const px0 = bx - pad, py0 = by - pad;
     const pw = bw + pad * 2, ph = bh + pad + STATS_H;
 
-    // panel card: barely-lighter fill with a hairline border
+    // panel card: barely-lighter fill
     ctx.globalAlpha = 1;
     ctx.fillStyle = 'rgba(255,255,255,0.025)';
     ctx.fillRect(px0, py0, pw, ph);
-    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(px0 + 0.5, py0 + 0.5, pw - 1, ph - 1);
 
     // faint cell grid over the play area
     ctx.globalAlpha = (0.055 + beat.kick * 0.015) * flick;
@@ -2284,13 +2281,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
       ctx.fillRect(bx + cf.x * cell - cell, by + cf.y * cell, cell * 3, cell);
       ctx.shadowBlur = 0;
     }
-
-    // small edge tags on the panel border
-    ctx.globalAlpha = 0.45;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(px0 - 4, by + bh * 0.16, 9, 4);
-    ctx.fillRect(px0 + pw - 5, by + bh * 0.52, 9, 4);
-    ctx.fillRect(px0 - 4, by + bh * 0.78, 9, 4);
 
     // particles: muted line shards
     ctx.lineWidth = 1.4;
