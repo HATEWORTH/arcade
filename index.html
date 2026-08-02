@@ -239,6 +239,16 @@
     gap: 2.6rem;
     font-family: "Courier New", Courier, monospace;
   }
+  /* CRT bezel: black edge with rounded tube corners masking the screen */
+  .overlay.nes::before {
+    content: '';
+    position: absolute;
+    inset: 10px;
+    border-radius: 2.4rem;
+    box-shadow: 0 0 0 120vmax #000;
+    z-index: 3;
+    pointer-events: none;
+  }
   /* gentle darkening at the screen edges */
   .overlay.nes::after {
     content: '';
