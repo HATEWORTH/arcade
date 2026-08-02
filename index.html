@@ -4002,9 +4002,9 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   function drawPoker() {
     const W = innerWidth, H = innerHeight;
     const cw = Math.min(84, W / 11), chh = cw * 1.42, gap = cw * 0.22;
-    lcdText("HOLD'EM", W / 2, 42, 20, LINK, 'center');
+    lcdText("HOLD'EM", W / 2, 72, 20, LINK, 'center');
     // cpu hole cards, stack beside them
-    const cy0 = H * 0.12;
+    const cy0 = H * 0.17;
     const cx0 = W / 2 - (2 * cw + gap) / 2;
     lcdText('CPU ' + HU.cpu, cx0 - 28, cy0 + chh / 2 + 6, 16, LINK, 'right');
     for (let i = 0; i < 2; i++) lcdCard(cx0 + i * (cw + gap), cy0, cw, chh, HU.cHole[i], HU.showCpu, false);
