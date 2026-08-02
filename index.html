@@ -390,8 +390,9 @@ window.ARCADE_LOCK = (() => {
   }
   addEventListener('pointermove', e => {
     if (locked()) {
-      cur.x = Math.max(0, Math.min(innerWidth, cur.x + e.movementX));
-      cur.y = Math.max(0, Math.min(innerHeight, cur.y + e.movementY));
+      const SENS = 0.6; // locked-cursor sensitivity
+      cur.x = Math.max(0, Math.min(innerWidth, cur.x + e.movementX * SENS));
+      cur.y = Math.max(0, Math.min(innerHeight, cur.y + e.movementY * SENS));
     } else {
       cur.x = e.clientX; cur.y = e.clientY;
     }
