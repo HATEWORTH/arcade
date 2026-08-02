@@ -245,7 +245,10 @@
     position: absolute;
     inset: 18px;
     border-radius: 2.4rem;
-    box-shadow: 0 0 0 120vmax #000;
+    /* frame in the same dark ink, fading softly onto the screen */
+    box-shadow:
+      0 0 0 120vmax #14160f,
+      inset 0 0 26px 6px rgba(20, 22, 15, .5);
     z-index: 3;
     pointer-events: none;
   }
