@@ -2486,22 +2486,86 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
 
 <script>
 'use strict';
-// ---- splash LCD demo: a tiny pong rally in snapping segment steps -------
+// ---- splash LCD demo: mini vignette of whichever game is hovered --------
 (() => {
   const el = document.getElementById('lcdDemo');
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const W = 19; // ball travel cells between the paddles
-  const frame = pos => '█' + ' '.repeat(pos) + '■' + ' '.repeat(W - 1 - pos) + '█';
-  if (reducedMotion) { el.textContent = frame(9); return; }
-  // ping-pong sequence: 0..W-1 then back, one snap per tick
-  const seq = [];
-  for (let i = 0; i < W; i++) seq.push(i);
-  for (let i = W - 2; i > 0; i--) seq.push(i);
-  let f = 0;
-  setInterval(() => {
-    el.textContent = frame(seq[f % seq.length]);
-    f++;
-  }, 220);
+  const W = 21, R = 3; // segment grid: 3 rows tall, fixed so nothing shifts
+
+  const blank = () => Array.from({ length: R }, () => Array(W).fill(' '));
+  const show = g => { el.textContent = g.map(r => r.join('')).join('\n'); };
+
+  // pong: ball ricochets between two tracking paddles
+  const pong = { x: 2, y: 1, vx: 1, vy: 1 };
+  function pongTick() {
+    pong.x += pong.vx; pong.y += pong.vy;
+    if (pong.y <= 0 || pong.y >= R - 1) pong.vy *= -1, pong.y = Math.max(0, Math.min(R - 1, pong.y));
+    if (pong.x <= 1 || pong.x >= W - 2) pong.vx *= -1, pong.x = Math.max(1, Math.min(W - 2, pong.x));
+    const g = blank();
+    g[pong.y][0] = '█'; g[pong.y][W - 1] = '█';
+    g[pong.y][pong.x] = '■';
+    return g;
+  }
+
+  // tetris: pieces drop in steps and stack along the bottom, then clear
+  const tet = { cols: [3, 10, 16, 6, 13, 1, 18, 8], i: 0, row: 0, stack: [], flash: 0 };
+  function tetTick() {
+    const g = blank();
+    if (tet.flash > 0) {
+      tet.flash--;
+      if (tet.flash === 0) { tet.stack = []; tet.i = 0; tet.row = 0; }
+      if (tet.flash % 2) for (let c = 0; c < W; c++) g[R - 1][c] = '█';
+      return g;
+    }
+    for (const c of tet.stack) g[R - 1][c] = '█';
+    const col = tet.cols[tet.i];
+    if (tet.row < R - 1) {
+      g[tet.row][col] = '■'; g[tet.row][col + 1] = '■';
+      tet.row++;
+    } else {
+      tet.stack.push(col, col + 1);
+      g[R - 1][col] = '█'; g[R - 1][col + 1] = '█';
+      tet.i++; tet.row = 0;
+      if (tet.i >= tet.cols.length) tet.flash = 5;
+    }
+    return g;
+  }
+
+  // snake: crawls the field perimeter chasing a food segment
+  const perim = [];
+  for (let c = 0; c < W; c++) perim.push([0, c]);
+  perim.push([1, W - 1]);
+  for (let c = W - 1; c >= 0; c--) perim.push([R - 1, c]);
+  perim.push([1, 0]);
+  const snk = { head: 0, len: 6, food: 12 };
+  function snakeTick() {
+    snk.head = (snk.head + 1) % perim.length;
+    if (snk.head === snk.food) snk.food = (snk.food + 13) % perim.length;
+    const g = blank();
+    const [fr, fc] = perim[snk.food];
+    g[fr][fc] = '*';
+    for (let i = 0; i < snk.len; i++) {
+      const [r, c] = perim[(snk.head - i + perim.length) % perim.length];
+      g[r][c] = '■';
+    }
+    return g;
+  }
+
+  const anims = { pong: pongTick, tetris: tetTick, snake: snakeTick };
+  let mode = 'pong';
+  show(anims[mode]());
+  if (!reducedMotion) setInterval(() => show(anims[mode]()), 220);
+
+  // hovered title picks the vignette; leaving falls back to pong
+  const picks = { pickPong: 'pong', pickTetris: 'tetris', pickSnake: 'snake' };
+  for (const [id, m] of Object.entries(picks)) {
+    const b = document.getElementById(id);
+    const set = to => { mode = to; if (reducedMotion) show(anims[mode]()); };
+    b.addEventListener('mouseenter', () => set(m));
+    b.addEventListener('focus', () => set(m));
+    b.addEventListener('mouseleave', () => set('pong'));
+    b.addEventListener('blur', () => set('pong'));
+  }
 })();
 </script>
 
