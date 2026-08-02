@@ -244,16 +244,21 @@
     letter-spacing: 0;
     white-space: pre;
     text-align: left;
-    color: #f2e068;
+    color: #ececf1;
     position: relative;
-    /* front-facing sign with the top half leaning away */
-    transform: perspective(30rem) rotateX(24deg);
-    transform-origin: 50% 100%;
-    /* ANSI-style depth: crisp teal copies of the glyphs stepped underneath */
+    /* phosphor look: soft bloom plus faint glyph copies stepped underneath */
     text-shadow:
-      .3ch .28em 0 #157f76,
-      .6ch .56em 0 #0b4d47;
-    animation: none;
+      0 0 14px rgba(236, 236, 241, .45),
+      .3ch .28em 0 rgba(236, 236, 241, .18),
+      .6ch .56em 0 rgba(236, 236, 241, .08);
+    /* gentle CRT shimmer, same spirit as the in-game flicker — no hard strobe */
+    animation: crtflick 3.4s ease-in-out infinite;
+  }
+  @keyframes crtflick {
+    0%, 100% { opacity: 1; }
+    31% { opacity: .93; }
+    47% { opacity: .98; }
+    72% { opacity: .9; }
   }
   .overlay.nes .gamemenu { flex-direction: column; gap: 1.15rem; align-items: flex-start; }
   .overlay.nes .gamecard,
@@ -290,7 +295,7 @@
   .overlay.nes .gamecard:hover::before,
   .overlay.nes .gamecard:focus-visible::before { opacity: 1; }
   @media (prefers-reduced-motion: reduce) {
-    .title, .prompt { animation: none; }
+    .title, .prompt, .nestitle { animation: none; }
   }
 </style>
 
