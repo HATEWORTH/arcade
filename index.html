@@ -230,12 +230,16 @@
 
   /* NES title-screen styling for the launch splash: solid black, chunky
      tilted logo with hard layered drop-shadows, plain text menu + star cursor */
+  /* monochrome LCD: pale sage screen, dark segments that cast soft
+     shadows onto the layer beneath — no glow, no scanlines */
   .overlay.nes {
-    background: #000;
+    background:
+      radial-gradient(ellipse at 50% 42%, rgba(255, 255, 255, .16), transparent 62%),
+      #c3c8b2;
     gap: 2.6rem;
     font-family: "Courier New", Courier, monospace;
   }
-  /* old screen: scanlines + darkened corners laid over everything */
+  /* faint LCD pixel matrix + gentle darkening at the edges */
   .overlay.nes::after {
     content: '';
     position: absolute;
@@ -243,34 +247,9 @@
     z-index: 2;
     pointer-events: none;
     background:
-      radial-gradient(ellipse at center, transparent 48%, rgba(0, 0, 0, .55) 100%),
-      repeating-linear-gradient(0deg, rgba(0, 0, 0, .32) 0 1px, transparent 1px 3px);
-    animation: crtshimmer 4.2s ease-in-out infinite;
-  }
-  /* slow rolling scan band drifting down the tube */
-  .overlay.nes::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: -16vh;
-    height: 14vh;
-    z-index: 1;
-    pointer-events: none;
-    background: linear-gradient(180deg, transparent, rgba(214, 226, 168, .05), transparent);
-    animation: scanroll 8s linear infinite;
-  }
-  @keyframes scanroll { to { transform: translateY(130vh); } }
-  /* soft brightness waver — shallow dips only, photosensitive-safe */
-  @keyframes crtshimmer {
-    0%, 100% { opacity: 1; }
-    38% { opacity: .92; }
-    61% { opacity: .97; }
-    80% { opacity: .9; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .overlay.nes::before { display: none; }
-    .overlay.nes::after { animation: none; }
+      radial-gradient(ellipse at center, transparent 55%, rgba(46, 50, 38, .22) 100%),
+      repeating-linear-gradient(0deg, rgba(46, 50, 38, .05) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(46, 50, 38, .05) 0 1px, transparent 1px 3px);
   }
   .nestitle {
     margin: 0 0 1rem;
@@ -280,16 +259,14 @@
     line-height: 1;
     letter-spacing: .06em;
     padding-left: .06em;
-    /* hollow letters: pale phosphor stroke, no fill */
+    /* hollow letters: dark LCD-segment stroke, no fill */
     color: transparent;
-    -webkit-text-stroke: 2.5px #e4e8c8;
-    text-stroke: 2.5px #e4e8c8;
+    -webkit-text-stroke: 2.5px #2a2e22;
+    text-stroke: 2.5px #2a2e22;
     position: relative;
     text-shadow: none;
-    /* phosphor bloom: glow hugs the stroke only, since the fill is hollow */
-    filter:
-      drop-shadow(0 0 4px rgba(228, 232, 200, .85))
-      drop-shadow(0 0 14px rgba(214, 226, 168, .38));
+    /* the segment floats above the backing layer and casts a fuzzy shadow */
+    filter: drop-shadow(3px 5px 3px rgba(42, 46, 34, .4));
     animation: none;
   }
   .overlay.nes .gamemenu { flex-direction: column; gap: .85rem; align-items: flex-start; }
@@ -305,22 +282,20 @@
     font-weight: 400;
     font-size: clamp(1rem, 2.4vw, 1.25rem);
     letter-spacing: .08em;
-    color: #e4e8c8;
+    color: #2a2e22;
     position: relative;
     transition: none;
-    /* phosphor bloom on the menu text */
-    text-shadow:
-      0 0 5px rgba(228, 232, 200, .7),
-      0 0 14px rgba(214, 226, 168, .3);
+    /* LCD segment shadow under the menu text */
+    text-shadow: 2px 3px 3px rgba(42, 46, 34, .35);
   }
-  /* hard block highlight — the row inverts into a lit phosphor bar */
+  /* hard block highlight — the row fills like an active LCD segment */
   .overlay.nes .gamecard:hover,
   .overlay.nes .gamecard:focus-visible {
-    background: #e4e8c8;
-    color: #000;
+    background: #2a2e22;
+    color: #c3c8b2;
     outline: none;
     text-shadow: none;
-    box-shadow: 0 0 14px rgba(214, 226, 168, .5);
+    box-shadow: 3px 5px 4px rgba(42, 46, 34, .35);
   }
   .overlay.nes .gamecard b {
     display: inline;
@@ -346,8 +321,8 @@
     font-size: .72rem;
     letter-spacing: .5em;
     padding-left: .5em;
-    color: #7d8168;
-    text-shadow: 0 0 6px rgba(214, 226, 168, .35);
+    color: #565b48;
+    text-shadow: 1px 2px 2px rgba(42, 46, 34, .25);
   }
   .vertag {
     position: absolute;
@@ -356,8 +331,8 @@
     font-family: Consolas, "Courier New", monospace;
     font-size: .68rem;
     letter-spacing: .3em;
-    color: #5a5e4a;
-    text-shadow: 0 0 6px rgba(214, 226, 168, .3);
+    color: #565b48;
+    text-shadow: 1px 2px 2px rgba(42, 46, 34, .25);
   }
   @media (prefers-reduced-motion: reduce) {
     .title, .prompt { animation: none; }
