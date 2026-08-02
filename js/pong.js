@@ -1,5 +1,5 @@
 'use strict';
-window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards'
+window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards' | 'dungeon'
 (() => {
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');

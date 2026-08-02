@@ -146,13 +146,35 @@
     return g;
   }
 
-  const anims = { pong: pongTick, tetris: tetTick, snake: snakeTick, geo: geoTick, cards: cardsTick };
+  // dungeon: hero paces two torch-lit rooms joined by a corridor
+  const dgV = { x: 3, dir: 1, ph: 0 };
+  function dungeonTick() {
+    const g = blank();
+    dgV.ph++;
+    // room walls: two boxes bridged by a gap corridor
+    const wall = (r, c) => { if (g[r] && g[r][c] !== undefined) g[r][c] = '█'; };
+    for (let c = 1; c <= 8; c++) { wall(1, c); wall(5, c); }
+    for (let c = 12; c <= 19; c++) { wall(1, c); wall(5, c); }
+    for (let r = 1; r <= 5; r++) { wall(r, 1); wall(r, 19); }
+    wall(2, 8); wall(4, 8); wall(2, 12); wall(4, 12);
+    wall(3, 9); g[3][9] = ' '; // corridor mouth stays open
+    // torches blink on the far walls
+    if (dgV.ph % 4 < 3) { g[2][3] = '*'; g[2][16] = '*'; }
+    // hero paces between the rooms
+    dgV.x += dgV.dir;
+    if (dgV.x >= 17) dgV.dir = -1;
+    if (dgV.x <= 3) dgV.dir = 1;
+    g[3][dgV.x] = '■';
+    return g;
+  }
+
+  const anims = { pong: pongTick, tetris: tetTick, snake: snakeTick, geo: geoTick, cards: cardsTick, dungeon: dungeonTick };
   let mode = 'pong';
   show(anims[mode]());
   if (!reducedMotion) setInterval(() => show(anims[mode]()), 220);
 
   // hovered title picks the vignette; leaving falls back to pong
-  const picks = { pickPong: 'pong', pickTetris: 'tetris', pickSnake: 'snake', pickGeo: 'geo', pickCards: 'cards' };
+  const picks = { pickPong: 'pong', pickTetris: 'tetris', pickSnake: 'snake', pickGeo: 'geo', pickCards: 'cards', pickDungeon: 'dungeon' };
   for (const [id, m] of Object.entries(picks)) {
     const b = document.getElementById(id);
     const set = to => { mode = to; if (reducedMotion) show(anims[mode]()); };
