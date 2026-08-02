@@ -239,17 +239,14 @@
     gap: 2.6rem;
     font-family: "Courier New", Courier, monospace;
   }
-  /* faint LCD pixel matrix + gentle darkening at the edges */
+  /* gentle darkening at the screen edges */
   .overlay.nes::after {
     content: '';
     position: absolute;
     inset: 0;
     z-index: 2;
     pointer-events: none;
-    background:
-      radial-gradient(ellipse at center, transparent 55%, rgba(46, 50, 38, .22) 100%),
-      repeating-linear-gradient(0deg, rgba(46, 50, 38, .05) 0 1px, transparent 1px 3px),
-      repeating-linear-gradient(90deg, rgba(46, 50, 38, .05) 0 1px, transparent 1px 3px);
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(46, 50, 38, .22) 100%);
   }
   .nestitle {
     margin: 0 0 1rem;
