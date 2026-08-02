@@ -235,6 +235,43 @@
     gap: 2.6rem;
     font-family: "Courier New", Courier, monospace;
   }
+  /* old screen: scanlines + darkened corners laid over everything */
+  .overlay.nes::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at center, transparent 48%, rgba(0, 0, 0, .55) 100%),
+      repeating-linear-gradient(0deg, rgba(0, 0, 0, .32) 0 1px, transparent 1px 3px);
+    animation: crtshimmer 4.2s ease-in-out infinite;
+  }
+  /* slow rolling scan band drifting down the tube */
+  .overlay.nes::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -16vh;
+    height: 14vh;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(236, 236, 241, .05), transparent);
+    animation: scanroll 8s linear infinite;
+  }
+  @keyframes scanroll { to { transform: translateY(130vh); } }
+  /* soft brightness waver — shallow dips only, photosensitive-safe */
+  @keyframes crtshimmer {
+    0%, 100% { opacity: 1; }
+    38% { opacity: .92; }
+    61% { opacity: .97; }
+    80% { opacity: .9; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .overlay.nes::before { display: none; }
+    .overlay.nes::after { animation: none; }
+  }
   .nestitle {
     margin: 0 0 1rem;
     font-family: "Gotham Ultra", "Arial Black", "Segoe UI Black", Impact, sans-serif;
