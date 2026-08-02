@@ -477,7 +477,7 @@ window.ARCADE_LOCK = (() => {
 <div class="overlay hidden" id="cardsMenu">
   <h1 class="title">NEON<em>CARDS</em></h1>
   <div class="gamemenu">
-    <button class="gamecard" id="pickPoker"><b>POKER</b><span>jacks or better draw</span></button>
+    <button class="gamecard" id="pickPoker"><b>POKER</b><span>heads-up hold'em</span></button>
     <button class="gamecard magenta" id="pickBlackjack"><b>BLACKJACK</b><span>beat the dealer</span></button>
     <button class="gamecard lime" id="pickSolitaire"><b>SOLITAIRE</b><span>klondike &middot; draw one</span></button>
   </div>
@@ -3632,90 +3632,231 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   }
   const inRect = (px, py, b) => b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
 
-  // ---- poker: five-card draw, jacks or better ---------------------------
-  const PK = { deck: [], hand: [], held: [0, 0, 0, 0, 0], phase: 'hold', msg: '', bet: 25, btn: null };
+  // ---- poker: heads-up limit texas hold'em vs the house -----------------
+  // Blinds 5/10, bets fixed at 10 preflop/flop and 20 on turn/river,
+  // max 4 raises per street. Button alternates each hand; heads-up rules
+  // (button posts the small blind and acts first preflop, last after).
+  const HU = {
+    cpu: 500, deck: [], pHole: [], cHole: [], board: [],
+    pot: 0, curP: 0, curC: 0, actedP: false, actedC: false,
+    raises: 0, street: 0, button: false,
+    state: 'idle', msg: '', showCpu: false, at: 0, btns: [],
+  };
+  const HAND_NAMES = ['HIGH CARD', 'PAIR', 'TWO PAIR', 'THREE OF A KIND', 'STRAIGHT',
+    'FLUSH', 'FULL HOUSE', 'FOUR OF A KIND', 'STRAIGHT FLUSH'];
+  const rankHigh = r => r === 1 ? 14 : r;
+  function score5(cs) {
+    const rs = cs.map(c => rankHigh(c.r)).sort((a, b) => b - a);
+    const cnt = {};
+    for (const r of rs) cnt[r] = (cnt[r] || 0) + 1;
+    const groups = Object.keys(cnt).map(Number).sort((a, b) => (cnt[b] - cnt[a]) || (b - a));
+    const flush = cs.every(c => c.s === cs[0].s);
+    const uniq = [...new Set(rs)];
+    let straightHigh = 0;
+    if (uniq.length === 5) {
+      if (uniq[0] - uniq[4] === 4) straightHigh = uniq[0];
+      else if (uniq.join() === '14,5,4,3,2') straightHigh = 5;
+    }
+    const kick = groups.flatMap(r => Array(cnt[r]).fill(r));
+    if (flush && straightHigh) return [8, straightHigh];
+    if (cnt[groups[0]] === 4) return [7, ...kick];
+    if (cnt[groups[0]] === 3 && cnt[groups[1]] === 2) return [6, ...kick];
+    if (flush) return [5, ...rs];
+    if (straightHigh) return [4, straightHigh];
+    if (cnt[groups[0]] === 3) return [3, ...kick];
+    if (cnt[groups[0]] === 2 && cnt[groups[1]] === 2) return [2, ...kick];
+    if (cnt[groups[0]] === 2) return [1, ...kick];
+    return [0, ...rs];
+  }
+  function cmpScore(a, b) {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const d = (a[i] || 0) - (b[i] || 0);
+      if (d) return d;
+    }
+    return 0;
+  }
+  function best7(cs) {
+    let best = null;
+    for (let i = 0; i < 7; i++) for (let j = i + 1; j < 7; j++) {
+      const s = score5(cs.filter((_, k) => k !== i && k !== j));
+      if (!best || cmpScore(s, best) > 0) best = s;
+    }
+    return best;
+  }
+
   function startPoker() {
     comp();
-    C.chips -= PK.bet; saveChips();
-    PK.deck = newDeck();
-    PK.hand = PK.deck.splice(0, 5);
-    PK.held = [0, 0, 0, 0, 0];
-    PK.phase = 'hold';
-    PK.msg = '';
+    if (HU.cpu < 40) HU.cpu = 500;
+    newHand();
+  }
+  const unit = () => HU.street < 2 ? 10 : 20;
+  const highBet = () => Math.max(HU.curP, HU.curC);
+  function cpuLater() {
+    HU.state = 'cpu';
+    HU.at = performance.now() + 650 + Math.random() * 550;
+  }
+  function newHand() {
+    comp();
+    if (HU.cpu < 40) HU.cpu = 500;
+    HU.deck = newDeck();
+    HU.pHole = [HU.deck.pop(), HU.deck.pop()];
+    HU.cHole = [HU.deck.pop(), HU.deck.pop()];
+    HU.board = [];
+    HU.pot = 0; HU.street = 0; HU.raises = 1; // big blind counts as first bet
+    HU.showCpu = false; HU.msg = '';
+    HU.actedP = false; HU.actedC = false;
+    HU.button = !HU.button;
+    if (HU.button) {
+      C.chips -= 5; HU.cpu -= 10;
+      HU.curP = 5; HU.curC = 10;
+      HU.state = 'player';   // player is small blind and acts first
+    } else {
+      C.chips -= 10; HU.cpu -= 5;
+      HU.curP = 10; HU.curC = 5;
+      cpuLater();
+    }
+    saveChips();
     A.bleep(520, 0.04, 'triangle', 0.03);
   }
-  function evalPoker(cards) {
-    const cnt = {};
-    for (const c of cards) cnt[c.r] = (cnt[c.r] || 0) + 1;
-    const groups = Object.values(cnt).sort((a, b) => b - a);
-    const rs = cards.map(c => c.r).sort((a, b) => a - b).join(',');
-    const flush = cards.every(c => c.s === cards[0].s);
-    const arr = cards.map(c => c.r).sort((a, b) => a - b);
-    const straight = arr.every((r, i) => i === 0 || r === arr[i - 1] + 1) || rs === '1,10,11,12,13';
-    if (flush && rs === '1,10,11,12,13') return ['ROYAL FLUSH', 250];
-    if (flush && straight) return ['STRAIGHT FLUSH', 50];
-    if (groups[0] === 4) return ['FOUR OF A KIND', 25];
-    if (groups[0] === 3 && groups[1] === 2) return ['FULL HOUSE', 9];
-    if (flush) return ['FLUSH', 6];
-    if (straight) return ['STRAIGHT', 4];
-    if (groups[0] === 3) return ['THREE OF A KIND', 3];
-    if (groups[0] === 2 && groups[1] === 2) return ['TWO PAIR', 2];
-    if (groups[0] === 2) {
-      const pr = +Object.keys(cnt).find(r => cnt[r] === 2);
-      if (pr === 1 || pr >= 11) return ['JACKS OR BETTER', 1];
+  function endHand(winner, reason) {
+    HU.pot += HU.curP + HU.curC;
+    HU.curP = 0; HU.curC = 0;
+    if (winner === 'p') { C.chips += HU.pot; A.sweep(500, 60, 0.4, 'sawtooth', 0.06); }
+    else if (winner === 'c') { HU.cpu += HU.pot; A.bleep(200, 0.14, 'sawtooth', 0.04); }
+    else { C.chips += HU.pot / 2; HU.cpu += HU.pot / 2; A.bleep(400, 0.08, 'triangle', 0.03); }
+    HU.msg = winner === 'p' ? reason + '  +' + HU.pot : winner === null ? reason + '  ·  SPLIT' : reason;
+    HU.pot = 0;
+    HU.state = 'done';
+    saveChips();
+  }
+  function doFold(who) {
+    HU.showCpu = false;
+    endHand(who === 'p' ? 'c' : 'p', who === 'p' ? 'YOU FOLD' : 'CPU FOLDS');
+  }
+  function doCheckCall(who) {
+    const need = highBet() - (who === 'p' ? HU.curP : HU.curC);
+    if (who === 'p') { const pay = Math.min(need, C.chips); C.chips -= pay; HU.curP += pay; HU.actedP = true; }
+    else { const pay = Math.min(need, HU.cpu); HU.cpu -= pay; HU.curC += pay; HU.actedC = true; }
+    A.bleep(need > 0 ? 600 : 440, 0.025, 'triangle', 0.025);
+    afterAction(who);
+  }
+  function canRaise(who) {
+    const stack = who === 'p' ? C.chips : HU.cpu;
+    const cur = who === 'p' ? HU.curP : HU.curC;
+    return HU.raises < 4 && stack >= (highBet() - cur) + unit();
+  }
+  function doRaise(who) {
+    if (!canRaise(who)) { doCheckCall(who); return; }
+    const target = highBet() + unit();
+    if (who === 'p') { C.chips -= target - HU.curP; HU.curP = target; HU.actedP = true; HU.actedC = false; }
+    else { HU.cpu -= target - HU.curC; HU.curC = target; HU.actedC = true; HU.actedP = false; }
+    HU.raises++;
+    A.bleep(720, 0.04, 'square', 0.03);
+    afterAction(who);
+  }
+  function afterAction(who) {
+    saveChips();
+    if (HU.actedP && HU.actedC && HU.curP === HU.curC) { advanceStreet(); return; }
+    if (who === 'p') cpuLater(); else HU.state = 'player';
+  }
+  function advanceStreet() {
+    HU.pot += HU.curP + HU.curC;
+    HU.curP = 0; HU.curC = 0; HU.raises = 0;
+    HU.actedP = false; HU.actedC = false;
+    if (HU.street === 3) { showdown(); return; }
+    HU.street++;
+    if (HU.street === 1) HU.board.push(HU.deck.pop(), HU.deck.pop(), HU.deck.pop());
+    else HU.board.push(HU.deck.pop());
+    A.bleep(560, 0.03, 'triangle', 0.03);
+    // postflop the non-button player acts first
+    if (HU.button) cpuLater(); else HU.state = 'player';
+  }
+  function showdown() {
+    HU.showCpu = true;
+    const ps = best7([...HU.pHole, ...HU.board]);
+    const cs = best7([...HU.cHole, ...HU.board]);
+    const d = cmpScore(ps, cs);
+    if (d > 0) endHand('p', 'YOU WIN · ' + HAND_NAMES[ps[0]]);
+    else if (d < 0) endHand('c', 'CPU WINS · ' + HAND_NAMES[cs[0]]);
+    else endHand(null, HAND_NAMES[ps[0]]);
+  }
+  // house AI: raw hand strength plus noise; bluffs a little, folds junk
+  function cpuStrength() {
+    if (HU.street === 0) {
+      const hi = HU.cHole.map(c => rankHigh(c.r)).sort((a, b) => b - a);
+      if (hi[0] === hi[1]) return 0.55 + hi[0] / 40;
+      let s = (hi[0] + hi[1]) / 54;
+      if (HU.cHole[0].s === HU.cHole[1].s) s += 0.06;
+      if (hi[0] - hi[1] === 1) s += 0.04;
+      return s;
     }
-    return ['NO PAIR', 0];
+    const sc = best7([...HU.cHole, ...HU.board]);
+    return Math.min(1, sc[0] / 8 + (sc[1] || 0) / 120 + (sc[0] > 0 ? 0.08 : 0));
   }
-  function pokerDraw() {
-    for (let i = 0; i < 5; i++) if (!PK.held[i]) PK.hand[i] = PK.deck.pop();
-    const [name, pay] = evalPoker(PK.hand);
-    const winnings = pay * PK.bet;
-    C.chips += winnings; saveChips();
-    PK.msg = winnings > 0 ? name + '  +' + winnings : name;
-    PK.phase = 'result';
-    if (winnings > 0) { A.sweep(500, 60, 0.4, 'sawtooth', 0.06); A.hat(0.06, 0.1); }
-    else A.bleep(200, 0.12, 'sawtooth', 0.04);
-  }
-  function pokerLayout() {
-    const W = innerWidth, H = innerHeight;
-    const cw = Math.min(100, W / 8), chh = cw * 1.45;
-    const gap = cw * 0.24;
-    const x0 = W / 2 - (5 * cw + 4 * gap) / 2;
-    return { cw, chh, gap, x0, cy: H / 2 - chh / 2 };
+  function cpuAct() {
+    const facing = highBet() - HU.curC > 0;
+    const s = cpuStrength() + (Math.random() - 0.5) * 0.16;
+    if (s > 0.6 && canRaise('c')) doRaise('c');
+    else if (!facing) {
+      if (Math.random() < 0.12 && canRaise('c')) doRaise('c');
+      else doCheckCall('c');
+    }
+    else if (s > 0.33 || Math.random() < 0.1) doCheckCall('c');
+    else doFold('c');
   }
   function drawPoker() {
     const W = innerWidth, H = innerHeight;
-    const L = pokerLayout();
-    hudText('POKER', W / 2, 54, 22, INK, 'center');
+    const cw = Math.min(84, W / 11), chh = cw * 1.42, gap = cw * 0.22;
+    hudText("HOLD'EM", W / 2, 42, 20, INK, 'center');
     hudText('CHIPS ' + C.chips, 30, 40, 17);
-    hudText('BET ' + PK.bet, 30, 64, 13, '#9a9aa5');
+    hudText('CPU ' + HU.cpu, W - 30, 40, 17, INK, 'right');
+    if (HU.button) hudText('YOUR BUTTON', 30, 62, 11, '#9a9aa5');
+    // cpu hole cards
+    const cy0 = H * 0.12;
+    const cx0 = W / 2 - (2 * cw + gap) / 2;
+    for (let i = 0; i < 2; i++) drawCard(cx0 + i * (cw + gap), cy0, cw, chh, HU.cHole[i], HU.showCpu, false);
+    if (HU.curC) hudText('BET ' + HU.curC, W / 2, cy0 + chh + 22, 13, '#9a9aa5', 'center');
+    if (HU.state === 'cpu') hudText('CPU THINKING…', W / 2, cy0 + chh + 42, 11, '#9a9aa5', 'center');
+    // board
+    const bx0 = W / 2 - (5 * cw + 4 * gap) / 2, byy = H / 2 - chh / 2;
+    hudText('POT ' + (HU.pot + HU.curP + HU.curC), W / 2, byy - 16, 15, LIME, 'center');
     for (let i = 0; i < 5; i++) {
-      const cx2 = L.x0 + i * (L.cw + L.gap);
-      const hov = PK.phase === 'hold' &&
-        C.mx >= cx2 && C.mx <= cx2 + L.cw && C.my >= L.cy && C.my <= L.cy + L.chh;
-      drawCard(cx2, L.cy, L.cw, L.chh, PK.hand[i], true, !!PK.held[i], hov);
-    }
-    if (PK.msg) hudText(PK.msg, W / 2, L.cy - 46, 20, PK.msg.includes('+') ? LIME : '#9a9aa5', 'center');
-    const bw = 150, bh2 = 38;
-    PK.btn = button(PK.phase === 'hold' ? 'DRAW' : 'DEAL', W / 2 - bw / 2, L.cy + L.chh + 56, bw, bh2, true);
-    hudText(PK.phase === 'hold' ? 'click cards to hold · enter draws' : 'enter deals again',
-      W / 2, L.cy + L.chh + 126, 12, '#9a9aa5', 'center');
-  }
-  function pokerClick(x, y) {
-    if (inRect(x, y, PK.btn)) { pokerAdvance(); return; }
-    if (PK.phase !== 'hold') return;
-    const L = pokerLayout();
-    for (let i = 0; i < 5; i++) {
-      if (x >= L.x0 + i * (L.cw + L.gap) && x <= L.x0 + i * (L.cw + L.gap) + L.cw &&
-          y >= L.cy && y <= L.cy + L.chh) {
-        PK.held[i] = PK.held[i] ? 0 : 1;
-        A.bleep(700, 0.02, 'square', 0.02);
+      const x = bx0 + i * (cw + gap);
+      if (HU.board[i]) drawCard(x, byy, cw, chh, HU.board[i], true, false);
+      else {
+        ctx.globalAlpha = 0.14; ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        rr(x + 0.5, byy + 0.5, cw - 1, chh - 1, 6); ctx.stroke();
       }
     }
+    // player hole cards
+    const py0 = H * 0.62;
+    for (let i = 0; i < 2; i++) drawCard(cx0 + i * (cw + gap), py0, cw, chh, HU.pHole[i], true, false);
+    if (HU.curP) hudText('BET ' + HU.curP, W / 2, py0 - 12, 13, '#9a9aa5', 'center');
+    if (HU.msg) hudText(HU.msg, W / 2, byy + chh + 40, 18, HU.msg.includes('+') ? LIME : INK, 'center');
+    // actions
+    HU.btns = [];
+    const bw = 158, bh2 = 38, bg = 16, byb = py0 + chh + 30;
+    if (HU.state === 'player') {
+      const facing = highBet() - HU.curP > 0;
+      const x0 = W / 2 - (3 * bw + 2 * bg) / 2;
+      HU.btns.push(button('FOLD [F]', x0, byb, bw, bh2, true));
+      HU.btns.push(button(facing ? 'CALL ' + (highBet() - HU.curP) + ' [C]' : 'CHECK [C]', x0 + bw + bg, byb, bw, bh2, true));
+      HU.btns.push(button((highBet() > 0 ? 'RAISE ' : 'BET ') + unit() + ' [R]', x0 + 2 * (bw + bg), byb, bw, bh2, canRaise('p')));
+    } else if (HU.state === 'done') {
+      HU.btns.push(button('DEAL', W / 2 - bw / 2, byb, bw, bh2, true));
+      hudText('enter deals again', W / 2, byb + bh2 + 26, 11, '#9a9aa5', 'center');
+    }
   }
-  function pokerAdvance() {
-    if (PK.phase === 'hold') pokerDraw();
-    else startPoker();
+  function pokerClick(x, y) {
+    for (const b of HU.btns) {
+      if (inRect(x, y, b)) {
+        if (b.label.startsWith('FOLD')) doFold('p');
+        else if (b.label.startsWith('CALL') || b.label.startsWith('CHECK')) doCheckCall('p');
+        else if (b.label.startsWith('RAISE') || b.label.startsWith('BET')) doRaise('p');
+        else newHand();
+        return;
+      }
+    }
   }
 
   // ---- blackjack --------------------------------------------------------
@@ -4003,7 +4144,14 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       return;
     }
     if (e.key === 'Escape') { showMenu(); return; }
-    if (C.view === 'poker' && e.key === 'Enter') pokerAdvance();
+    if (C.view === 'poker') {
+      if (HU.state === 'player') {
+        if (e.key === 'f' || e.key === 'F') doFold('p');
+        else if (e.key === 'c' || e.key === 'C') doCheckCall('p');
+        else if (e.key === 'r' || e.key === 'R') doRaise('p');
+      }
+      if (e.key === 'Enter' && HU.state === 'done') newHand();
+    }
     if (C.view === 'blackjack') {
       if (e.key === 'h' || e.key === 'H') bjHit();
       if (e.key === 's' || e.key === 'S') bjResolve();
@@ -4034,6 +4182,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, W, H);
+      if (C.view === 'poker' && HU.state === 'cpu' && performance.now() >= HU.at) cpuAct();
       if (C.view === 'poker') drawPoker();
       else if (C.view === 'blackjack') drawBlackjack();
       else if (C.view === 'solitaire') drawSolitaire();
