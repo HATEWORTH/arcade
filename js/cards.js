@@ -829,7 +829,6 @@
       if (C.view === 'poker') drawPoker();
       else if (C.view === 'blackjack') drawBlackjack();
       else if (C.view === 'solitaire') drawSolitaire();
-      if (C.view !== 'menu') ARCADE_FX.bezel(ctx);
     }
     requestAnimationFrame(frame);
   }

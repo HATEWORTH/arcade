@@ -535,7 +535,6 @@
       if (T.running) tick(dt);
       fx(dt);
       draw();
-      ARCADE_FX.bezel(ctx);
     }
     requestAnimationFrame(loop);
   }

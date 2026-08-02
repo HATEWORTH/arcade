@@ -1501,7 +1501,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       update(dt);
       updateFx(dt);
       draw(dt);
-      ARCADE_FX.bezel(ctx);
     }
     requestAnimationFrame(frame);
   }

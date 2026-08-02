@@ -235,19 +235,6 @@
     gap: 2.6rem;
     font-family: "Courier New", Courier, monospace;
   }
-  /* CRT bezel: black edge with rounded tube corners masking the screen */
-  .overlay.nes::before {
-    content: '';
-    position: absolute;
-    inset: 18px;
-    border-radius: 2.4rem;
-    /* frame in the same dark ink, fading softly onto the screen */
-    box-shadow:
-      0 0 0 120vmax #14160f,
-      inset 0 0 26px 6px rgba(20, 22, 15, .5);
-    z-index: 3;
-    pointer-events: none;
-  }
   .nestitle {
     margin: 0 0 1rem;
     font-family: "Gotham Ultra", "Arial Black", "Segoe UI Black", Impact, sans-serif;
@@ -384,6 +371,21 @@
     color: inherit;
   }
   .pausesub { color: #9a9aa5; }
+
+  /* inverted LCD: the cards sub-menu is the splash in negative */
+  .overlay.nes.invert { background: #2a2e22; }
+  .overlay.nes.invert .nestitle { color: #c3c8b2; }
+  .overlay.nes.invert .menulabel { color: #c3c8b2; }
+  .overlay.nes.invert .gamecard,
+  .overlay.nes.invert .gamecard:focus-visible {
+    background: #c3c8b2;
+    color: #2a2e22;
+  }
+  .overlay.nes.invert .gamecard:hover {
+    background: #2a2e22;
+    color: #c3c8b2;
+  }
+  .overlay.nes.invert .lcdsub { color: #8a9078; }
 
   .lcdsub {
     color: #565b48;

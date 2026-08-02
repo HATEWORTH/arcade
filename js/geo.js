@@ -51,11 +51,9 @@
   }
   initAtmos();
 
-  // the field runs edge to edge — an endless grid with the screen as walls,
-  // inset just enough that nothing playable hides under the CRT bezel
+  // the field runs edge to edge — an endless grid with the screen as walls
   function arena() {
-    const inset = 22;
-    return { bx: inset, by: inset, bw: innerWidth - inset * 2, bh: innerHeight - inset * 2 };
+    return { bx: 0, by: 0, bw: innerWidth, bh: innerHeight };
   }
 
   // kill-streak scoring: every kill bumps the multiplier, going 0.8s
@@ -936,7 +934,6 @@
       if (G.running) update(dt);
       fx(dt);
       draw();
-      ARCADE_FX.bezel(ctx);
     }
     requestAnimationFrame(loop);
   }

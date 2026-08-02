@@ -52,32 +52,12 @@ addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// ---- shared CRT bezel: the rounded tube frame every screen sits behind --
+// ---- shared screen fill -------------------------------------------------
 window.ARCADE_FX = {
   // dark-LCD substrate: same glass as the sage screens, backlight off
   screen(ctx) {
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#12140d';
     ctx.fillRect(0, 0, innerWidth, innerHeight);
-  },
-  bezel(ctx) {
-    const W = innerWidth, H = innerHeight;
-    const inset = 18, rad = 38;
-    const x = inset, y = inset, w = W - inset * 2, h = H - inset * 2;
-    ctx.save();
-    ctx.globalAlpha = 1;
-    ctx.beginPath();
-    ctx.rect(0, 0, W, H);
-    ctx.moveTo(x + rad, y);
-    ctx.arcTo(x + w, y, x + w, y + h, rad);
-    ctx.arcTo(x + w, y + h, x, y + h, rad);
-    ctx.arcTo(x, y + h, x, y, rad);
-    ctx.arcTo(x, y, x + w, y, rad);
-    ctx.closePath();
-    ctx.shadowColor = 'rgba(20, 22, 15, 0.55)';
-    ctx.shadowBlur = 26;
-    ctx.fillStyle = '#14160f';
-    ctx.fill('evenodd');
-    ctx.restore();
   },
 };
