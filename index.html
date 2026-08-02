@@ -2581,6 +2581,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   const G = {
     running: false, paused: false,
     ship: { x: 0, y: 0, vx: 0, vy: 0 },
+    mov: { x: 0, y: 0 },
     aim: { x: 0, y: 0 },
     firing: false, fireT: 0,
     bullets: [], enemies: [], parts: [], spray: [],
@@ -2771,6 +2772,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     const { bx, by, bw, bh } = arena();
     G.ship.x = bx + bw / 2; G.ship.y = by + bh / 2;
     G.ship.vx = 0; G.ship.vy = 0;
+    G.mov.x = 0; G.mov.y = 0;
     G.aim.x = G.ship.x; G.aim.y = by + bh * 0.3;
     G.bullets.length = 0; G.enemies.length = 0; G.parts.length = 0;
     G.spray.length = 0;
@@ -2953,19 +2955,24 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     if (keys['d'] || keys['arrowright']) ax += 1;
     if (keys['w'] || keys['arrowup']) ay -= 1;
     if (keys['s'] || keys['arrowdown']) ay += 1;
+    // smooth the stick: input eases in and out instead of snapping,
+    // so direction changes carve arcs rather than kinking
     const m = Math.hypot(ax, ay) || 1;
-    G.ship.vx += (ax / m) * 1500 * dt;
-    G.ship.vy += (ay / m) * 1500 * dt;
+    const k = Math.min(1, dt * 9);
+    G.mov.x += ((ax / m) - G.mov.x) * k;
+    G.mov.y += ((ay / m) - G.mov.y) * k;
+    G.ship.vx += G.mov.x * 2300 * dt;
+    G.ship.vy += G.mov.y * 2300 * dt;
     // gentle pull toward the cursor so the ship drifts where you're looking
     const adx = G.aim.x - G.ship.x, ady = G.aim.y - G.ship.y;
     const ad = Math.hypot(adx, ady) || 1;
     G.ship.vx += (adx / ad) * 260 * dt;
     G.ship.vy += (ady / ad) * 260 * dt;
-    // barely any drag: momentum carries like open space
-    G.ship.vx *= Math.max(0, 1 - dt * 0.9);
-    G.ship.vy *= Math.max(0, 1 - dt * 0.9);
+    // light drag: momentum carries, but the ship stays steerable
+    G.ship.vx *= Math.max(0, 1 - dt * 1.4);
+    G.ship.vy *= Math.max(0, 1 - dt * 1.4);
     const sp = Math.hypot(G.ship.vx, G.ship.vy);
-    if (sp > 520) { G.ship.vx *= 520 / sp; G.ship.vy *= 520 / sp; }
+    if (sp > 560) { G.ship.vx *= 560 / sp; G.ship.vy *= 560 / sp; }
     G.ship.x += G.ship.vx * dt;
     G.ship.y += G.ship.vy * dt;
     // soft bounces off the arena walls
