@@ -237,20 +237,19 @@
   }
   .nestitle {
     margin: 0 0 1rem;
-    font-family: inherit;
-    font-weight: 700;
-    font-size: clamp(.5rem, 1.55vw, 1.1rem);
-    line-height: 1.15;
-    letter-spacing: 0;
-    white-space: pre;
-    text-align: left;
-    color: #ececf1;
+    font-family: "Gotham Ultra", "Arial Black", "Segoe UI Black", Impact, sans-serif;
+    font-weight: 900;
+    font-size: clamp(3.4rem, 13vw, 8.5rem);
+    line-height: 1;
+    letter-spacing: .06em;
+    padding-left: .06em;
+    /* hollow letters: off-white stroke, no fill */
+    color: transparent;
+    -webkit-text-stroke: 2.5px #ececf1;
+    text-stroke: 2.5px #ececf1;
     position: relative;
-    /* phosphor look: soft bloom plus faint glyph copies stepped underneath */
-    text-shadow:
-      0 0 14px rgba(236, 236, 241, .45),
-      .3ch .28em 0 rgba(236, 236, 241, .18),
-      .6ch .56em 0 rgba(236, 236, 241, .08);
+    /* faint phosphor bloom around the outline */
+    text-shadow: 0 0 18px rgba(236, 236, 241, .35);
     /* gentle CRT shimmer, same spirit as the in-game flicker — no hard strobe */
     animation: crtflick 3.4s ease-in-out infinite;
   }
@@ -309,15 +308,7 @@
 <div id="trackToast" class="track" aria-live="polite"></div>
 
 <div class="overlay nes" id="launchOverlay">
-  <pre class="nestitle" role="heading" aria-level="1" aria-label="Arcade">
-   █████████   ███████████     █████████    █████████   ██████████   ██████████
-  ███░░░░░███ ░░███░░░░░███   ███░░░░░███  ███░░░░░███ ░░███░░░░███ ░░███░░░░░█
- ░███    ░███  ░███    ░███  ███     ░░░  ░███    ░███  ░███   ░░███ ░███  █ ░
- ░███████████  ░██████████  ░███          ░███████████  ░███    ░███ ░██████
- ░███░░░░░███  ░███░░░░░███ ░███          ░███░░░░░███  ░███    ░███ ░███░░█
- ░███    ░███  ░███    ░███ ░░███     ███ ░███    ░███  ░███    ███  ░███ ░   █
- █████   █████ █████   █████ ░░█████████  █████   █████ ██████████   ██████████
-░░░░░   ░░░░░ ░░░░░   ░░░░░   ░░░░░░░░░  ░░░░░   ░░░░░ ░░░░░░░░░░   ░░░░░░░░░░</pre>
+  <h1 class="nestitle">ARCADE</h1>
   <div class="gamemenu">
     <button class="gamecard" id="pickPong"><b>PONG 3D</b><span>defend the tunnel core</span></button>
     <button class="gamecard magenta" id="pickTetris"><b>TETRIS</b><span>stack in the void</span></button>
