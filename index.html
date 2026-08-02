@@ -2583,7 +2583,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   // ---- spring-mass grid, ported from NeonShooter's Grid.cs ---------------
   const grid = { pts: [], springs: [], cols: 0, rows: 0, w: 0, h: 0 };
   function spring(a, b) {
-    return { a, b, k: 0.28, d: 0.06, target: Math.hypot(a.x - b.x, a.y - b.y) * 0.95 };
+    return { a, b, k: 0.4, d: 0.14, target: Math.hypot(a.x - b.x, a.y - b.y) * 0.95 };
   }
   function buildGrid() {
     const { bx, by, bw, bh } = arena();
@@ -2604,8 +2604,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       for (let c = 0; c <= cols; c++) {
         if (c === 0 || r === 0 || c === cols || r === rows)
           grid.springs.push({ a: null, b: P(c, r), k: 0.1, d: 0.1 });     // hard border anchor
-        else if (c % 3 === 0 && r % 3 === 0)
-          grid.springs.push({ a: null, b: P(c, r), k: 0.002, d: 0.02 });  // loose interior anchor
+        else if (c % 2 === 0 && r % 2 === 0)
+          grid.springs.push({ a: null, b: P(c, r), k: 0.012, d: 0.06 });  // firmer interior anchors
         if (c > 0) grid.springs.push(spring(P(c - 1, r), P(c, r)));
         if (r > 0) grid.springs.push(spring(P(c, r - 1), P(c, r)));
       }
@@ -2634,7 +2634,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       p.x += p.vx; p.y += p.vy;
       p.fx = 0; p.fy = 0;
       p.vx *= p.damp; p.vy *= p.damp;
-      p.damp = 0.98;
+      p.damp = 0.95;
     }
   }
   function gridExplosive(force, x, y, radius) {
@@ -2887,8 +2887,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     // gentle pull toward the cursor so the ship drifts where you're looking
     const adx = G.aim.x - G.ship.x, ady = G.aim.y - G.ship.y;
     const ad = Math.hypot(adx, ady) || 1;
-    G.ship.vx += (adx / ad) * 110 * dt;
-    G.ship.vy += (ady / ad) * 110 * dt;
+    G.ship.vx += (adx / ad) * 260 * dt;
+    G.ship.vy += (ady / ad) * 260 * dt;
     // barely any drag: momentum carries like open space
     G.ship.vx *= Math.max(0, 1 - dt * 0.9);
     G.ship.vy *= Math.max(0, 1 - dt * 0.9);
@@ -2922,7 +2922,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       const b = G.bullets[i];
       b.x += b.vx * dt; b.y += b.vy * dt;
       // every bullet nudges the grid outward as it flies — kept subtle
-      gridExplosive(2.5, b.x, b.y, 60);
+      gridExplosive(3.5, b.x, b.y, 70);
       if (b.x < bx + 3 || b.x > bx + bw - 3 || b.y < by + 3 || b.y > by + bh - 3) {
         // wall impact: a little splash of light-blue sparks
         for (let k = 0; k < 12; k++) {
@@ -3014,8 +3014,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       h.flash = Math.max(0, h.flash - dt);
       // spray jet rotates a full turn every ~0.83s, like the original
       h.sprayA -= (Math.PI * 2 / 50) * 60 * dt;
-      // continuous breathing suction on the spring grid
-      gridImplosive(Math.sin(h.sprayA / 2) * 10 + 20, h.x, h.y, 200);
+      // continuous breathing suction on the spring grid — kept gentle
+      gridImplosive(Math.sin(h.sprayA / 2) * 5 + 9, h.x, h.y, 180);
       const PR = 250; // gravity reach
       // ship is attracted, linear falloff (respawn blink is exempt)
       if (G.inv <= 0) {
