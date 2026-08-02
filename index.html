@@ -412,6 +412,30 @@ window.ARCADE_LOCK = (() => {
   });
   return { cur, lock, unlock, locked };
 })();
+
+// ---- shared CRT bezel: the rounded tube frame every screen sits behind --
+window.ARCADE_FX = {
+  bezel(ctx) {
+    const W = innerWidth, H = innerHeight;
+    const inset = 18, rad = 38;
+    const x = inset, y = inset, w = W - inset * 2, h = H - inset * 2;
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.rect(0, 0, W, H);
+    ctx.moveTo(x + rad, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rad);
+    ctx.arcTo(x + w, y + h, x, y + h, rad);
+    ctx.arcTo(x, y + h, x, y, rad);
+    ctx.arcTo(x, y, x + w, y, rad);
+    ctx.closePath();
+    ctx.shadowColor = 'rgba(20, 22, 15, 0.55)';
+    ctx.shadowBlur = 26;
+    ctx.fillStyle = '#14160f';
+    ctx.fill('evenodd');
+    ctx.restore();
+  },
+};
 </script>
 
 <div class="hud hidden" id="pongHud">
@@ -610,7 +634,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   // tracks. Soft triangle/sine voices, sparse half-time drums, long feedback
   // echo. Each song plays `bars` bars, then hands off to the next.
   const music = {
-    on: true, started: false, songIndex: 0, bpm: 92,
+    on: true, started: false, songIndex: 0, bpm: 92, style: 'neon',
     startTime: 0, nextStepTime: 0, step: 0,
     timer: null,
     bus: null, delay: null, delayNode: null,
@@ -692,6 +716,71 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     },
   ];
 
+  // per-game playlists: tetris goes medieval, the card room plays it jaunty
+  const MEDIEVAL_SONGS = [
+    { name: 'Torchlight Court', bpm: 96, bars: 16,     // D dorian, drone court dance
+      kick:  [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,1,0],
+      hat:   [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0],
+      snare: null,
+      bassWave: 'square',
+      bass: [
+        [38,-1,-1,-1, 45,-1,-1,-1, 38,-1,-1,-1, 45,-1,-1,-1],
+        [36,-1,-1,-1, 43,-1,-1,-1, 36,-1,-1,-1, 43,-1,-1,-1],
+      ],
+      arpWave: 'square',
+      arp: [
+        [62,-1,65,-1, 69,-1,65,-1, 62,-1,65,-1, 69,-1,72,-1],
+        [60,-1,64,-1, 67,-1,64,-1, 60,-1,64,-1, 67,-1,71,-1],
+      ],
+      leadWave: 'square',
+      lead: [
+        [74,-1,-1,72, 74,-1,77,-1, 74,-1,72,-1, 69,-1,-1,-1],
+        [72,-1,-1,71, 72,-1,74,-1, 72,-1,69,-1, 67,-1,-1,-1],
+        [65,-1,67,-1, 69,-1,72,-1, 74,-1,72,-1, 69,-1,-1,-1],
+        [-1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1],
+      ],
+      pads: [50, 48, 50, 45],
+    },
+  ];
+  const OPENTTD_SONGS = [
+    { name: 'High Street Shuffle', bpm: 116, bars: 16, // F major, walking-bass lounge
+      kick:  [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
+      hat:   [0,0,1,0, 1,0,1,0, 0,0,1,0, 1,0,1,0],
+      snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+      bassWave: 'triangle',
+      bass: [
+        [41,-1,-1,-1, 45,-1,-1,-1, 48,-1,-1,-1, 50,-1,-1,-1],
+        [53,-1,-1,-1, 50,-1,-1,-1, 48,-1,-1,-1, 45,-1,-1,-1],
+        [46,-1,-1,-1, 50,-1,-1,-1, 53,-1,-1,-1, 50,-1,-1,-1],
+        [48,-1,-1,-1, 47,-1,-1,-1, 46,-1,-1,-1, 43,-1,-1,-1],
+      ],
+      arpWave: 'sine',
+      arp: [
+        [-1,-1,69,-1, -1,-1,72,-1, -1,-1,76,-1, -1,-1,72,-1],
+        [-1,-1,69,-1, -1,-1,74,-1, -1,-1,77,-1, -1,-1,74,-1],
+        [-1,-1,70,-1, -1,-1,74,-1, -1,-1,77,-1, -1,-1,74,-1],
+        [-1,-1,67,-1, -1,-1,72,-1, -1,-1,76,-1, -1,-1,72,-1],
+      ],
+      leadWave: 'triangle',
+      lead: [
+        [-1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1],
+        [77,-1,76,-1, 74,-1,72,-1, 69,-1,-1,-1, -1,-1,-1,-1],
+        [-1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1],
+        [72,-1,74,-1, 76,-1,77,-1, 79,-1,-1,-1, -1,-1,-1,-1],
+      ],
+      pads: [41, 41, 46, 43],
+    },
+  ];
+  const PLAYLISTS = { neon: SONGS, medieval: MEDIEVAL_SONGS, openttd: OPENTTD_SONGS };
+  function playlist() { return PLAYLISTS[music.style] || SONGS; }
+  // switch playlist; takes effect at the next scheduled step
+  function setStyle(name) {
+    if (music.style === name || !PLAYLISTS[name]) return;
+    music.style = name;
+    music.songIndex = 0;
+    music.step = 0;
+  }
+
   let noiseBuf = null;
   function musicBus() {
     if (music.bus) return;
@@ -771,7 +860,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   function schedulerTick() {
     if (!AC || !music.on) return;
     while (music.nextStepTime < AC.currentTime + 0.15) {
-      const song = SONGS[music.songIndex];
+      const list = playlist();
+      const song = list[music.songIndex % list.length];
       const st = 60 / song.bpm / 4;
       if (music.step === 0) {
         music.bpm = song.bpm;
@@ -784,7 +874,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       music.nextStepTime += st;
       if (music.step >= song.bars * 16) {
         music.step = 0;
-        music.songIndex = (music.songIndex + 1) % SONGS.length;
+        music.songIndex = (music.songIndex + 1) % list.length;
         music.nextStepTime += 60 / song.bpm; // one-beat breath between tracks
       }
     }
@@ -822,7 +912,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       beat.bar = Math.floor(beat.phase / 4);
       return;
     }
-    const song = SONGS[music.songIndex];
+    const list = playlist();
+    const song = list[music.songIndex % list.length];
     const tBeats = (AC.currentTime - music.startTime) * (song.bpm / 60);
     if (tBeats < 0) { beat.kick = 0; beat.snare = 0; beat.bass = 0; beat.arp = 0; return; }
     beat.phase = tBeats;
@@ -1591,7 +1682,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   // ---- loop --------------------------------------------------------------
   // shared services for the other arcade games
   window.ARCADE = {
-    audio, startMusic, toggleMusic, bleep, sweep, hat, beat,
+    audio, startMusic, toggleMusic, setStyle, bleep, sweep, hat, beat,
     suspend: () => { if (AC) AC.suspend(); },
     resume: () => { if (AC) AC.resume(); },
   };
@@ -1607,6 +1698,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       update(dt);
       updateFx(dt);
       draw(dt);
+      ARCADE_FX.bezel(ctx);
     }
     requestAnimationFrame(frame);
   }
@@ -1854,6 +1946,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   function quitToMenu() {
     T.running = false; T.paused = false;
     ARCADE_LOCK.unlock();
+    A.setStyle('neon');
     A.resume();
     pauseEl.classList.add('hidden');
     startEl.classList.add('hidden');
@@ -1864,6 +1957,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
 
   document.getElementById('pickTetris').addEventListener('click', () => {
     window.MODE = 'tetris';
+    A.setStyle('medieval');
     launchEl.classList.add('hidden');
     endEl.classList.add('hidden');
     prime();
@@ -2143,6 +2237,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       if (T.running) tick(dt);
       fx(dt);
       draw();
+      ARCADE_FX.bezel(ctx);
     }
     requestAnimationFrame(loop);
   }
@@ -2588,6 +2683,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       if (S.running) tick(dt);
       fx(dt);
       draw();
+      ARCADE_FX.bezel(ctx);
     }
     requestAnimationFrame(loop);
   }
@@ -3522,6 +3618,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       if (G.running) update(dt);
       fx(dt);
       draw();
+      ARCADE_FX.bezel(ctx);
     }
     requestAnimationFrame(loop);
   }
@@ -4017,28 +4114,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     }
     drawHandRef();
   }
-  // CRT bezel identical to the splash: dark frame, rounded tube corners,
-  // soft shadow bleeding from the frame onto the screen
-  function drawBezel() {
-    const W = innerWidth, H = innerHeight;
-    const inset = 18, rad = 38;
-    const x = inset, y = inset, w = W - inset * 2, h = H - inset * 2;
-    ctx.save();
-    ctx.globalAlpha = 1;
-    ctx.beginPath();
-    ctx.rect(0, 0, W, H);
-    ctx.moveTo(x + rad, y);
-    ctx.arcTo(x + w, y, x + w, y + h, rad);
-    ctx.arcTo(x + w, y + h, x, y + h, rad);
-    ctx.arcTo(x, y + h, x, y, rad);
-    ctx.arcTo(x, y, x + w, y, rad);
-    ctx.closePath();
-    ctx.shadowColor = 'rgba(20, 22, 15, 0.55)';
-    ctx.shadowBlur = 26;
-    ctx.fillStyle = '#14160f';
-    ctx.fill('evenodd');
-    ctx.restore();
-  }
   function pokerClick(x, y) {
     for (const b of HU.btns) {
       if (inRect(x, y, b)) {
@@ -4323,6 +4398,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   }
   function quitToArcade() {
     C.view = 'menu';
+    A.setStyle('neon');
     stageEl.classList.remove('freecursor');
     menuEl.classList.add('hidden');
     launchEl.classList.remove('hidden');
@@ -4330,6 +4406,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   }
   document.getElementById('pickCards').addEventListener('click', () => {
     window.MODE = 'cards';
+    A.setStyle('openttd');
     stageEl.classList.add('freecursor');
     launchEl.classList.add('hidden');
     showMenu();
@@ -4402,7 +4479,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       if (C.view === 'poker') drawPoker();
       else if (C.view === 'blackjack') drawBlackjack();
       else if (C.view === 'solitaire') drawSolitaire();
-      if (C.view !== 'menu') drawBezel();
+      if (C.view !== 'menu') ARCADE_FX.bezel(ctx);
     }
     requestAnimationFrame(frame);
   }
