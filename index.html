@@ -2528,10 +2528,32 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   const keys = {};
   let t = 0;
 
+  // ambient atmosphere: drifting dust motes and slow nebula glows
+  const dust = [], blobs = [];
+  function initAtmos() {
+    dust.length = 0; blobs.length = 0;
+    for (let i = 0; i < 90; i++) {
+      dust.push({
+        x: Math.random() * innerWidth, y: Math.random() * innerHeight,
+        vx: (Math.random() - 0.5) * 26, vy: (Math.random() - 0.5) * 26,
+        s: 0.6 + Math.random() * 1.6,
+        ph: Math.random() * 6.28, f: 0.4 + Math.random() * 1.6,
+      });
+    }
+    const tints = ['224, 69, 155', '143, 206, 154', '69, 116, 224', '195, 122, 230'];
+    for (let i = 0; i < 4; i++) {
+      blobs.push({
+        x: Math.random() * innerWidth, y: Math.random() * innerHeight,
+        vx: (Math.random() - 0.5) * 9, vy: (Math.random() - 0.5) * 9,
+        r: 200 + Math.random() * 280, tint: tints[i],
+      });
+    }
+  }
+  initAtmos();
+
+  // the field runs edge to edge — an endless grid with the screen as walls
   function arena() {
-    const W = innerWidth, H = innerHeight;
-    const bw = W * 0.84, bh = H * 0.8;
-    return { bx: (W - bw) / 2, by: (H - bh) / 2, bw, bh };
+    return { bx: 0, by: 0, bw: innerWidth, bh: innerHeight };
   }
 
   // kill-streak scoring: every kill bumps the multiplier, going 0.8s
@@ -2899,8 +2921,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     for (let i = G.bullets.length - 1; i >= 0; i--) {
       const b = G.bullets[i];
       b.x += b.vx * dt; b.y += b.vy * dt;
-      // every bullet shoves the grid outward as it flies
-      gridExplosive(8, b.x, b.y, 80);
+      // every bullet nudges the grid outward as it flies — kept subtle
+      gridExplosive(2.5, b.x, b.y, 60);
       if (b.x < bx + 3 || b.x > bx + bw - 3 || b.y < by + 3 || b.y > by + bh - 3) {
         // wall impact: a little splash of light-blue sparks
         for (let k = 0; k < 12; k++) {
@@ -3153,6 +3175,23 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       if (p.life <= 0) G.parts.splice(i, 1);
     }
     G.shake = Math.max(0, G.shake - dt * 30);
+    // atmosphere drift: motes wander (and lean toward black holes), glows roam
+    for (const p of dust) {
+      let vx = p.vx, vy = p.vy;
+      for (const h of G.holes) {
+        const dx = h.x - p.x, dy = h.y - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d < 300) { const k = (1 - d / 300) * 60; vx += (dx / d) * k; vy += (dy / d) * k; }
+      }
+      p.x += vx * dt; p.y += vy * dt;
+      if (p.x < 0) p.x += innerWidth; if (p.x > innerWidth) p.x -= innerWidth;
+      if (p.y < 0) p.y += innerHeight; if (p.y > innerHeight) p.y -= innerHeight;
+    }
+    for (const b of blobs) {
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.x < -b.r) b.x += innerWidth + b.r * 2; if (b.x > innerWidth + b.r) b.x -= innerWidth + b.r * 2;
+      if (b.y < -b.r) b.y += innerHeight + b.r * 2; if (b.y > innerHeight + b.r) b.y -= innerHeight + b.r * 2;
+    }
     if (grid.w !== innerWidth || grid.h !== innerHeight) buildGrid();
     gridUpdate();
   }
@@ -3195,6 +3234,22 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     ctx.fillStyle = '#050507';
     ctx.fillRect(0, 0, W, H);
     const { bx, by, bw, bh } = arena();
+    // nebula glows: huge soft color washes drifting behind everything
+    for (const b of blobs) {
+      const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+      grad.addColorStop(0, 'rgba(' + b.tint + ', 0.05)');
+      grad.addColorStop(1, 'rgba(' + b.tint + ', 0)');
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = grad;
+      ctx.fillRect(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2);
+    }
+    // dust motes twinkling as they drift
+    ctx.fillStyle = '#ffffff';
+    for (const p of dust) {
+      ctx.globalAlpha = 0.07 + 0.11 * (0.5 + 0.5 * Math.sin(t * p.f + p.ph));
+      ctx.fillRect(p.x, p.y, p.s, p.s);
+    }
+
     ctx.save();
     if (G.shake > 0 && !reducedMotion) {
       ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
@@ -3226,12 +3281,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       }
     }
     ctx.stroke();
-    ctx.globalAlpha = 0.45;
-    ctx.strokeStyle = CYAN;
-    ctx.shadowColor = CYAN;
-    ctx.shadowBlur = 10;
-    ctx.strokeRect(bx + 0.5, by + 0.5, bw, bh);
-    ctx.shadowBlur = 0;
 
     // black holes: dark core whose size pulsates like the original sprite
     for (const h of G.holes) {
