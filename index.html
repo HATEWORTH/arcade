@@ -249,19 +249,11 @@
     /* front-facing sign with the top half leaning away */
     transform: perspective(30rem) rotateX(24deg);
     transform-origin: 50% 100%;
-    /* hard shadow directly underneath the strokes */
-    text-shadow: 0 3px 0 #0e5a54;
+    /* ANSI-style depth: crisp teal copies of the glyphs stepped underneath */
+    text-shadow:
+      .3ch .28em 0 #157f76,
+      .6ch .56em 0 #0b4d47;
     animation: none;
-  }
-  /* ASCII floor shadow: a mirrored, flattened dark copy under the logo */
-  .nesshadow {
-    margin: -1.4em 0 -1.4em;
-    color: #0e5a54;
-    text-shadow: none;
-    transform: scaleY(-.5) skewX(-14deg);
-    transform-origin: 50% 50%;
-    opacity: .6;
-    filter: blur(1px);
   }
   .overlay.nes .gamemenu { flex-direction: column; gap: 1.15rem; align-items: flex-start; }
   .overlay.nes .gamecard,
@@ -313,12 +305,6 @@
 
 <div class="overlay nes" id="launchOverlay">
   <pre class="nestitle" role="heading" aria-level="1" aria-label="Arcade">
-   _      __    ___   _      ___  __
-  /_\    /__\  / __\ /_\    /   \/__\
- //_\\  / \// / /   //_\\  / /\ /_\
-/  _  \/ _  \/ /___/  _  \/ /_///__
-\_/ \_/\/ \_/\____/\_/ \_/___,'\__/</pre>
-  <pre class="nestitle nesshadow" aria-hidden="true">
    _      __    ___   _      ___  __
   /_\    /__\  / __\ /_\    /   \/__\
  //_\\  / \// / /   //_\\  / /\ /_\
