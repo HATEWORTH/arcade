@@ -395,19 +395,19 @@
     // smooth the stick: input eases in and out instead of snapping,
     // so direction changes carve arcs rather than kinking
     const m = Math.hypot(ax, ay) || 1;
-    const k = Math.min(1, dt * 9);
+    const k = Math.min(1, dt * 14);
     G.mov.x += ((ax / m) - G.mov.x) * k;
     G.mov.y += ((ay / m) - G.mov.y) * k;
-    G.ship.vx += G.mov.x * 2300 * dt;
-    G.ship.vy += G.mov.y * 2300 * dt;
+    G.ship.vx += G.mov.x * 3100 * dt;
+    G.ship.vy += G.mov.y * 3100 * dt;
     // gentle pull toward the cursor so the ship drifts where you're looking
     const adx = G.aim.x - G.ship.x, ady = G.aim.y - G.ship.y;
     const ad = Math.hypot(adx, ady) || 1;
     G.ship.vx += (adx / ad) * 260 * dt;
     G.ship.vy += (ady / ad) * 260 * dt;
     // light drag: momentum carries, but the ship stays steerable
-    G.ship.vx *= Math.max(0, 1 - dt * 1.4);
-    G.ship.vy *= Math.max(0, 1 - dt * 1.4);
+    G.ship.vx *= Math.max(0, 1 - dt * 1.8);
+    G.ship.vy *= Math.max(0, 1 - dt * 1.8);
     const sp = Math.hypot(G.ship.vx, G.ship.vy);
     if (sp > 560) { G.ship.vx *= 560 / sp; G.ship.vy *= 560 / sp; }
     G.ship.x += G.ship.vx * dt;
