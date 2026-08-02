@@ -326,6 +326,18 @@
     color: #565b48;
     text-shadow: 1px 2px 2px rgba(42, 46, 34, .25);
   }
+  /* Game & Watch style demo rally: dark segments snapping between
+     fixed positions, same ink and floating shadow as the text */
+  .lcdgame {
+    margin: 0;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: clamp(.8rem, 1.8vw, 1rem);
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: pre;
+    color: #2a2e22;
+    text-shadow: 2px 3px 3px rgba(42, 46, 34, .35);
+  }
   .vertag {
     position: absolute;
     right: 1.4rem;
@@ -360,6 +372,7 @@
       <button class="gamecard lime" id="pickSnake"><b>SNAKE</b><span>hunt the signal</span></button>
     </div>
   </div>
+  <pre class="lcdgame" id="lcdDemo" aria-hidden="true"></pre>
   <span class="vertag">V1.0</span>
 </div>
 
@@ -2458,6 +2471,27 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
+})();
+</script>
+
+<script>
+'use strict';
+// ---- splash LCD demo: a tiny pong rally in snapping segment steps -------
+(() => {
+  const el = document.getElementById('lcdDemo');
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const W = 19; // ball travel cells between the paddles
+  const frame = pos => '█' + ' '.repeat(pos) + '■' + ' '.repeat(W - 1 - pos) + '█';
+  if (reducedMotion) { el.textContent = frame(9); return; }
+  // ping-pong sequence: 0..W-1 then back, one snap per tick
+  const seq = [];
+  for (let i = 0; i < W; i++) seq.push(i);
+  for (let i = W - 2; i > 0; i--) seq.push(i);
+  let f = 0;
+  setInterval(() => {
+    el.textContent = frame(seq[f % seq.length]);
+    f++;
+  }, 220);
 })();
 </script>
 
