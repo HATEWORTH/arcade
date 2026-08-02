@@ -2519,7 +2519,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     ship: { x: 0, y: 0, vx: 0, vy: 0 },
     aim: { x: 0, y: 0 },
     firing: false, fireT: 0,
-    bullets: [], enemies: [], parts: [],
+    bullets: [], enemies: [], parts: [], spray: [],
     holes: [], shocks: [], holeT: 12,
     score: 0, kills: 0, lives: 3, inv: 0,
     spawnT: 1, time: 0, shake: 0,
@@ -2553,6 +2553,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     G.ship.vx = 0; G.ship.vy = 0;
     G.aim.x = G.ship.x; G.aim.y = by + bh * 0.3;
     G.bullets.length = 0; G.enemies.length = 0; G.parts.length = 0;
+    G.spray.length = 0;
     G.holes.length = 0; G.shocks.length = 0; G.holeT = 12;
     G.score = 0; G.kills = 0; G.lives = 3; G.inv = 0;
     G.spawnT = 1; G.time = 0; G.shake = 0; G.fireT = 0; G.firing = false;
@@ -2645,26 +2646,45 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       x = bx + 80 + Math.random() * (bw - 160);
       y = by + 80 + Math.random() * (bh - 160);
     } while (Math.hypot(x - G.ship.x, y - G.ship.y) < 300 && ++tries < 20);
-    G.holes.push({ x, y, r: 13, hp: 10, eaten: 0, life: 14, flash: 0 });
+    G.holes.push({ x, y, r: 13, hp: 10, eaten: 0, flash: 0, sprayA: Math.random() * Math.PI * 2 });
     A.sweep(300, 45, 0.7, 'sine', 0.06);
   }
-  function explodeHole(i) {
+  // NeonShooter-style death: a uniform 150-particle ring in a cycling hue
+  function ringBurst(x, y) {
+    const N = 150;
+    const off = Math.random() * (Math.PI * 2 / N);
+    const hue = Math.floor((t * 180) % 360);
+    for (let k = 0; k < N; k++) {
+      const a = (Math.PI * 2 * k) / N + off;
+      const spd = 480 + Math.random() * 480;
+      G.parts.push({
+        x: x + Math.cos(a) * 4, y: y + Math.sin(a) * 4,
+        vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+        life: 1, decay: 0.65 + Math.random() * 0.35,
+        color: 'hsl(' + hue + ', 65%, 74%)',
+        len: 6 + Math.random() * 12,
+      });
+    }
+  }
+  function explodeHole(i, withBits) {
     const h = G.holes[i];
     G.holes.splice(i, 1);
     G.holeT = 18 + Math.random() * 8;
     G.shocks.push({ x: h.x, y: h.y, rad: 8, speed: 660, maxRad: 700 });
-    burst(h.x, h.y, MAGENTA, 44, 1.7);
+    ringBurst(h.x, h.y);
     G.shake = 18;
     A.sweep(700, 24, 0.7, 'sawtooth', 0.11);
     A.hat(0.12, 0.2);
-    // everything it swallowed tears free as seeker bits chasing the ship
-    const n = Math.min(14, Math.max(4, h.eaten + 2));
-    for (let k = 0; k < n; k++) {
-      const a = (k / n) * Math.PI * 2;
-      G.enemies.push({
-        x: h.x + Math.cos(a) * (h.r + 8), y: h.y + Math.sin(a) * (h.r + 8),
-        type: 'bit', r: 5, spd: 230 + Math.random() * 90,
-      });
+    // what it swallowed tears free as seeker bits chasing the ship
+    if (withBits) {
+      const n = Math.min(14, h.eaten);
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2;
+        G.enemies.push({
+          x: h.x + Math.cos(a) * (h.r + 8), y: h.y + Math.sin(a) * (h.r + 8),
+          type: 'bit', r: 5, spd: 230 + Math.random() * 90,
+        });
+      }
     }
   }
 
@@ -2674,14 +2694,10 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     G.shake = 14;
     A.sweep(500, 40, 0.4, 'sawtooth', 0.07);
     A.hat(0.09, 0.12);
-    // the blast clears the space around you for the respawn
-    for (let i = G.enemies.length - 1; i >= 0; i--) {
-      const en = G.enemies[i];
-      if (Math.hypot(en.x - G.ship.x, en.y - G.ship.y) < 260) {
-        burst(en.x, en.y, ENEMY_COLOR[en.type], 8, 1);
-        G.enemies.splice(i, 1);
-      }
-    }
+    // like the original: your death wipes the board and detonates every hole
+    for (const en of G.enemies) burst(en.x, en.y, ENEMY_COLOR[en.type], 6, 1);
+    G.enemies.length = 0;
+    for (let i = G.holes.length - 1; i >= 0; i--) explodeHole(i, false);
     G.inv = 2;
     if (G.lives <= 0) die();
   }
@@ -2763,35 +2779,35 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     }
     for (let i = G.holes.length - 1; i >= 0; i--) {
       const h = G.holes[i];
-      h.life -= dt;
       h.flash = Math.max(0, h.flash - dt);
-      const PR = 320; // gravity reach
-      // pull on the ship (respawn blink is exempt so you can escape)
+      // spray jet rotates a full turn every ~0.83s, like the original
+      h.sprayA -= (Math.PI * 2 / 50) * 60 * dt;
+      const PR = 250; // gravity reach
+      // ship is attracted, linear falloff (respawn blink is exempt)
       if (G.inv <= 0) {
         const dx = h.x - G.ship.x, dy = h.y - G.ship.y;
         const d = Math.hypot(dx, dy) || 1;
         if (d < PR) {
           const k = 1 - d / PR;
-          G.ship.vx += (dx / d) * 640 * k * k * dt;
-          G.ship.vy += (dy / d) * 640 * k * k * dt;
+          G.ship.vx += (dx / d) * 2000 * k * dt;
+          G.ship.vy += (dy / d) * 2000 * k * dt;
         }
-        if (d < h.r + 10) shipHit();
+        if (d < h.r + 10) { shipHit(); break; }
       }
-      // shots curve around the well; hitting the core wears it down
+      // bullets are repelled — you have to fight the push to land hits
       for (let j = G.bullets.length - 1; j >= 0; j--) {
         const b = G.bullets[j];
         const dx = h.x - b.x, dy = h.y - b.y;
         const d = Math.hypot(dx, dy) || 1;
         if (d < PR) {
-          const k = 1 - d / PR;
-          b.vx += (dx / d) * 1500 * k * dt;
-          b.vy += (dy / d) * 1500 * k * dt;
+          b.vx -= (dx / d) * 1000 * dt;
+          b.vy -= (dy / d) * 1000 * dt;
         }
         if (d < h.r + 4) {
           G.bullets.splice(j, 1);
           h.hp--; h.flash = 0.12;
           burst(b.x, b.y, MAGENTA, 3, 0.5);
-          if (h.hp <= 0) { explodeHole(i); break; }
+          if (h.hp <= 0) { G.score += 25 * mult(); explodeHole(i, true); break; }
         }
       }
       if (!G.holes[i]) continue; // burst by gunfire this frame
@@ -2802,18 +2818,29 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
         const d = Math.hypot(dx, dy) || 1;
         if (d < PR) {
           const k = 1 - d / PR;
-          const pull = 480 * k * k * dt;
+          const pull = 420 * k * dt;
           en.x += (dx / d) * pull; en.y += (dy / d) * pull;
-          if (en.vx !== undefined) { en.vx += (dx / d) * 700 * k * dt; en.vy += (dy / d) * 700 * k * dt; }
+          if (en.vx !== undefined) { en.vx += (dx / d) * 900 * k * dt; en.vy += (dy / d) * 900 * k * dt; }
         }
         if (d < h.r + en.r) {
           G.enemies.splice(j, 1);
-          h.eaten++; h.r = Math.min(26, h.r + 0.7);
+          h.eaten++; h.r = Math.min(26, h.r + 0.5);
           burst(en.x, en.y, ENEMY_COLOR[en.type], 5, 0.6);
           A.bleep(130, 0.05, 'sine', 0.025);
         }
       }
-      if (h.eaten >= 10 || h.life <= 0) explodeHole(i);
+      // orbiting particle jet: sprays in quarter-second on/off windows
+      if (Math.floor(t * 4) % 2 === 0 && G.spray.length < 220) {
+        const sp = 720 + Math.random() * 180;
+        const vx = Math.cos(h.sprayA) * sp, vy = Math.sin(h.sprayA) * sp;
+        G.spray.push({
+          x: h.x + vy * 0.033 + (Math.random() - 0.5) * 10,
+          y: h.y - vx * 0.033 + (Math.random() - 0.5) * 10,
+          vx, vy, life: 3.2,
+        });
+      }
+      // overfed wells destabilize and blow on their own
+      if (h.eaten >= 15) explodeHole(i, true);
     }
     // shockwaves: the blast wave drags everything it crosses toward it
     for (let i = G.shocks.length - 1; i >= 0; i--) {
@@ -2868,6 +2895,27 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
 
   function fx(dt) {
     t += dt;
+    // orbiting spray: attracted with 1/d^2 gravity plus a tangential kick,
+    // which winds them into the signature vortex around the hole
+    for (let i = G.spray.length - 1; i >= 0; i--) {
+      const p = G.spray[i];
+      for (const h of G.holes) {
+        const dx = h.x - p.x, dy = h.y - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const nx = dx / d, ny = dy / d;
+        const g = 36000000 / (d * d + 10000);
+        p.vx += nx * g * dt; p.vy += ny * g * dt;
+        if (d < 400) {
+          const tg = 162000 / (d + 100);
+          p.vx += ny * tg * dt; p.vy += -nx * tg * dt;
+        }
+      }
+      const damp = Math.pow(0.94, dt * 60);
+      p.vx *= damp; p.vy *= damp;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.life -= dt;
+      if (p.life <= 0) G.spray.splice(i, 1);
+    }
     for (let i = G.parts.length - 1; i >= 0; i--) {
       const p = G.parts[i];
       p.x += p.vx * dt; p.y += p.vy * dt;
@@ -2918,10 +2966,12 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       for (const h of G.holes) {
         const dx = x - h.x, dy = y - h.y;
         const d = Math.hypot(dx, dy) || 1;
-        if (d < 300) {
-          const k = 1 - d / 300;
-          ox -= (dx / d) * k * k * 26;
-          oy -= (dy / d) * k * k * 26;
+        if (d < 220) {
+          // implosive pull that breathes with the spray cycle, per the original
+          const amp = (Math.sin(h.sprayA / 2) * 10 + 20) * 1.4;
+          const k = 1 - d / 220;
+          ox -= (dx / d) * k * k * amp;
+          oy -= (dy / d) * k * k * amp;
         }
       }
       for (const s of G.shocks) {
@@ -2960,26 +3010,37 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     ctx.strokeRect(bx + 0.5, by + 0.5, bw, bh);
     ctx.shadowBlur = 0;
 
-    // black holes: dark core, pulsing ring, slow-orbiting debris ring
+    // black holes: dark core whose size pulsates like the original sprite
     for (const h of G.holes) {
+      const rr = h.r * (1 + 0.1 * Math.sin(t * 10)) + (h.flash > 0 ? 3 : 0);
       ctx.globalAlpha = 1;
       ctx.fillStyle = '#000';
-      ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2); ctx.fill();
-      const pulse = h.r + 2 + Math.sin(t * 6) * 1.5 + (h.flash > 0 ? 4 : 0);
+      ctx.beginPath(); ctx.arc(h.x, h.y, rr, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = MAGENTA;
       ctx.shadowColor = MAGENTA;
       ctx.shadowBlur = 16;
       ctx.lineWidth = 2.5;
       ctx.globalAlpha = 0.95;
-      ctx.beginPath(); ctx.arc(h.x, h.y, pulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(h.x, h.y, rr + 2, 0, Math.PI * 2); ctx.stroke();
       ctx.shadowBlur = 0;
-      ctx.globalAlpha = 0.3;
-      ctx.setLineDash([5, 9]);
-      ctx.lineDashOffset = -t * 40;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(h.x, h.y, h.r + 16, 0, Math.PI * 2); ctx.stroke();
-      ctx.setLineDash([]);
     }
+    // spray vortex: light-purple shards spiraling around the wells
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#c37ae6';
+    ctx.shadowColor = '#c37ae6';
+    ctx.shadowBlur = 6;
+    for (const p of G.spray) {
+      const s = Math.hypot(p.vx, p.vy) || 1;
+      ctx.globalAlpha = Math.min(1, p.life) * Math.min(1, s / 260) * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      const l = Math.min(16, 4 + s * 0.018);
+      ctx.lineTo(p.x + (p.vx / s) * l, p.y + (p.vy / s) * l);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.lineCap = 'butt';
     // shockwave rings racing outward
     for (const s of G.shocks) {
       const fade = 1 - s.rad / s.maxRad;
