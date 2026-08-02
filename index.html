@@ -295,15 +295,6 @@
   }
   .overlay.nes .gamecard:hover::before,
   .overlay.nes .gamecard:focus-visible::before { opacity: 1; }
-  .nescopy {
-    margin: 1.4rem 0 0;
-    font-weight: 700;
-    font-size: clamp(.85rem, 2vw, 1.05rem);
-    letter-spacing: .28em;
-    color: #fff;
-  }
-  .nescopy em { font-style: normal; color: #e0459b; }
-
   @media (prefers-reduced-motion: reduce) {
     .title, .prompt { animation: none; }
   }
@@ -330,7 +321,6 @@
     <button class="gamecard magenta" id="pickTetris"><b>TETRIS</b><span>stack in the void</span></button>
     <button class="gamecard lime" id="pickSnake"><b>SNAKE</b><span>hunt the signal</span></button>
   </div>
-  <p class="nescopy">&copy; 2026 <em>NEON</em>, LTD.</p>
 </div>
 
 <div class="overlay hidden" id="startOverlay">
