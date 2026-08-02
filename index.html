@@ -258,14 +258,22 @@
     background: none;
     border: none;
     box-shadow: none;
-    padding: 0 0 0 1.6em;
+    padding: .1em .5em .1em 1.6em;
     transform: none;
     font-family: Consolas, "Courier New", monospace;
     font-weight: 400;
     font-size: clamp(1rem, 2.4vw, 1.25rem);
     letter-spacing: .08em;
-    color: #fff;
+    color: #ececf1;
     position: relative;
+    transition: none;
+  }
+  /* hard block highlight — the row inverts, no glow, no ease */
+  .overlay.nes .gamecard:hover,
+  .overlay.nes .gamecard:focus-visible {
+    background: #ececf1;
+    color: #000;
+    outline: none;
   }
   .overlay.nes .gamecard b {
     display: inline;
@@ -279,12 +287,29 @@
   .overlay.nes .gamecard::before {
     content: '*';
     position: absolute;
-    left: 0;
-    color: #c2255e;
+    left: .5em;
+    color: inherit;
     opacity: 0;
   }
   .overlay.nes .gamecard:hover::before,
   .overlay.nes .gamecard:focus-visible::before { opacity: 1; }
+  .menulabel {
+    margin: 0 0 -1.2rem;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: .72rem;
+    letter-spacing: .5em;
+    padding-left: .5em;
+    color: #6a6a74;
+  }
+  .vertag {
+    position: absolute;
+    right: 1.4rem;
+    bottom: 1.1rem;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: .68rem;
+    letter-spacing: .3em;
+    color: #4a4a52;
+  }
   @media (prefers-reduced-motion: reduce) {
     .title, .prompt { animation: none; }
   }
@@ -301,11 +326,13 @@
 
 <div class="overlay nes" id="launchOverlay">
   <h1 class="nestitle">ARCADE</h1>
+  <p class="menulabel">SELECT GAME</p>
   <div class="gamemenu">
     <button class="gamecard" id="pickPong"><b>PONG 3D</b><span>defend the tunnel core</span></button>
     <button class="gamecard magenta" id="pickTetris"><b>TETRIS</b><span>stack in the void</span></button>
     <button class="gamecard lime" id="pickSnake"><b>SNAKE</b><span>hunt the signal</span></button>
   </div>
+  <span class="vertag">V1.0</span>
 </div>
 
 <div class="overlay hidden" id="startOverlay">
