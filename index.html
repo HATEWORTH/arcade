@@ -3925,6 +3925,19 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     ['PAIR',         1, [['10', 0], ['10', 1], ['K', 2], ['6', 3], ['2', 0]]],
     ['HIGH CARD',    0, [['A', 0], ['Q', 1], ['9', 2], ['5', 3], ['3', 0]]],
   ];
+  // shared side-panel geometry: the old left-edge slot and its right mirror
+  function refGeom() {
+    const W = innerWidth;
+    const mw = 27, mg = 4;
+    const pw = 5 * (mw + mg) - mg + 28;
+    const cw = Math.min(84, W / 11), gap = cw * 0.22;
+    const boardLeft = W / 2 - (5 * cw + 4 * gap) / 2;
+    const near = boardLeft - 250;
+    const x0L = Math.max(40, near - (near - 34) * 0.4);
+    const pxL = x0L - 14;
+    const pxR = W - pxL - pw;
+    return { pw, pxL, x0L, pxR, x0R: pxR + 14 };
+  }
   function bestOf(cs) {
     if (cs.length === 5) return score5(cs);
     if (cs.length === 6) {
@@ -3949,11 +3962,9 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     }
     const mw = 27, mh = 37, mg = 4;
     const rowH = Math.min(72, Math.max(52, (H - 140) / HAND_REF.length));
-    // sit 60% of the way from the screen edge toward the board
-    const cw = Math.min(84, W / 11), gap = cw * 0.22;
-    const boardLeft = W / 2 - (5 * cw + 4 * gap) / 2;
-    const near = boardLeft - 250;
-    const x0 = Math.max(40, near - (near - 34) * 0.4);
+    // mirrored to the right of the board, same distance as the old left spot
+    const g2 = refGeom();
+    const x0 = g2.x0R;
     const y0 = H / 2 - (HAND_REF.length * rowH) / 2 + 16;
     // panel frame + row dividers
     const pw = 5 * (mw + mg) - mg + 28;
@@ -4002,7 +4013,16 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   function drawPoker() {
     const W = innerWidth, H = innerHeight;
     const cw = Math.min(84, W / 11), chh = cw * 1.42, gap = cw * 0.22;
-    lcdText("HOLD'EM", W / 2, 72, 20, LINK, 'center');
+    // big bold title in the old guide slot on the left
+    const tg = refGeom();
+    ctx.shadowColor = 'rgba(42, 46, 34, .3)';
+    ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 5; ctx.shadowBlur = 3;
+    ctx.fillStyle = LINK;
+    ctx.font = '800 60px ' + MONO;
+    ctx.textAlign = 'center';
+    ctx.fillText("HOLD'EM", tg.pxL + tg.pw / 2, H / 2 + 20);
+    lcdShadow(false);
+    ctx.textAlign = 'left';
     // cpu hole cards, stack beside them
     const cy0 = H * 0.17;
     const cx0 = W / 2 - (2 * cw + gap) / 2;
