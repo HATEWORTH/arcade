@@ -228,6 +228,78 @@
   }
   .overlay.strategy .verdict { color: #ececf1; text-shadow: none; font-weight: 600; letter-spacing: .32em; }
 
+  /* NES title-screen styling for the launch splash: solid black, chunky
+     tilted logo with hard layered drop-shadows, plain text menu + star cursor */
+  .overlay.nes {
+    background: #000;
+    gap: 2.6rem;
+    font-family: "Courier New", Courier, monospace;
+  }
+  .nestitle {
+    margin: 0 0 1rem;
+    font-weight: 700;
+    font-size: clamp(3rem, 13vw, 7.5rem);
+    letter-spacing: .04em;
+    color: #fff;
+    transform: rotate(-6deg);
+    position: relative;
+    text-shadow:
+      .045em .045em 0 #f7a046,
+      .095em .095em 0 #e0459b,
+      .15em .15em 0 #4a4a4a;
+    animation: none;
+  }
+  .nestitle .tm {
+    position: absolute;
+    right: -1.4em;
+    bottom: .5em;
+    font-size: .14em;
+    letter-spacing: .1em;
+    text-shadow: none;
+  }
+  .overlay.nes .gamemenu { flex-direction: column; gap: 1.15rem; align-items: flex-start; }
+  .overlay.nes .gamecard,
+  .overlay.nes .gamecard:hover,
+  .overlay.nes .gamecard:focus-visible {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0 0 0 1.6em;
+    transform: none;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: clamp(1rem, 2.6vw, 1.35rem);
+    letter-spacing: .32em;
+    color: #fff;
+    position: relative;
+  }
+  .overlay.nes .gamecard b {
+    display: inline;
+    font-size: inherit;
+    letter-spacing: inherit;
+    margin: 0;
+    color: inherit;
+    text-shadow: none;
+  }
+  .overlay.nes .gamecard span { display: none; }
+  .overlay.nes .gamecard::before {
+    content: '\2605';
+    position: absolute;
+    left: 0;
+    color: #c2255e;
+    opacity: 0;
+  }
+  .overlay.nes .gamecard:hover::before,
+  .overlay.nes .gamecard:focus-visible::before { opacity: 1; }
+  .nescopy {
+    margin: 1.4rem 0 0;
+    font-weight: 700;
+    font-size: clamp(.85rem, 2vw, 1.05rem);
+    letter-spacing: .28em;
+    color: #fff;
+  }
+  .nescopy em { font-style: normal; color: #e0459b; }
+
   @media (prefers-reduced-motion: reduce) {
     .title, .prompt { animation: none; }
   }
@@ -242,14 +314,14 @@
 
 <div id="trackToast" class="track" aria-live="polite"></div>
 
-<div class="overlay" id="launchOverlay">
-  <h1 class="title">NEON<em>ARCADE</em></h1>
+<div class="overlay nes" id="launchOverlay">
+  <h1 class="nestitle">ARCADE<span class="tm">TM</span></h1>
   <div class="gamemenu">
     <button class="gamecard" id="pickPong"><b>PONG 3D</b><span>defend the tunnel core</span></button>
     <button class="gamecard magenta" id="pickTetris"><b>TETRIS</b><span>stack in the void</span></button>
     <button class="gamecard lime" id="pickSnake"><b>SNAKE</b><span>hunt the signal</span></button>
   </div>
-  <p class="sub">Everything moves to the music &middot; M mutes</p>
+  <p class="nescopy">&copy; 2026 <em>NEON</em>, LTD.</p>
 </div>
 
 <div class="overlay hidden" id="startOverlay">
@@ -1392,8 +1464,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     last = now;
     dt = Math.min(dt, 1 / 30);
     updateBeat();
-    // pong renders in its own mode and as the menu's ambient backdrop
-    if (window.MODE !== 'tetris' && window.MODE !== 'snake' && !game.paused) {
+    // pong only renders in its own mode; the menu splash is a solid card
+    if (window.MODE === 'pong' && !game.paused) {
       update(dt);
       updateFx(dt);
       draw(dt);
