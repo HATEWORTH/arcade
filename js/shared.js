@@ -53,8 +53,9 @@ addEventListener('DOMContentLoaded', () => {
 });
 
 // ---- shared CRT bezel: the rounded tube frame every screen sits behind --
-// fine static grain used to dither the low-alpha gradient washes —
-// without it the 8-bit gradients band visibly on the near-black substrate
+// fine static grain used to dither the highlight wash — without it the
+// 8-bit gradient bands visibly. Pre-baked into a layer masked to the
+// hotspot so the grain lives only where the banding does.
 let grainPat = null;
 function grainPattern(ctx) {
   if (grainPat) return grainPat;
@@ -65,18 +66,37 @@ function grainPattern(ctx) {
   for (let i = 0; i < img.data.length; i += 4) {
     const v = Math.random() < 0.5 ? 0 : 255;
     img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
-    img.data[i + 3] = 9; // ~3.5% alpha, half lightening, half darkening
+    img.data[i + 3] = 5; // ~2% alpha, half lightening, half darkening
   }
   g.putImageData(img, 0, 0);
   grainPat = ctx.createPattern(c, 'repeat');
   return grainPat;
 }
+let grainLayer = null, grainW = 0, grainH = 0;
+function grainHighlightLayer() {
+  const W = innerWidth, H = innerHeight;
+  if (!grainLayer || grainW !== W || grainH !== H) {
+    grainW = W; grainH = H;
+    grainLayer = document.createElement('canvas');
+    grainLayer.width = W; grainLayer.height = H;
+    const g = grainLayer.getContext('2d');
+    g.fillStyle = grainPattern(g);
+    g.fillRect(0, 0, W, H);
+    // fade the grain out with the same radial the hotspot uses
+    const m = g.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.62);
+    m.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    m.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    g.globalCompositeOperation = 'destination-in';
+    g.fillStyle = m;
+    g.fillRect(0, 0, W, H);
+  }
+  return grainLayer;
+}
 
 window.ARCADE_FX = {
   grain(ctx) {
     ctx.globalAlpha = 1;
-    ctx.fillStyle = grainPattern(ctx);
-    ctx.fillRect(0, 0, innerWidth, innerHeight);
+    ctx.drawImage(grainHighlightLayer(), 0, 0);
   },
   // dark-LCD substrate: same glass as the sage screens with the backlight
   // off — olive-tinted black, a faint warm hotspot, edges falling away
