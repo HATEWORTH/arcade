@@ -22,7 +22,8 @@ window.ARCADE_LOCK = (() => {
   }
   addEventListener('pointermove', e => {
     if (locked()) {
-      const SENS = 0.6; // locked-cursor sensitivity
+      // per-game locked-cursor sensitivity: aiming in geo wants a quicker hand
+      const SENS = window.MODE === 'geo' ? 0.9 : 0.6;
       cur.x = Math.max(0, Math.min(innerWidth, cur.x + e.movementX * SENS));
       cur.y = Math.max(0, Math.min(innerHeight, cur.y + e.movementY * SENS));
     } else {
