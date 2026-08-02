@@ -341,7 +341,7 @@
   .lcdgame {
     margin: 0;
     font-family: Consolas, "Courier New", monospace;
-    font-size: clamp(.8rem, 1.8vw, 1rem);
+    font-size: clamp(.7rem, 1.5vw, .85rem);
     line-height: 1;
     letter-spacing: 0;
     white-space: pre;
@@ -2490,23 +2490,24 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
 (() => {
   const el = document.getElementById('lcdDemo');
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const W = 21, R = 3; // segment grid: 3 rows tall, fixed so nothing shifts
+  const W = 21, R = 6; // segment grid: 6 rows tall, fixed so nothing shifts
 
   const blank = () => Array.from({ length: R }, () => Array(W).fill(' '));
   const show = g => { el.textContent = g.map(r => r.join('')).join('\n'); };
 
-  // pong: flat rally along the middle row
+  // pong: flat rally along the middle, paddles tall enough to read as pong
   const pong = { x: 2, vx: 1 };
   function pongTick() {
     pong.x += pong.vx;
     if (pong.x <= 1 || pong.x >= W - 2) pong.vx *= -1, pong.x = Math.max(1, Math.min(W - 2, pong.x));
     const g = blank();
-    g[1][0] = '█'; g[1][W - 1] = '█';
-    g[1][pong.x] = '■';
+    for (const r of [1, 2, 3]) { g[r][0] = '█'; g[r][W - 1] = '█'; }
+    g[2][pong.x] = '■';
     return g;
   }
 
-  // tetris: real tetromino shapes drop in steps and pile up, then clear
+  // tetris: tetrominoes fall the height of the well, land on the pile,
+  // and a full bottom row blinks and clears
   const SHAPES = {
     I: [[0, 0], [0, 1], [0, 2], [0, 3]],
     O: [[0, 0], [0, 1], [1, 0], [1, 1]],
@@ -2514,30 +2515,59 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     S: [[0, 1], [0, 2], [1, 0], [1, 1]],
     L: [[0, 0], [1, 0], [1, 1], [1, 2]],
   };
-  const drops = [['I', 0], ['O', 5], ['T', 8], ['S', 12], ['L', 16]];
-  const tet = { i: 0, top: 0, stack: [], flash: 0 };
+  const drops = [
+    ['I', 0], ['O', 4], ['T', 6], ['L', 9], ['O', 12], ['I', 14], ['T', 18],
+    ['S', 2], ['L', 16], ['O', 7], ['T', 10],
+  ];
+  const tet = {
+    i: 0, top: 0, flash: 0, mode: '',
+    stack: Array.from({ length: R }, () => Array(W).fill(false)),
+  };
+  function tetFits(top) {
+    const [name, col] = drops[tet.i % drops.length];
+    for (const [r, c] of SHAPES[name]) {
+      const nr = top + r;
+      if (nr >= R || tet.stack[nr][col + c]) return false;
+    }
+    return true;
+  }
   function tetTick() {
     const g = blank();
     if (tet.flash > 0) {
       tet.flash--;
-      if (tet.flash === 0) { tet.stack = []; tet.i = 0; tet.top = 0; }
-      if (tet.flash % 2) for (let c = 0; c < W; c++) g[R - 1][c] = '█';
+      for (let r = 0; r < R; r++) {
+        for (let c = 0; c < W; c++) {
+          const lit = tet.stack[r][c] && !(tet.flash % 2 && (tet.mode === 'all' || r === R - 1));
+          if (lit) g[r][c] = '█';
+        }
+      }
+      if (tet.flash === 0) {
+        if (tet.mode === 'all') {
+          tet.stack = Array.from({ length: R }, () => Array(W).fill(false));
+        } else {
+          tet.stack.splice(R - 1, 1);
+          tet.stack.unshift(Array(W).fill(false));
+        }
+        tet.top = 0;
+      }
       return g;
     }
-    for (const [r, c] of tet.stack) g[r][c] = '█';
-    const [name, col] = drops[tet.i];
-    const shape = SHAPES[name];
-    const h = Math.max(...shape.map(([r]) => r)) + 1;
-    if (tet.top + h - 1 < R - 1) {
-      for (const [r, c] of shape) g[tet.top + r][col + c] = '■';
+    for (let r = 0; r < R; r++) for (let c = 0; c < W; c++) if (tet.stack[r][c]) g[r][c] = '█';
+    const [name, col] = drops[tet.i % drops.length];
+    if (tetFits(tet.top) && tetFits(tet.top + 1)) {
+      for (const [r, c] of SHAPES[name]) g[tet.top + r][col + c] = '■';
       tet.top++;
+    } else if (!tetFits(tet.top)) {
+      // no room to enter: the well topped out
+      tet.flash = 6; tet.mode = 'all';
     } else {
-      for (const [r, c] of shape) {
-        tet.stack.push([R - h + r, col + c]);
-        g[R - h + r][col + c] = '█';
+      for (const [r, c] of SHAPES[name]) {
+        tet.stack[tet.top + r][col + c] = true;
+        g[tet.top + r][col + c] = '█';
       }
       tet.i++; tet.top = 0;
-      if (tet.i >= drops.length) tet.flash = 5;
+      if (tet.stack[R - 1].every(Boolean)) { tet.flash = 6; tet.mode = 'row'; }
+      else if (tet.stack[1].some(Boolean)) { tet.flash = 6; tet.mode = 'all'; }
     }
     return g;
   }
@@ -2545,13 +2575,13 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
   // snake: crawls the field perimeter chasing a food segment
   const perim = [];
   for (let c = 0; c < W; c++) perim.push([0, c]);
-  perim.push([1, W - 1]);
+  for (let r = 1; r < R - 1; r++) perim.push([r, W - 1]);
   for (let c = W - 1; c >= 0; c--) perim.push([R - 1, c]);
-  perim.push([1, 0]);
-  const snk = { head: 0, len: 6, food: 12 };
+  for (let r = R - 2; r >= 1; r--) perim.push([r, 0]);
+  const snk = { head: 0, len: 8, food: 12 };
   function snakeTick() {
     snk.head = (snk.head + 1) % perim.length;
-    if (snk.head === snk.food) snk.food = (snk.food + 13) % perim.length;
+    if (snk.head === snk.food) snk.food = (snk.food + 17) % perim.length;
     const g = blank();
     const [fr, fc] = perim[snk.food];
     g[fr][fc] = '*';
