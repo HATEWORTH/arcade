@@ -284,7 +284,7 @@
 <div class="overlay strategy hidden" id="snakeEnd">
   <p class="verdict lose">SIGNAL LOST</p>
   <p class="sub" id="snakeScoreLine"></p>
-  <p class="prompt">Click to retry</p>
+  <p class="prompt">Enter or click to retry</p>
 </div>
 
 <div class="overlay hidden" id="endOverlay">
@@ -1954,20 +1954,23 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
   const COLS = 22, ROWS = 22;
   const WHITE = '#ffffff';
   const GREEN = '#8fce9a', PINK = '#e0459b';
+  // each spawned signal gets its own neon hue
+  const FOOD_COLORS = [PINK, '#45c8e0', '#e0c945', '#9a45e0', '#45e07a', '#e06a45', '#4574e0'];
 
   const S = {
     running: false, paused: false,
     body: [],            // head first, {x, y}
     dir: { x: 1, y: 0 },
     queue: [],           // buffered turns
-    food: null,
+    food: null, foodColor: PINK,
     score: 0, eaten: 0, level: 1,
     stepT: 0, shake: 0,
   };
   // residue map: cells the snake vacates leave a fading gray ghost tile
   let heat = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
   const particles = [];
-  const cellFlashes = []; // white blooms over eaten signals
+  const cellFlashes = []; // blooms over eaten signals, tinted by the food's hue
+  const rings = [];       // shockwave rings on each catch
   let t = 0;
 
   const STATS_H = 96; // footer inside the panel: big numerals + info bar
@@ -2001,6 +2004,9 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
       }
     }
     S.food = free.length ? free[Math.floor(Math.random() * free.length)] : null;
+    // always switch to a different hue than the last signal
+    const others = FOOD_COLORS.filter(c => c !== S.foodColor);
+    S.foodColor = others[Math.floor(Math.random() * others.length)];
   }
 
   function stepInterval() {
@@ -2024,15 +2030,21 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     S.body.unshift({ x: nx, y: ny });
 
     if (S.food && nx === S.food.x && ny === S.food.y) {
+      const eatenColor = S.foodColor;
       S.eaten++;
       S.score += 10 * S.level;
       S.level = 1 + Math.floor(S.eaten / 5);
-      S.shake = 6;
-      cellFlashes.push({ x: nx, y: ny, life: 1 });
-      chaosBurst(bx + (nx + 0.5) * cell, by + (ny + 0.5) * cell, PINK, 18, 1.4);
-      // drowning synth + hi-hat on the catch, like a tetris touchdown
-      A.sweep(500, 32, 0.45, 'sawtooth', 0.06);
-      A.hat(0.07, 0.1);
+      S.shake = 14;
+      const fx0 = bx + (nx + 0.5) * cell, fy0 = by + (ny + 0.5) * cell;
+      cellFlashes.push({ x: nx, y: ny, life: 1, color: eatenColor });
+      rings.push({ x: fx0, y: fy0, r: cell * 0.4, life: 1, color: eatenColor });
+      rings.push({ x: fx0, y: fy0, r: cell * 0.2, life: 1.25, color: WHITE });
+      chaosBurst(fx0, fy0, eatenColor, 44, 2.2);
+      // hard catch: deep dive-bomb sweep, cracked hat, bright zap on top
+      A.sweep(900, 24, 0.5, 'sawtooth', 0.11);
+      A.hat(0.13, 0.16);
+      A.bleep(1200 + S.level * 60, 0.06, 'square', 0.05);
+      setTimeout(() => A.bleep(1600 + S.level * 60, 0.05, 'square', 0.04), 45);
       spawnFood();
     } else {
       const tail = S.body.pop();
@@ -2066,6 +2078,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     S.stepT = 0;
     particles.length = 0;
     cellFlashes.length = 0;
+    rings.length = 0;
     spawnFood();
     S.running = true;
     A.audio(); A.startMusic();
@@ -2109,6 +2122,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     if (window.MODE !== 'snake') return;
     if (e.key === 'Escape') { togglePause(); return; }
     if ((e.key === 'q' || e.key === 'Q') && (S.paused || !S.running)) { quitToMenu(); return; }
+    if (e.key === 'Enter' && !S.running && !S.paused) { start(); return; }
     if (!S.running || S.paused) return;
     const d = DIRS[e.key];
     if (d) {
@@ -2143,6 +2157,12 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     for (let i = cellFlashes.length - 1; i >= 0; i--) {
       cellFlashes[i].life -= dt * 2.2;
       if (cellFlashes[i].life <= 0) cellFlashes.splice(i, 1);
+    }
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const rg = rings[i];
+      rg.r += dt * 620;
+      rg.life -= dt * 3;
+      if (rg.life <= 0) rings.splice(i, 1);
     }
     // residue tiles fade slowly
     for (let r = 0; r < ROWS; r++) {
@@ -2245,21 +2265,32 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
       drawCell(bx + h.x * cell, by + h.y * cell, cell, GREEN, 0.92 * flick, 16 + beat.kick * 8);
     }
 
-    // food signal: pink tile pulsing gently with the arpeggio
+    // food signal: tile in this spawn's hue, pulsing gently with the arpeggio
     if (S.food && S.running) {
       const pulse = 0.72 + 0.14 * Math.sin(t * 4) + beat.arp * 0.1;
-      drawCell(bx + S.food.x * cell, by + S.food.y * cell, cell, PINK, pulse * flick, 14 + beat.arp * 8);
+      drawCell(bx + S.food.x * cell, by + S.food.y * cell, cell, S.foodColor, pulse * flick, 14 + beat.arp * 8);
     }
 
-    // catch flash: a white bloom over the eaten signal cell
+    // catch flash: a hot bloom over the eaten signal cell in its hue
     for (const cf of cellFlashes) {
-      ctx.globalAlpha = cf.life * cf.life * 0.35;
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = '#ffffff';
-      ctx.shadowBlur = 22 * cf.life;
+      ctx.globalAlpha = cf.life * cf.life * 0.55;
+      ctx.fillStyle = cf.color || '#ffffff';
+      ctx.shadowColor = cf.color || '#ffffff';
+      ctx.shadowBlur = 34 * cf.life;
       ctx.fillRect(bx + cf.x * cell - cell, by + cf.y * cell, cell * 3, cell);
       ctx.shadowBlur = 0;
     }
+
+    // shockwave rings racing out from the catch
+    for (const rg of rings) {
+      ctx.globalAlpha = Math.max(0, rg.life) * 0.6;
+      ctx.strokeStyle = rg.color;
+      ctx.lineWidth = 2.5 * Math.max(0.2, rg.life);
+      ctx.beginPath();
+      ctx.arc(rg.x, rg.y, rg.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 1;
 
     // particles: muted line shards
     ctx.lineWidth = 1.4;
