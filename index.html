@@ -318,10 +318,7 @@
     position: absolute;
     left: .5em;
     color: inherit;
-    opacity: 0;
   }
-  .overlay.nes .gamecard:hover::before,
-  .overlay.nes .gamecard:focus-visible::before { opacity: 1; }
   .menublock {
     display: flex;
     flex-direction: column;
@@ -335,11 +332,9 @@
     font-size: clamp(1.15rem, 2.6vw, 1.5rem);
     letter-spacing: .5em;
     padding-left: .5em;
-    /* hollow label: heavy glyphs drawn as outline only */
-    color: transparent;
-    -webkit-text-stroke: 1px #2a2e22;
-    text-stroke: 1px #2a2e22;
-    text-shadow: none;
+    /* solid heavy label in the dark ink */
+    color: #2a2e22;
+    text-shadow: 2px 3px 3px rgba(42, 46, 34, .35);
   }
   /* Game & Watch style demo rally: dark segments snapping between
      fixed positions, same ink and floating shadow as the text */
