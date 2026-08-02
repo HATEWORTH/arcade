@@ -822,19 +822,8 @@
     if (window.MODE === 'cards') {
       const W = innerWidth, H = innerHeight;
       ctx.globalAlpha = 1;
-      // LCD screen, same treatment as the splash: pale sage with a
-      // center highlight and darkened edges
+      // LCD screen, same flat sage as the splash
       ctx.fillStyle = LBG;
-      ctx.fillRect(0, 0, W, H);
-      let g = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.62);
-      g.addColorStop(0, 'rgba(255, 255, 255, 0.16)');
-      g.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-      g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.78);
-      g.addColorStop(0, 'rgba(46, 50, 38, 0)');
-      g.addColorStop(1, 'rgba(46, 50, 38, 0.24)');
-      ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
       if (C.view === 'poker' && HU.state === 'cpu' && performance.now() >= HU.at) cpuAct();
       if (C.view === 'poker') drawPoker();

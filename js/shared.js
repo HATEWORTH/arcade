@@ -54,23 +54,11 @@ addEventListener('DOMContentLoaded', () => {
 
 // ---- shared CRT bezel: the rounded tube frame every screen sits behind --
 window.ARCADE_FX = {
-  // dark-LCD substrate: same glass as the sage screens with the backlight
-  // off — olive-tinted black, a faint warm hotspot, edges falling away
+  // dark-LCD substrate: same glass as the sage screens, backlight off
   screen(ctx) {
-    const W = innerWidth, H = innerHeight;
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#12140d';
-    ctx.fillRect(0, 0, W, H);
-    let g = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.62);
-    g.addColorStop(0, 'rgba(214, 226, 168, 0.05)');
-    g.addColorStop(1, 'rgba(214, 226, 168, 0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.78);
-    g.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    g.addColorStop(1, 'rgba(0, 0, 0, 0.32)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, innerWidth, innerHeight);
   },
   bezel(ctx) {
     const W = innerWidth, H = innerHeight;

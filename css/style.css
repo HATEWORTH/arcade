@@ -231,9 +231,7 @@
   /* monochrome LCD: pale sage screen, dark segments that cast soft
      shadows onto the layer beneath — no glow, no scanlines */
   .overlay.nes {
-    background:
-      radial-gradient(ellipse at 50% 42%, rgba(255, 255, 255, .16), transparent 62%),
-      #c3c8b2;
+    background: #c3c8b2;
     gap: 2.6rem;
     font-family: "Courier New", Courier, monospace;
   }
@@ -249,15 +247,6 @@
       inset 0 0 26px 6px rgba(20, 22, 15, .5);
     z-index: 3;
     pointer-events: none;
-  }
-  /* gentle darkening at the screen edges */
-  .overlay.nes::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    pointer-events: none;
-    background: radial-gradient(ellipse at center, transparent 55%, rgba(46, 50, 38, .22) 100%);
   }
   .nestitle {
     margin: 0 0 1rem;
