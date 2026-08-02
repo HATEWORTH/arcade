@@ -156,6 +156,8 @@
     D.floor = 1;
     D.t = 0;
     generate();
+    D.cam.x = D.hero.x;
+    D.cam.y = D.hero.y;
   }
   function start() {
     prime();
@@ -242,13 +244,9 @@
     let ny = D.hero.y + vy * dt;
     if (!collideAxis(D.hero.x, ny)) D.hero.y = ny;
     if (D.hero.moving) reveal();
-    // camera eases after the hero
-    const W = innerWidth, H = innerHeight;
-    const txc = Math.max(W / 2, Math.min(MW * TILE - W / 2, D.hero.x));
-    const tyc = Math.max(H / 2, Math.min(MH * TILE - H / 2, D.hero.y));
-    const k = Math.min(1, dt * 6);
-    D.cam.x += (txc - D.cam.x) * k;
-    D.cam.y += (tyc - D.cam.y) * k;
+    // camera stays locked dead-center on the hero
+    D.cam.x = D.hero.x;
+    D.cam.y = D.hero.y;
   }
 
   // ---- rendering ---------------------------------------------------------
