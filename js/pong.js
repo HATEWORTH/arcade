@@ -34,7 +34,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     cx = W / 2; cy = H / 2;
     // Near plane (z=0) projects at full scale, so keep it inside the screen:
-    // half-extent must stay under min(W,H)/2, with margin for glow + bezel.
+    // half-extent must stay under min(W,H)/2, with a little margin for glow.
     viewScale = Math.min(W, H) * 0.45;
   }
   addEventListener('resize', resize);

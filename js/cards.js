@@ -452,7 +452,7 @@
       }
     }
     // player hole cards, stack beside them — the hand + buttons group is
-    // centered in the space between the board and the bezel
+    // centered in the space between the board and the screen bottom
     const boardBottom = H / 2 + chh / 2;
     const groupH = chh + 30 + 38;
     const py0 = (boardBottom + (H - 18)) / 2 - groupH / 2;
