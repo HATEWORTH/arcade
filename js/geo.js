@@ -758,9 +758,7 @@
 
   function draw() {
     const W = innerWidth, H = innerHeight;
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#050507';
-    ctx.fillRect(0, 0, W, H);
+    ARCADE_FX.screen(ctx);
     const { bx, by, bw, bh } = arena();
     // nebula glows: huge soft color washes drifting behind everything
     for (const b of blobs) {

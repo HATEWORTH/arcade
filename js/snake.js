@@ -288,8 +288,7 @@
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
-    ctx.fillStyle = '#050507';
-    ctx.fillRect(0, 0, W, H);
+    ARCADE_FX.screen(ctx);
     ctx.fillStyle = dotPattern();
     ctx.fillRect(0, 0, W, H);
 

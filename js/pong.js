@@ -1209,11 +1209,17 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   let t = 0;
   function draw(dt) {
     t += dt;
-    // fade instead of clear -> phosphor persistence
+    // fade instead of clear -> phosphor persistence, on the olive substrate
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(5, 5, 7, 0.5)';
+    ctx.fillStyle = 'rgba(18, 20, 13, 0.5)';
+    ctx.fillRect(0, 0, W, H);
+    // backlight hotspot, faint enough to survive the trail fade
+    const blg = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.62);
+    blg.addColorStop(0, 'rgba(214, 226, 168, 0.022)');
+    blg.addColorStop(1, 'rgba(214, 226, 168, 0)');
+    ctx.fillStyle = blg;
     ctx.fillRect(0, 0, W, H);
 
     ctx.save();
@@ -1482,8 +1488,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
     const vg = ctx.createRadialGradient(cx, cy, Math.min(W, H) * 0.35, cx, cy, Math.max(W, H) * 0.75);
-    vg.addColorStop(0, 'rgba(5,5,7,0)');
-    vg.addColorStop(1, 'rgba(5,5,7,0.55)');
+    vg.addColorStop(0, 'rgba(14,16,10,0)');
+    vg.addColorStop(1, 'rgba(14,16,10,0.55)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, W, H);
   }
