@@ -1,0 +1,365 @@
+:root {
+    --bg: #050507;
+    --cyan: #8fce9a;
+    --magenta: #e0459b;
+    --violet: #4a2b7a;
+    --lime: #e6cf5e;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    overflow: hidden;
+    font-family: "Cascadia Mono", "SF Mono", Consolas, Menlo, monospace;
+    color: #c9c9d1;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #stage { position: fixed; inset: 0; cursor: none; touch-action: none; }
+  #stage.freecursor { cursor: default; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  .hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+    z-index: 2;
+  }
+  .hud .score {
+    position: absolute;
+    top: .9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-weight: 700;
+    line-height: 1;
+  }
+  /* hug the top corners of the tunnel (near plane half-extent = min(47vw, 47vh)) */
+  .hud .you { left: max(.6rem, calc(50% - min(47vw, 47vh))); }
+  .hud .cpu { right: max(.6rem, calc(50% - min(47vw, 47vh))); }
+  .bar { display: flex; gap: 5px; height: 20px; }
+  .bar i {
+    width: clamp(9px, 1.2vw, 14px);
+    border: 1px solid rgba(255, 255, 255, .25);
+    transform: skewX(-14deg);
+    transition: background .25s ease, box-shadow .25s ease;
+  }
+  .cpu .bar { flex-direction: row-reverse; }
+  .you .bar i.on { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan), 0 0 24px rgba(143,206,154,.5); }
+  .cpu .bar i.on { background: var(--magenta); border-color: var(--magenta); box-shadow: 0 0 10px var(--magenta), 0 0 24px rgba(224,69,155,.5); }
+  .hud .you   { color: var(--cyan);    text-shadow: 0 0 12px var(--cyan),    0 0 34px rgba(143,206,154,.55); }
+  .hud .cpu   { color: var(--magenta); text-shadow: 0 0 12px var(--magenta), 0 0 34px rgba(224,69,155,.55); }
+  .hud .tag {
+    display: block;
+    font-size: .62rem;
+    font-weight: 400;
+    letter-spacing: .4em;
+    text-transform: uppercase;
+    margin-top: .5rem;
+    opacity: .75;
+    padding-left: .4em;
+    text-align: center;
+    text-shadow: none;
+  }
+
+  .track {
+    position: fixed;
+    bottom: 1.2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: .68rem;
+    letter-spacing: .4em;
+    text-transform: uppercase;
+    color: #9a9aa5;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .track.show { opacity: .85; }
+
+  .hud.hidden { display: none; }
+  .gamemenu {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .gamecard {
+    font-family: inherit;
+    cursor: pointer;
+    background: rgba(143, 206, 154,.05);
+    border: 1px solid var(--cyan);
+    color: #c9c9d1;
+    padding: 1.5rem 2.4rem;
+    letter-spacing: .3em;
+    text-transform: uppercase;
+    box-shadow: 0 0 18px rgba(143, 206, 154,.25), inset 0 0 18px rgba(143, 206, 154,.06);
+    transition: box-shadow .25s ease, background .25s ease, transform .25s ease;
+  }
+  .gamecard:hover, .gamecard:focus-visible {
+    background: rgba(143, 206, 154,.12);
+    box-shadow: 0 0 36px rgba(143, 206, 154,.55), inset 0 0 26px rgba(143, 206, 154,.12);
+    transform: translateY(-3px);
+    outline: none;
+  }
+  .gamecard b {
+    display: block;
+    font-size: 1.35rem;
+    letter-spacing: .22em;
+    margin-bottom: .7rem;
+    color: #fff;
+    text-shadow: 0 0 12px var(--cyan), 0 0 30px rgba(143, 206, 154,.6);
+  }
+  .gamecard span { font-size: .6rem; opacity: .72; letter-spacing: .28em; }
+  .gamecard.magenta {
+    border-color: var(--magenta);
+    background: rgba(224, 69, 155,.05);
+    box-shadow: 0 0 18px rgba(224, 69, 155,.25), inset 0 0 18px rgba(224, 69, 155,.06);
+  }
+  .gamecard.magenta:hover, .gamecard.magenta:focus-visible {
+    background: rgba(224, 69, 155,.12);
+    box-shadow: 0 0 36px rgba(224, 69, 155,.55), inset 0 0 26px rgba(224, 69, 155,.12);
+  }
+  .gamecard.magenta b { text-shadow: 0 0 12px var(--magenta), 0 0 30px rgba(224, 69, 155,.6); }
+  .gamecard.lime {
+    border-color: var(--lime);
+    background: rgba(230, 207, 94,.05);
+    box-shadow: 0 0 18px rgba(230, 207, 94,.25), inset 0 0 18px rgba(230, 207, 94,.06);
+  }
+  .gamecard.lime:hover, .gamecard.lime:focus-visible {
+    background: rgba(230, 207, 94,.12);
+    box-shadow: 0 0 36px rgba(230, 207, 94,.55), inset 0 0 26px rgba(230, 207, 94,.12);
+  }
+  .gamecard.lime b { text-shadow: 0 0 12px var(--lime), 0 0 30px rgba(230, 207, 94,.6); }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.4rem;
+    text-align: center;
+    z-index: 3;
+    background: radial-gradient(ellipse at center, rgba(5,5,7,.25) 0%, rgba(5,5,7,.82) 78%);
+    transition: opacity .45s ease;
+  }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .title {
+    font-size: clamp(2.4rem, 9vw, 5.6rem);
+    font-weight: 700;
+    letter-spacing: .18em;
+    padding-left: .18em;
+    margin: 0;
+    color: #fff;
+    text-shadow:
+      0 0 8px var(--cyan), 0 0 28px var(--cyan), 0 0 70px rgba(143,206,154,.7),
+      0 0 4px #fff;
+    animation: titlepulse 2.4s ease-in-out infinite;
+  }
+  .title em {
+    font-style: normal;
+    color: #fff;
+    text-shadow:
+      0 0 8px var(--magenta), 0 0 28px var(--magenta), 0 0 70px rgba(224,69,155,.7),
+      0 0 4px #fff;
+  }
+  @keyframes titlepulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .82; }
+  }
+  .sub {
+    font-size: .78rem;
+    letter-spacing: .4em;
+    text-transform: uppercase;
+    color: #9a9aa5;
+    margin: 0;
+    padding-left: .4em;
+    max-width: 34ch;
+    line-height: 2.1;
+  }
+  .prompt {
+    font-size: .85rem;
+    letter-spacing: .35em;
+    text-transform: uppercase;
+    color: var(--lime);
+    text-shadow: 0 0 10px var(--lime), 0 0 30px rgba(230,207,94,.5);
+    animation: blink 1.6s ease-in-out infinite;
+    padding-left: .35em;
+    margin: 0;
+  }
+  /* gentle fade, not a hard strobe — photosensitive-safe */
+  @keyframes blink { 50% { opacity: .5; } }
+
+  .verdict {
+    font-size: clamp(1.6rem, 6vw, 3.2rem);
+    font-weight: 700;
+    letter-spacing: .3em;
+    padding-left: .3em;
+    margin: 0;
+  }
+  .verdict.win  { color: #fff; text-shadow: 0 0 10px var(--cyan), 0 0 40px var(--cyan); }
+  .verdict.lose { color: #fff; text-shadow: 0 0 10px var(--magenta), 0 0 40px var(--magenta); }
+
+  /* flat "strategy map" styling for the tetris overlays */
+  .overlay.strategy { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+  .overlay.strategy .title {
+    font-size: clamp(1.7rem, 5.5vw, 3rem);
+    font-weight: 600;
+    letter-spacing: .32em;
+    color: #ececf1;
+    text-shadow: none;
+    animation: none;
+  }
+  .overlay.strategy .title em { color: #e0459b; text-shadow: none; }
+  .overlay.strategy .sub { color: #8f8f9a; }
+  .overlay.strategy .prompt {
+    color: #ececf1;
+    text-shadow: none;
+    border: 1px solid rgba(255,255,255,.25);
+    padding: .55em 1.1em .55em 1.45em;
+    font-size: .7rem;
+  }
+  .overlay.strategy .verdict { color: #ececf1; text-shadow: none; font-weight: 600; letter-spacing: .32em; }
+
+  /* NES title-screen styling for the launch splash: solid black, chunky
+     tilted logo with hard layered drop-shadows, plain text menu + star cursor */
+  /* monochrome LCD: pale sage screen, dark segments that cast soft
+     shadows onto the layer beneath — no glow, no scanlines */
+  .overlay.nes {
+    background:
+      radial-gradient(ellipse at 50% 42%, rgba(255, 255, 255, .16), transparent 62%),
+      #c3c8b2;
+    gap: 2.6rem;
+    font-family: "Courier New", Courier, monospace;
+  }
+  /* CRT bezel: black edge with rounded tube corners masking the screen */
+  .overlay.nes::before {
+    content: '';
+    position: absolute;
+    inset: 18px;
+    border-radius: 2.4rem;
+    /* frame in the same dark ink, fading softly onto the screen */
+    box-shadow:
+      0 0 0 120vmax #14160f,
+      inset 0 0 26px 6px rgba(20, 22, 15, .5);
+    z-index: 3;
+    pointer-events: none;
+  }
+  /* gentle darkening at the screen edges */
+  .overlay.nes::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(46, 50, 38, .22) 100%);
+  }
+  .nestitle {
+    margin: 0 0 1rem;
+    font-family: "Gotham Ultra", "Arial Black", "Segoe UI Black", Impact, sans-serif;
+    font-weight: 900;
+    font-size: clamp(3.4rem, 13vw, 8.5rem);
+    line-height: 1;
+    letter-spacing: .06em;
+    padding-left: .06em;
+    /* solid dark LCD-segment fill */
+    color: #2a2e22;
+    position: relative;
+    text-shadow: none;
+    /* the segment floats above the backing layer and casts a fuzzy shadow */
+    filter: drop-shadow(3px 5px 3px rgba(42, 46, 34, .4));
+    animation: none;
+  }
+  .overlay.nes .gamemenu { flex-direction: column; gap: .85rem; align-items: center; }
+  .overlay.nes .gamecard,
+  .overlay.nes .gamecard:hover,
+  .overlay.nes .gamecard:focus-visible {
+    border: none;
+    padding: .1em 1.6em;
+    transform: none;
+    font-family: Consolas, "Courier New", monospace;
+    font-weight: 400;
+    font-size: calc(.9rem + 2px);
+    letter-spacing: .08em;
+    /* always-on block: solid dark box, text in the screen color */
+    background: #2a2e22;
+    color: #c3c8b2;
+    position: relative;
+    transition: none;
+    text-shadow: none;
+    box-shadow: 3px 5px 4px rgba(42, 46, 34, .35);
+  }
+  /* hover inverts the block: screen-colored box, dark ink text */
+  .overlay.nes .gamecard:hover,
+  .overlay.nes .gamecard:focus-visible {
+    background: #c3c8b2;
+    color: #2a2e22;
+    outline: none;
+  }
+  .overlay.nes .gamecard b {
+    display: inline;
+    font-weight: 700;
+    font-size: inherit;
+    letter-spacing: inherit;
+    margin: 0;
+    color: inherit;
+    text-shadow: none;
+  }
+  .overlay.nes .gamecard span { display: none; }
+  .overlay.nes .gamecard::before {
+    content: '*';
+    position: absolute;
+    left: .5em;
+    color: inherit;
+  }
+  .menublock {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.3rem;
+  }
+  .menulabel {
+    margin: 0;
+    font-family: Consolas, "Courier New", monospace;
+    font-weight: 900;
+    font-size: clamp(1.15rem, 2.6vw, 1.5rem);
+    letter-spacing: .5em;
+    padding-left: .5em;
+    /* solid heavy label in the dark ink */
+    color: #2a2e22;
+    text-shadow: 2px 3px 3px rgba(42, 46, 34, .35);
+  }
+  /* Game & Watch style demo rally: dark segments snapping between
+     fixed positions, same ink and floating shadow as the text */
+  .lcdgame {
+    margin: 0;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: clamp(.7rem, 1.5vw, .85rem);
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: pre;
+    color: #2a2e22;
+    text-shadow: 2px 3px 3px rgba(42, 46, 34, .35);
+  }
+  .lcdsub {
+    color: #565b48;
+    text-shadow: 1px 2px 2px rgba(42, 46, 34, .25);
+  }
+  .vertag {
+    position: absolute;
+    right: 1.4rem;
+    bottom: 1.1rem;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: .68rem;
+    letter-spacing: .3em;
+    color: #565b48;
+    text-shadow: 1px 2px 2px rgba(42, 46, 34, .25);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .title, .prompt { animation: none; }
+  }
