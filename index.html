@@ -2512,7 +2512,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const CYAN = '#8fce9a', MAGENTA = '#e0459b', LIME = '#e6cf5e', WHITE = '#ffffff';
-  const ENEMY_COLOR = { chaser: MAGENTA, drifter: CYAN, weaver: LIME };
+  const ENEMY_COLOR = { chaser: MAGENTA, drifter: CYAN, weaver: LIME, bit: '#f2f2f2' };
 
   const G = {
     running: false, paused: false,
@@ -2520,6 +2520,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     aim: { x: 0, y: 0 },
     firing: false, fireT: 0,
     bullets: [], enemies: [], parts: [],
+    holes: [], shocks: [], holeT: 12,
     score: 0, kills: 0, lives: 3, inv: 0,
     spawnT: 1, time: 0, shake: 0,
   };
@@ -2552,6 +2553,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     G.ship.vx = 0; G.ship.vy = 0;
     G.aim.x = G.ship.x; G.aim.y = by + bh * 0.3;
     G.bullets.length = 0; G.enemies.length = 0; G.parts.length = 0;
+    G.holes.length = 0; G.shocks.length = 0; G.holeT = 12;
     G.score = 0; G.kills = 0; G.lives = 3; G.inv = 0;
     G.spawnT = 1; G.time = 0; G.shake = 0; G.fireT = 0; G.firing = false;
   }
@@ -2636,6 +2638,36 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     }
   }
 
+  function spawnHole() {
+    const { bx, by, bw, bh } = arena();
+    let x, y, tries = 0;
+    do {
+      x = bx + 80 + Math.random() * (bw - 160);
+      y = by + 80 + Math.random() * (bh - 160);
+    } while (Math.hypot(x - G.ship.x, y - G.ship.y) < 300 && ++tries < 20);
+    G.holes.push({ x, y, r: 13, hp: 10, eaten: 0, life: 14, flash: 0 });
+    A.sweep(300, 45, 0.7, 'sine', 0.06);
+  }
+  function explodeHole(i) {
+    const h = G.holes[i];
+    G.holes.splice(i, 1);
+    G.holeT = 18 + Math.random() * 8;
+    G.shocks.push({ x: h.x, y: h.y, rad: 8, speed: 660, maxRad: 700 });
+    burst(h.x, h.y, MAGENTA, 44, 1.7);
+    G.shake = 18;
+    A.sweep(700, 24, 0.7, 'sawtooth', 0.11);
+    A.hat(0.12, 0.2);
+    // everything it swallowed tears free as seeker bits chasing the ship
+    const n = Math.min(14, Math.max(4, h.eaten + 2));
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2;
+      G.enemies.push({
+        x: h.x + Math.cos(a) * (h.r + 8), y: h.y + Math.sin(a) * (h.r + 8),
+        type: 'bit', r: 5, spd: 230 + Math.random() * 90,
+      });
+    }
+  }
+
   function shipHit() {
     G.lives--;
     burst(G.ship.x, G.ship.y, WHITE, 46, 1.5);
@@ -2665,14 +2697,25 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     if (keys['w'] || keys['arrowup']) ay -= 1;
     if (keys['s'] || keys['arrowdown']) ay += 1;
     const m = Math.hypot(ax, ay) || 1;
-    G.ship.vx += (ax / m) * 2600 * dt;
-    G.ship.vy += (ay / m) * 2600 * dt;
-    G.ship.vx *= Math.max(0, 1 - dt * 6);
-    G.ship.vy *= Math.max(0, 1 - dt * 6);
+    G.ship.vx += (ax / m) * 1500 * dt;
+    G.ship.vy += (ay / m) * 1500 * dt;
+    // gentle pull toward the cursor so the ship drifts where you're looking
+    const adx = G.aim.x - G.ship.x, ady = G.aim.y - G.ship.y;
+    const ad = Math.hypot(adx, ady) || 1;
+    G.ship.vx += (adx / ad) * 110 * dt;
+    G.ship.vy += (ady / ad) * 110 * dt;
+    // barely any drag: momentum carries like open space
+    G.ship.vx *= Math.max(0, 1 - dt * 0.9);
+    G.ship.vy *= Math.max(0, 1 - dt * 0.9);
     const sp = Math.hypot(G.ship.vx, G.ship.vy);
-    if (sp > 460) { G.ship.vx *= 460 / sp; G.ship.vy *= 460 / sp; }
-    G.ship.x = Math.max(bx + 14, Math.min(bx + bw - 14, G.ship.x + G.ship.vx * dt));
-    G.ship.y = Math.max(by + 14, Math.min(by + bh - 14, G.ship.y + G.ship.vy * dt));
+    if (sp > 520) { G.ship.vx *= 520 / sp; G.ship.vy *= 520 / sp; }
+    G.ship.x += G.ship.vx * dt;
+    G.ship.y += G.ship.vy * dt;
+    // soft bounces off the arena walls
+    if (G.ship.x < bx + 14) { G.ship.x = bx + 14; G.ship.vx = Math.abs(G.ship.vx) * 0.55; }
+    if (G.ship.x > bx + bw - 14) { G.ship.x = bx + bw - 14; G.ship.vx = -Math.abs(G.ship.vx) * 0.55; }
+    if (G.ship.y < by + 14) { G.ship.y = by + 14; G.ship.vy = Math.abs(G.ship.vy) * 0.55; }
+    if (G.ship.y > by + bh - 14) { G.ship.y = by + bh - 14; G.ship.vy = -Math.abs(G.ship.vy) * 0.55; }
 
     // fire toward the cursor
     G.fireT -= dt;
@@ -2711,6 +2754,88 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
         }
         en.x += vx * dt; en.y += vy * dt;
       }
+    }
+
+    // ---- black holes -----------------------------------------------------
+    if (G.holes.length === 0) {
+      G.holeT -= dt;
+      if (G.holeT <= 0) spawnHole();
+    }
+    for (let i = G.holes.length - 1; i >= 0; i--) {
+      const h = G.holes[i];
+      h.life -= dt;
+      h.flash = Math.max(0, h.flash - dt);
+      const PR = 320; // gravity reach
+      // pull on the ship (respawn blink is exempt so you can escape)
+      if (G.inv <= 0) {
+        const dx = h.x - G.ship.x, dy = h.y - G.ship.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d < PR) {
+          const k = 1 - d / PR;
+          G.ship.vx += (dx / d) * 640 * k * k * dt;
+          G.ship.vy += (dy / d) * 640 * k * k * dt;
+        }
+        if (d < h.r + 10) shipHit();
+      }
+      // shots curve around the well; hitting the core wears it down
+      for (let j = G.bullets.length - 1; j >= 0; j--) {
+        const b = G.bullets[j];
+        const dx = h.x - b.x, dy = h.y - b.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d < PR) {
+          const k = 1 - d / PR;
+          b.vx += (dx / d) * 1500 * k * dt;
+          b.vy += (dy / d) * 1500 * k * dt;
+        }
+        if (d < h.r + 4) {
+          G.bullets.splice(j, 1);
+          h.hp--; h.flash = 0.12;
+          burst(b.x, b.y, MAGENTA, 3, 0.5);
+          if (h.hp <= 0) { explodeHole(i); break; }
+        }
+      }
+      if (!G.holes[i]) continue; // burst by gunfire this frame
+      // enemies get dragged in and swallowed
+      for (let j = G.enemies.length - 1; j >= 0; j--) {
+        const en = G.enemies[j];
+        const dx = h.x - en.x, dy = h.y - en.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d < PR) {
+          const k = 1 - d / PR;
+          const pull = 480 * k * k * dt;
+          en.x += (dx / d) * pull; en.y += (dy / d) * pull;
+          if (en.vx !== undefined) { en.vx += (dx / d) * 700 * k * dt; en.vy += (dy / d) * 700 * k * dt; }
+        }
+        if (d < h.r + en.r) {
+          G.enemies.splice(j, 1);
+          h.eaten++; h.r = Math.min(26, h.r + 0.7);
+          burst(en.x, en.y, ENEMY_COLOR[en.type], 5, 0.6);
+          A.bleep(130, 0.05, 'sine', 0.025);
+        }
+      }
+      if (h.eaten >= 10 || h.life <= 0) explodeHole(i);
+    }
+    // shockwaves: the blast wave drags everything it crosses toward it
+    for (let i = G.shocks.length - 1; i >= 0; i--) {
+      const s = G.shocks[i];
+      s.rad += s.speed * dt;
+      const tug = (x, y) => {
+        const dx = s.x - x, dy = s.y - y;
+        const d = Math.hypot(dx, dy) || 1;
+        const band = Math.exp(-Math.pow(d - s.rad, 2) / (2 * 48 * 48));
+        return [(dx / d) * band, (dy / d) * band];
+      };
+      const [sx, sy] = tug(G.ship.x, G.ship.y);
+      G.ship.vx += sx * 1500 * dt; G.ship.vy += sy * 1500 * dt;
+      for (const en of G.enemies) {
+        const [ex, ey] = tug(en.x, en.y);
+        en.x += ex * 320 * dt; en.y += ey * 320 * dt;
+      }
+      for (const b of G.bullets) {
+        const [tx, ty] = tug(b.x, b.y);
+        b.vx += tx * 2200 * dt; b.vy += ty * 2200 * dt;
+      }
+      if (s.rad > s.maxRad) G.shocks.splice(i, 1);
     }
 
     // bullets vs enemies
@@ -2760,7 +2885,9 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     ctx.lineWidth = 2;
     ctx.globalAlpha = 0.9;
     ctx.beginPath();
-    if (en.type === 'chaser') {
+    if (en.type === 'bit') {
+      ctx.arc(en.x, en.y, en.r, 0, Math.PI * 2);
+    } else if (en.type === 'chaser') {
       ctx.moveTo(en.x, en.y - en.r); ctx.lineTo(en.x + en.r, en.y);
       ctx.lineTo(en.x, en.y + en.r); ctx.lineTo(en.x - en.r, en.y);
     } else if (en.type === 'drifter') {
@@ -2785,13 +2912,46 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
     }
 
-    // arena grid + wall
+    // arena grid, warped by gravity wells and passing shockwaves
+    const warp = (x, y) => {
+      let ox = 0, oy = 0;
+      for (const h of G.holes) {
+        const dx = x - h.x, dy = y - h.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d < 300) {
+          const k = 1 - d / 300;
+          ox -= (dx / d) * k * k * 26;
+          oy -= (dy / d) * k * k * 26;
+        }
+      }
+      for (const s of G.shocks) {
+        const dx = x - s.x, dy = y - s.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const band = Math.exp(-Math.pow(d - s.rad, 2) / (2 * 42 * 42));
+        const amp = 22 * (1 - s.rad / s.maxRad);
+        ox += (dx / d) * band * amp;
+        oy += (dy / d) * band * amp;
+      }
+      return [x + ox, y + oy];
+    };
     ctx.globalAlpha = 0.07;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let x = bx; x <= bx + bw + 0.5; x += 44) { ctx.moveTo(x + 0.5, by); ctx.lineTo(x + 0.5, by + bh); }
-    for (let y = by; y <= by + bh + 0.5; y += 44) { ctx.moveTo(bx, y + 0.5); ctx.lineTo(bx + bw, y + 0.5); }
+    for (let x = bx; x <= bx + bw + 0.5; x += 44) {
+      for (let y = by; y < by + bh; y += 20) {
+        const [px, py] = warp(x, y);
+        const [qx, qy] = warp(x, Math.min(by + bh, y + 20));
+        ctx.moveTo(px, py); ctx.lineTo(qx, qy);
+      }
+    }
+    for (let y = by; y <= by + bh + 0.5; y += 44) {
+      for (let x = bx; x < bx + bw; x += 20) {
+        const [px, py] = warp(x, y);
+        const [qx, qy] = warp(Math.min(bx + bw, x + 20), y);
+        ctx.moveTo(px, py); ctx.lineTo(qx, qy);
+      }
+    }
     ctx.stroke();
     ctx.globalAlpha = 0.45;
     ctx.strokeStyle = CYAN;
@@ -2799,6 +2959,40 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     ctx.shadowBlur = 10;
     ctx.strokeRect(bx + 0.5, by + 0.5, bw, bh);
     ctx.shadowBlur = 0;
+
+    // black holes: dark core, pulsing ring, slow-orbiting debris ring
+    for (const h of G.holes) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2); ctx.fill();
+      const pulse = h.r + 2 + Math.sin(t * 6) * 1.5 + (h.flash > 0 ? 4 : 0);
+      ctx.strokeStyle = MAGENTA;
+      ctx.shadowColor = MAGENTA;
+      ctx.shadowBlur = 16;
+      ctx.lineWidth = 2.5;
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath(); ctx.arc(h.x, h.y, pulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.3;
+      ctx.setLineDash([5, 9]);
+      ctx.lineDashOffset = -t * 40;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(h.x, h.y, h.r + 16, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // shockwave rings racing outward
+    for (const s of G.shocks) {
+      const fade = 1 - s.rad / s.maxRad;
+      ctx.strokeStyle = WHITE;
+      ctx.shadowColor = MAGENTA;
+      ctx.shadowBlur = 12;
+      for (let k = 0; k < 2; k++) {
+        ctx.globalAlpha = fade * (k ? 0.2 : 0.45);
+        ctx.lineWidth = k ? 1.2 : 2.2;
+        ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(1, s.rad - k * 22), 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+    }
 
     // bullets
     ctx.strokeStyle = LIME;
