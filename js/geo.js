@@ -51,9 +51,11 @@
   }
   initAtmos();
 
-  // the field runs edge to edge — an endless grid with the screen as walls
+  // the field runs edge to edge — an endless grid with the screen as walls,
+  // inset just enough that nothing playable hides under the CRT bezel
   function arena() {
-    return { bx: 0, by: 0, bw: innerWidth, bh: innerHeight };
+    const inset = 22;
+    return { bx: inset, by: inset, bw: innerWidth - inset * 2, bh: innerHeight - inset * 2 };
   }
 
   // kill-streak scoring: every kill bumps the multiplier, going 0.8s

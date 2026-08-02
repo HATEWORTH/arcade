@@ -28,16 +28,16 @@
   }
   .hud .score {
     position: absolute;
-    top: .9rem;
+    top: 1.7rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     font-weight: 700;
     line-height: 1;
   }
-  /* hug the top corners of the tunnel (near plane half-extent = min(47vw, 47vh)) */
-  .hud .you { left: max(.6rem, calc(50% - min(47vw, 47vh))); }
-  .hud .cpu { right: max(.6rem, calc(50% - min(47vw, 47vh))); }
+  /* hug the top corners of the tunnel (near plane half-extent = min(45vw, 45vh)) */
+  .hud .you { left: max(1.6rem, calc(50% - min(45vw, 45vh))); }
+  .hud .cpu { right: max(1.6rem, calc(50% - min(45vw, 45vh))); }
   .bar { display: flex; gap: 5px; height: 20px; }
   .bar i {
     width: clamp(9px, 1.2vw, 14px);
@@ -65,7 +65,7 @@
 
   .track {
     position: fixed;
-    bottom: 1.2rem;
+    bottom: 2.1rem;
     left: 50%;
     transform: translateX(-50%);
     font-size: .68rem;
@@ -352,8 +352,8 @@
   }
   .vertag {
     position: absolute;
-    right: 1.4rem;
-    bottom: 1.1rem;
+    right: 2.2rem;
+    bottom: 2rem;
     font-family: Consolas, "Courier New", monospace;
     font-size: .68rem;
     letter-spacing: .3em;
