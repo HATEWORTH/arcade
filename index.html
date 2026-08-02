@@ -3912,6 +3912,70 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     else if (s > callThr || Math.random() < 0.08) doCheckCall('c');
     else doFold('c');
   }
+  // left-side reference: every hand type with a mini example hand
+  const HAND_REF = [
+    ['ROYAL FLUSH',  8, [['A', 0], ['K', 0], ['Q', 0], ['J', 0], ['10', 0]]],
+    ['STR FLUSH',    8, [['9', 1], ['8', 1], ['7', 1], ['6', 1], ['5', 1]]],
+    ['4 OF A KIND',  7, [['K', 0], ['K', 1], ['K', 2], ['K', 3], ['7', 0]]],
+    ['FULL HOUSE',   6, [['Q', 0], ['Q', 1], ['Q', 2], ['4', 0], ['4', 3]]],
+    ['FLUSH',        5, [['A', 3], ['J', 3], ['8', 3], ['6', 3], ['3', 3]]],
+    ['STRAIGHT',     4, [['10', 0], ['9', 1], ['8', 2], ['7', 3], ['6', 0]]],
+    ['3 OF A KIND',  3, [['7', 0], ['7', 1], ['7', 2], ['K', 3], ['2', 0]]],
+    ['TWO PAIR',     2, [['J', 0], ['J', 1], ['4', 2], ['4', 3], ['9', 0]]],
+    ['PAIR',         1, [['10', 0], ['10', 1], ['K', 2], ['6', 3], ['2', 0]]],
+    ['HIGH CARD',    0, [['A', 0], ['Q', 1], ['9', 2], ['5', 3], ['3', 0]]],
+  ];
+  function bestOf(cs) {
+    if (cs.length === 5) return score5(cs);
+    if (cs.length === 6) {
+      let best = null;
+      for (let i = 0; i < 6; i++) {
+        const s = score5(cs.filter((_, k) => k !== i));
+        if (!best || cmpScore(s, best) > 0) best = s;
+      }
+      return best;
+    }
+    return best7(cs);
+  }
+  function drawHandRef() {
+    const W = innerWidth, H = innerHeight;
+    if (W < 980) return; // not enough room beside the table
+    // which row matches your current best hand (once the flop is out)
+    let hot = -1;
+    if (HU.board.length >= 3 && HU.state !== 'idle') {
+      const s = bestOf([...HU.pHole, ...HU.board]);
+      hot = HAND_REF.findIndex(([, cat], i) =>
+        cat === s[0] && (s[0] !== 8 || (i === 0) === (s[1] === 14)));
+    }
+    const mw = 19, mh = 26, mg = 3;
+    const rowH = Math.min(54, Math.max(42, (H - 160) / HAND_REF.length));
+    const x0 = 34;
+    const y0 = H / 2 - (HAND_REF.length * rowH) / 2 + 14;
+    for (let i = 0; i < HAND_REF.length; i++) {
+      const [name, , cards] = HAND_REF[i];
+      const y = y0 + i * rowH;
+      const lit = i === hot;
+      lcdText(name, x0, y, lit ? 11 : 10, lit ? LINK : LDIM);
+      for (let j = 0; j < 5; j++) {
+        const mx = x0 + j * (mw + mg), my = y + 6;
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = lit ? LINK : LCARD;
+        rr(mx, my, mw, mh, 2); ctx.fill();
+        ctx.strokeStyle = LINK;
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = lit ? 1 : 0.75;
+        rr(mx + 0.5, my + 0.5, mw - 1, mh - 1, 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = lit ? LBG : LINK;
+        ctx.textAlign = 'center';
+        ctx.font = '600 9px ' + MONO;
+        ctx.fillText(cards[j][0], mx + mw / 2, my + 11);
+        ctx.font = '9px ' + MONO;
+        ctx.fillText(SUITS[cards[j][1]], mx + mw / 2, my + 21);
+        ctx.textAlign = 'left';
+      }
+    }
+  }
   function drawPoker() {
     const W = innerWidth, H = innerHeight;
     const cw = Math.min(84, W / 11), chh = cw * 1.42, gap = cw * 0.22;
@@ -3960,6 +4024,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       HU.btns.push(lcdButton('DEAL', W / 2 - bw / 2, byb, bw, bh2, true));
       lcdText('enter deals again', W / 2, byb + bh2 + 26, 11, LDIM, 'center');
     }
+    drawHandRef();
   }
   // CRT bezel identical to the splash: dark frame, rounded tube corners,
   // soft shadow bleeding from the frame onto the screen
