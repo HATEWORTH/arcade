@@ -2521,7 +2521,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     firing: false, fireT: 0,
     bullets: [], enemies: [], parts: [], spray: [],
     holes: [], shocks: [], holeT: 12,
-    score: 0, kills: 0, lives: 3, inv: 0,
+    score: 0, kills: 0, lives: 4, inv: 0,
+    mult: 1, multT: 0, nextLife: 20000,
     spawnT: 1, time: 0, shake: 0,
   };
   const keys = {};
@@ -2532,7 +2533,112 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     const bw = W * 0.84, bh = H * 0.8;
     return { bx: (W - bw) / 2, by: (H - bh) / 2, bw, bh };
   }
-  function mult() { return 1 + Math.floor(G.kills / 12); }
+
+  // kill-streak scoring: every kill bumps the multiplier, going 0.8s
+  // without one resets it; an extra life every 20k points
+  let BEST = 0;
+  try { BEST = parseInt(localStorage.getItem('geoBest'), 10) || 0; } catch (e) {}
+  function saveBest() {
+    if (G.score > BEST) {
+      BEST = G.score;
+      try { localStorage.setItem('geoBest', String(BEST)); } catch (e) {}
+    }
+  }
+  function addPoints(base) {
+    G.score += base * G.mult;
+    while (G.score >= G.nextLife) {
+      G.nextLife += 20000;
+      G.lives++;
+      A.bleep(660, 0.12, 'triangle', 0.06);
+      setTimeout(() => A.bleep(880, 0.16, 'triangle', 0.06), 100);
+    }
+  }
+  function bumpMult() {
+    G.multT = 0.8;
+    if (G.mult < 20) G.mult++;
+  }
+
+  // ---- spring-mass grid, ported from NeonShooter's Grid.cs ---------------
+  const grid = { pts: [], springs: [], cols: 0, rows: 0, w: 0, h: 0 };
+  function spring(a, b) {
+    return { a, b, k: 0.28, d: 0.06, target: Math.hypot(a.x - b.x, a.y - b.y) * 0.95 };
+  }
+  function buildGrid() {
+    const { bx, by, bw, bh } = arena();
+    grid.w = innerWidth; grid.h = innerHeight;
+    const spacing = 44;
+    const cols = Math.max(4, Math.round(bw / spacing));
+    const rows = Math.max(4, Math.round(bh / spacing));
+    grid.cols = cols; grid.rows = rows;
+    grid.pts = []; grid.springs = [];
+    for (let r = 0; r <= rows; r++) {
+      for (let c = 0; c <= cols; c++) {
+        const x = bx + (c / cols) * bw, y = by + (r / rows) * bh;
+        grid.pts.push({ x, y, ox: x, oy: y, vx: 0, vy: 0, fx: 0, fy: 0, damp: 0.98 });
+      }
+    }
+    const P = (c, r) => grid.pts[r * (cols + 1) + c];
+    for (let r = 0; r <= rows; r++) {
+      for (let c = 0; c <= cols; c++) {
+        if (c === 0 || r === 0 || c === cols || r === rows)
+          grid.springs.push({ a: null, b: P(c, r), k: 0.1, d: 0.1 });     // hard border anchor
+        else if (c % 3 === 0 && r % 3 === 0)
+          grid.springs.push({ a: null, b: P(c, r), k: 0.002, d: 0.02 });  // loose interior anchor
+        if (c > 0) grid.springs.push(spring(P(c - 1, r), P(c, r)));
+        if (r > 0) grid.springs.push(spring(P(c, r - 1), P(c, r)));
+      }
+    }
+  }
+  function gridUpdate() {
+    for (const s of grid.springs) {
+      if (!s.a) { // anchor spring: pulls its point back toward rest
+        const p = s.b;
+        p.fx += (p.ox - p.x) * s.k - p.vx * s.d;
+        p.fy += (p.oy - p.y) * s.k - p.vy * s.d;
+        continue;
+      }
+      const dx = s.a.x - s.b.x, dy = s.a.y - s.b.y;
+      const len = Math.hypot(dx, dy);
+      if (len <= s.target) continue; // springs only pull, never push
+      const str = (len - s.target) / len;
+      const dvx = s.b.vx - s.a.vx, dvy = s.b.vy - s.a.vy;
+      const fx = s.k * dx * str - dvx * s.d;
+      const fy = s.k * dy * str - dvy * s.d;
+      s.a.fx -= fx; s.a.fy -= fy;
+      s.b.fx += fx; s.b.fy += fy;
+    }
+    for (const p of grid.pts) {
+      p.vx += p.fx; p.vy += p.fy;
+      p.x += p.vx; p.y += p.vy;
+      p.fx = 0; p.fy = 0;
+      p.vx *= p.damp; p.vy *= p.damp;
+      p.damp = 0.98;
+    }
+  }
+  function gridExplosive(force, x, y, radius) {
+    const r2 = radius * radius;
+    for (const p of grid.pts) {
+      const dx = p.x - x, dy = p.y - y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < r2) {
+        const f = 100 * force / (10000 + d2);
+        p.fx += dx * f; p.fy += dy * f;
+        p.damp *= 0.6;
+      }
+    }
+  }
+  function gridImplosive(force, x, y, radius) {
+    const r2 = radius * radius;
+    for (const p of grid.pts) {
+      const dx = x - p.x, dy = y - p.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < r2) {
+        const f = 10 * force / (100 + d2);
+        p.fx += dx * f; p.fy += dy * f;
+        p.damp *= 0.6;
+      }
+    }
+  }
 
   function burst(x, y, color, n, power) {
     for (let i = 0; i < n; i++) {
@@ -2547,6 +2653,34 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     }
   }
 
+  // two-hue shard spray, per the original's Enemy.WasShot
+  function enemyBurst(x, y) {
+    const h1 = Math.random() * 360, h2 = h1 + Math.random() * 120;
+    for (let i = 0; i < 40; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 1080 * (1 - 1 / (1 + Math.random() * 9));
+      const hue = Math.floor((h1 + (h2 - h1) * Math.random()) % 360);
+      G.parts.push({
+        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: 1, decay: 0.8 + Math.random() * 1.4, grav: true,
+        color: 'hsl(' + hue + ', 60%, 68%)',
+        len: 4 + Math.random() * 12,
+      });
+    }
+  }
+  function playerBurst(x, y) {
+    for (let i = 0; i < 300; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 1080 * (1 - 1 / (1 + Math.random() * 9));
+      G.parts.push({
+        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: 1, decay: 0.5 + Math.random() * 0.6,
+        color: Math.random() < 0.5 ? '#ffffff' : '#ccc966',
+        len: 6 + Math.random() * 14,
+      });
+    }
+  }
+
   function prime() {
     const { bx, by, bw, bh } = arena();
     G.ship.x = bx + bw / 2; G.ship.y = by + bh / 2;
@@ -2555,8 +2689,10 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     G.bullets.length = 0; G.enemies.length = 0; G.parts.length = 0;
     G.spray.length = 0;
     G.holes.length = 0; G.shocks.length = 0; G.holeT = 12;
-    G.score = 0; G.kills = 0; G.lives = 3; G.inv = 0;
+    G.score = 0; G.kills = 0; G.lives = 4; G.inv = 0;
+    G.mult = 1; G.multT = 0; G.nextLife = 20000;
     G.spawnT = 1; G.time = 0; G.shake = 0; G.fireT = 0; G.firing = false;
+    buildGrid();
   }
   function start() {
     prime();
@@ -2566,9 +2702,11 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   }
   function die() {
     G.running = false; G.firing = false;
-    burst(G.ship.x, G.ship.y, WHITE, 60, 1.6);
+    playerBurst(G.ship.x, G.ship.y);
+    gridExplosive(120, G.ship.x, G.ship.y, 300);
     G.shake = 16;
-    scoreLineEl.innerHTML = 'Score ' + G.score + ' &middot; ' + G.kills + ' kills &middot; ' + Math.floor(G.time) + 's survived';
+    saveBest();
+    scoreLineEl.innerHTML = 'Score ' + G.score + ' &middot; best ' + BEST + ' &middot; ' + G.kills + ' kills &middot; ' + Math.floor(G.time) + 's survived';
     A.bleep(220, 0.25, 'sawtooth', 0.06);
     setTimeout(() => A.bleep(150, 0.35, 'sawtooth', 0.06), 160);
     setTimeout(() => endEl.classList.remove('hidden'), 600);
@@ -2630,12 +2768,12 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     }
     const roll = Math.random();
     if (G.time > 25 && roll < 0.25) {
-      G.enemies.push({ x, y, type: 'weaver', r: 9, spd: 200 + G.time, wob: Math.random() * 6.28 });
+      G.enemies.push({ x, y, type: 'weaver', r: 9, spd: 200 + G.time, wob: Math.random() * 6.28, fade: 1, pv: 3 });
     } else if (roll < 0.62) {
-      G.enemies.push({ x, y, type: 'chaser', r: 12, spd: 110 + G.time * 1.4 });
+      G.enemies.push({ x, y, type: 'chaser', r: 12, spd: 110 + G.time * 1.4, fade: 1, pv: 2 });
     } else {
       const a = Math.random() * Math.PI * 2;
-      G.enemies.push({ x, y, type: 'drifter', r: 11, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150 });
+      G.enemies.push({ x, y, type: 'drifter', r: 11, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150, fade: 1, pv: 1 });
     }
   }
 
@@ -2671,6 +2809,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     G.holes.splice(i, 1);
     G.holeT = 18 + Math.random() * 8;
     G.shocks.push({ x: h.x, y: h.y, rad: 8, speed: 660, maxRad: 700 });
+    gridExplosive(140, h.x, h.y, 420);
     ringBurst(h.x, h.y);
     G.shake = 18;
     A.sweep(700, 24, 0.7, 'sawtooth', 0.11);
@@ -2682,7 +2821,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
         const a = (k / n) * Math.PI * 2;
         G.enemies.push({
           x: h.x + Math.cos(a) * (h.r + 8), y: h.y + Math.sin(a) * (h.r + 8),
-          type: 'bit', r: 5, spd: 230 + Math.random() * 90,
+          type: 'bit', r: 5, spd: 230 + Math.random() * 90, fade: 0, pv: 1,
         });
       }
     }
@@ -2690,7 +2829,9 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
 
   function shipHit() {
     G.lives--;
-    burst(G.ship.x, G.ship.y, WHITE, 46, 1.5);
+    G.mult = 1; G.multT = 0;
+    playerBurst(G.ship.x, G.ship.y);
+    gridExplosive(100, G.ship.x, G.ship.y, 280);
     G.shake = 14;
     A.sweep(500, 40, 0.4, 'sawtooth', 0.07);
     A.hat(0.09, 0.12);
@@ -2705,6 +2846,12 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
   function update(dt) {
     G.time += dt;
     const { bx, by, bw, bh } = arena();
+
+    // the streak dies 0.8s after your last kill
+    if (G.mult > 1) {
+      G.multT -= dt;
+      if (G.multT <= 0) G.mult = 1;
+    }
 
     // thrust + friction + speed cap
     let ax = 0, ay = 0;
@@ -2733,19 +2880,62 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     if (G.ship.y < by + 14) { G.ship.y = by + 14; G.ship.vy = Math.abs(G.ship.vy) * 0.55; }
     if (G.ship.y > by + bh - 14) { G.ship.y = by + bh - 14; G.ship.vy = -Math.abs(G.ship.vy) * 0.55; }
 
-    // fire toward the cursor
+    // twin cannons: two parallel shots with a touch of random spread
     G.fireT -= dt;
     if (G.firing && G.fireT <= 0) {
-      const dx = G.aim.x - G.ship.x, dy = G.aim.y - G.ship.y;
-      const d = Math.hypot(dx, dy) || 1;
-      G.bullets.push({ x: G.ship.x + (dx / d) * 16, y: G.ship.y + (dy / d) * 16, vx: (dx / d) * 950, vy: (dy / d) * 950 });
+      const spread = (Math.random() - 0.5) * 0.08 + (Math.random() - 0.5) * 0.08;
+      const aimA = Math.atan2(G.aim.y - G.ship.y, G.aim.x - G.ship.x) + spread;
+      const ca = Math.cos(aimA), sa = Math.sin(aimA);
+      for (const side of [-5, 5]) {
+        G.bullets.push({
+          x: G.ship.x + ca * 16 - sa * side,
+          y: G.ship.y + sa * 16 + ca * side,
+          vx: ca * 950, vy: sa * 950,
+        });
+      }
       G.fireT = 0.1;
       A.bleep(880, 0.018, 'square', 0.012);
     }
     for (let i = G.bullets.length - 1; i >= 0; i--) {
       const b = G.bullets[i];
       b.x += b.vx * dt; b.y += b.vy * dt;
-      if (b.x < bx + 3 || b.x > bx + bw - 3 || b.y < by + 3 || b.y > by + bh - 3) G.bullets.splice(i, 1);
+      // every bullet shoves the grid outward as it flies
+      gridExplosive(8, b.x, b.y, 80);
+      if (b.x < bx + 3 || b.x > bx + bw - 3 || b.y < by + 3 || b.y > by + bh - 3) {
+        // wall impact: a little splash of light-blue sparks
+        for (let k = 0; k < 12; k++) {
+          const a = Math.random() * Math.PI * 2;
+          const sp = Math.random() * 540;
+          G.parts.push({
+            x: b.x, y: b.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+            life: 0.6, decay: 1.4, color: '#9fd4f0', len: 3 + Math.random() * 6,
+          });
+        }
+        G.bullets.splice(i, 1);
+      }
+    }
+
+    // exhaust flame while thrusting: white core plus two red side jets
+    // that oscillate; the particles swirl into black holes like everything else
+    if (ax || ay) {
+      const svx = G.ship.vx, svy = G.ship.vy;
+      const ssp = Math.hypot(svx, svy) || 1;
+      const ux = svx / ssp, uy = svy / ssp;
+      const px = G.ship.x - ux * 14, py = G.ship.y - uy * 14;
+      const bvx = -ux * 180, bvy = -uy * 180;
+      const wob = Math.sin(t * 10) * 0.6;
+      const pvx = bvy * wob, pvy = -bvx * wob;
+      const streams = [
+        { vx: bvx + (Math.random() - 0.5) * 60, vy: bvy + (Math.random() - 0.5) * 60, color: '#ffbb1e' },
+        { vx: bvx + pvx, vy: bvy + pvy, color: '#c82609' },
+        { vx: bvx - pvx, vy: bvy - pvy, color: '#c82609' },
+      ];
+      for (const s of streams) {
+        G.parts.push({
+          x: px, y: py, vx: s.vx, vy: s.vy,
+          life: 0.55, decay: 1.7, grav: true, color: s.color, len: 5 + Math.random() * 6,
+        });
+      }
     }
 
     // swarm pressure ramps over time
@@ -2755,6 +2945,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       G.spawnT = Math.max(0.22, 1.05 - G.time * 0.012);
     }
     for (const en of G.enemies) {
+      // materializing enemies hold still and can't interact yet
+      if (en.fade > 0) { en.fade -= dt; continue; }
       if (en.type === 'drifter') {
         en.x += en.vx * dt; en.y += en.vy * dt;
         if (en.x < bx + en.r || en.x > bx + bw - en.r) { en.vx *= -1; en.x = Math.max(bx + en.r, Math.min(bx + bw - en.r, en.x)); }
@@ -2772,6 +2964,24 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       }
     }
 
+    // crowd control: overlapping enemies shove each other apart
+    for (let i = 0; i < G.enemies.length; i++) {
+      const a = G.enemies[i];
+      if (a.fade > 0) continue;
+      for (let j = i + 1; j < G.enemies.length; j++) {
+        const b = G.enemies[j];
+        if (b.fade > 0) continue;
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const d2 = dx * dx + dy * dy;
+        const rr = a.r + b.r;
+        if (d2 < rr * rr && d2 > 0.01) {
+          const f = 600 * dt / (d2 + 1);
+          a.x += dx * f; a.y += dy * f;
+          b.x -= dx * f; b.y -= dy * f;
+        }
+      }
+    }
+
     // ---- black holes -----------------------------------------------------
     if (G.holes.length === 0) {
       G.holeT -= dt;
@@ -2782,6 +2992,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       h.flash = Math.max(0, h.flash - dt);
       // spray jet rotates a full turn every ~0.83s, like the original
       h.sprayA -= (Math.PI * 2 / 50) * 60 * dt;
+      // continuous breathing suction on the spring grid
+      gridImplosive(Math.sin(h.sprayA / 2) * 10 + 20, h.x, h.y, 200);
       const PR = 250; // gravity reach
       // ship is attracted, linear falloff (respawn blink is exempt)
       if (G.inv <= 0) {
@@ -2807,13 +3019,14 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
           G.bullets.splice(j, 1);
           h.hp--; h.flash = 0.12;
           burst(b.x, b.y, MAGENTA, 3, 0.5);
-          if (h.hp <= 0) { G.score += 25 * mult(); explodeHole(i, true); break; }
+          if (h.hp <= 0) { addPoints(50); bumpMult(); explodeHole(i, true); break; }
         }
       }
       if (!G.holes[i]) continue; // burst by gunfire this frame
       // enemies get dragged in and swallowed
       for (let j = G.enemies.length - 1; j >= 0; j--) {
         const en = G.enemies[j];
+        if (en.fade > 0) continue;
         const dx = h.x - en.x, dy = h.y - en.y;
         const d = Math.hypot(dx, dy) || 1;
         if (d < PR) {
@@ -2874,8 +3087,10 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
           G.bullets.splice(j, 1);
           G.enemies.splice(i, 1);
           G.kills++;
-          G.score += 15 * mult();
-          burst(en.x, en.y, ENEMY_COLOR[en.type], 16, 1.1);
+          addPoints((en.pv || 1) * 10);
+          bumpMult();
+          enemyBurst(en.x, en.y);
+          gridExplosive(15, en.x, en.y, 110);
           G.shake = Math.max(G.shake, 5);
           A.bleep(280 + Math.random() * 220, 0.05, 'sawtooth', 0.032);
           if (G.kills % 4 === 0) A.hat(0.04, 0.05);
@@ -2884,10 +3099,11 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       }
     }
 
-    // enemies vs ship
+    // enemies vs ship (materializing enemies are harmless)
     if (G.inv > 0) G.inv -= dt;
     else {
       for (const en of G.enemies) {
+        if (en.fade > 0) continue;
         if (Math.hypot(en.x - G.ship.x, en.y - G.ship.y) < en.r + 10) { shipHit(); break; }
       }
     }
@@ -2918,35 +3134,59 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     }
     for (let i = G.parts.length - 1; i >= 0; i--) {
       const p = G.parts[i];
+      // exhaust and enemy shards get swirled by black holes, like the original
+      if (p.grav) {
+        for (const h of G.holes) {
+          const dx = h.x - p.x, dy = h.y - p.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const g = 36000000 / (d * d + 10000);
+          p.vx += (dx / d) * g * dt; p.vy += (dy / d) * g * dt;
+          if (d < 400) {
+            const tg = 162000 / (d + 100);
+            p.vx += (dy / d) * tg * dt; p.vy += (-dx / d) * tg * dt;
+          }
+        }
+      }
       p.x += p.vx * dt; p.y += p.vy * dt;
       p.vx *= (1 - dt * 2.5); p.vy *= (1 - dt * 2.5);
       p.life -= p.decay * dt;
       if (p.life <= 0) G.parts.splice(i, 1);
     }
     G.shake = Math.max(0, G.shake - dt * 30);
+    if (grid.w !== innerWidth || grid.h !== innerHeight) buildGrid();
+    gridUpdate();
   }
 
-  function drawEnemy(en) {
+  function drawEnemyShape(en, r, alpha) {
     ctx.strokeStyle = ENEMY_COLOR[en.type];
     ctx.shadowColor = ENEMY_COLOR[en.type];
     ctx.shadowBlur = 10;
     ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.9;
+    ctx.globalAlpha = alpha;
     ctx.beginPath();
     if (en.type === 'bit') {
-      ctx.arc(en.x, en.y, en.r, 0, Math.PI * 2);
+      ctx.arc(en.x, en.y, r, 0, Math.PI * 2);
     } else if (en.type === 'chaser') {
-      ctx.moveTo(en.x, en.y - en.r); ctx.lineTo(en.x + en.r, en.y);
-      ctx.lineTo(en.x, en.y + en.r); ctx.lineTo(en.x - en.r, en.y);
+      ctx.moveTo(en.x, en.y - r); ctx.lineTo(en.x + r, en.y);
+      ctx.lineTo(en.x, en.y + r); ctx.lineTo(en.x - r, en.y);
     } else if (en.type === 'drifter') {
-      ctx.rect(en.x - en.r, en.y - en.r, en.r * 2, en.r * 2);
+      ctx.rect(en.x - r, en.y - r, r * 2, r * 2);
     } else {
-      ctx.moveTo(en.x, en.y - en.r); ctx.lineTo(en.x + en.r, en.y + en.r);
-      ctx.lineTo(en.x - en.r, en.y + en.r);
+      ctx.moveTo(en.x, en.y - r); ctx.lineTo(en.x + r, en.y + r);
+      ctx.lineTo(en.x - r, en.y + r);
     }
     ctx.closePath();
     ctx.stroke();
     ctx.shadowBlur = 0;
+  }
+  function drawEnemy(en) {
+    if (en.fade > 0) {
+      // spawn-in: an expanding fading ghost over a fading-in solid
+      drawEnemyShape(en, en.r * (1 + en.fade), en.fade * 0.35);
+      drawEnemyShape(en, en.r, (1 - en.fade) * 0.9);
+    } else {
+      drawEnemyShape(en, en.r, 0.9);
+    }
   }
 
   function draw() {
@@ -2960,46 +3200,29 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
       ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
     }
 
-    // arena grid, warped by gravity wells and passing shockwaves
-    const warp = (x, y) => {
-      let ox = 0, oy = 0;
-      for (const h of G.holes) {
-        const dx = x - h.x, dy = y - h.y;
-        const d = Math.hypot(dx, dy) || 1;
-        if (d < 220) {
-          // implosive pull that breathes with the spray cycle, per the original
-          const amp = (Math.sin(h.sprayA / 2) * 10 + 20) * 1.4;
-          const k = 1 - d / 220;
-          ox -= (dx / d) * k * k * amp;
-          oy -= (dy / d) * k * k * amp;
-        }
-      }
-      for (const s of G.shocks) {
-        const dx = x - s.x, dy = y - s.y;
-        const d = Math.hypot(dx, dy) || 1;
-        const band = Math.exp(-Math.pow(d - s.rad, 2) / (2 * 42 * 42));
-        const amp = 22 * (1 - s.rad / s.maxRad);
-        ox += (dx / d) * band * amp;
-        oy += (dy / d) * band * amp;
-      }
-      return [x + ox, y + oy];
-    };
-    ctx.globalAlpha = 0.07;
+    // spring-mass grid: rippled by bullets, sucked by holes, blasted by deaths
+    const gcols = grid.cols, grows = grid.rows;
+    const GP = (c, r) => grid.pts[r * (gcols + 1) + c];
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.09;
     ctx.beginPath();
-    for (let x = bx; x <= bx + bw + 0.5; x += 44) {
-      for (let y = by; y < by + bh; y += 20) {
-        const [px, py] = warp(x, y);
-        const [qx, qy] = warp(x, Math.min(by + bh, y + 20));
-        ctx.moveTo(px, py); ctx.lineTo(qx, qy);
+    for (let r = 0; r <= grows; r++) {
+      for (let c = 0; c <= gcols; c++) {
+        const p = GP(c, r);
+        if (c > 0) { const q = GP(c - 1, r); ctx.moveTo(q.x, q.y); ctx.lineTo(p.x, p.y); }
+        if (r > 0) { const q = GP(c, r - 1); ctx.moveTo(q.x, q.y); ctx.lineTo(p.x, p.y); }
       }
     }
-    for (let y = by; y <= by + bh + 0.5; y += 44) {
-      for (let x = bx; x < bx + bw; x += 20) {
-        const [px, py] = warp(x, y);
-        const [qx, qy] = warp(Math.min(bx + bw, x + 20), y);
-        ctx.moveTo(px, py); ctx.lineTo(qx, qy);
+    ctx.stroke();
+    // interpolated mid-lines double the apparent density for free
+    ctx.globalAlpha = 0.045;
+    ctx.beginPath();
+    for (let r = 1; r <= grows; r++) {
+      for (let c = 1; c <= gcols; c++) {
+        const p = GP(c, r), left = GP(c - 1, r), up = GP(c, r - 1), ul = GP(c - 1, r - 1);
+        ctx.moveTo((ul.x + up.x) / 2, (ul.y + up.y) / 2); ctx.lineTo((left.x + p.x) / 2, (left.y + p.y) / 2);
+        ctx.moveTo((ul.x + left.x) / 2, (ul.y + left.y) / 2); ctx.lineTo((up.x + p.x) / 2, (up.y + p.y) / 2);
       }
     }
     ctx.stroke();
@@ -3108,8 +3331,14 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
     ctx.font = '600 17px Consolas, "Courier New", monospace';
     ctx.textAlign = 'left';
     ctx.fillText('SCORE ' + G.score, bx + 14, by + 28);
-    ctx.globalAlpha = 0.5;
-    ctx.fillText('x' + mult(), bx + 14, by + 50);
+    ctx.globalAlpha = G.mult > 1 ? 0.95 : 0.5;
+    ctx.fillStyle = G.mult > 1 ? LIME : '#ececf1';
+    ctx.fillText('x' + G.mult, bx + 14, by + 50);
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#ececf1';
+    ctx.font = '600 13px Consolas, "Courier New", monospace';
+    ctx.fillText('BEST ' + Math.max(BEST, G.score), bx + 14, by + 70);
+    ctx.font = '600 17px Consolas, "Courier New", monospace';
     ctx.globalAlpha = 0.85;
     for (let i = 0; i < G.lives; i++) {
       const lx = bx + bw - 22 - i * 24, ly = by + 22;
