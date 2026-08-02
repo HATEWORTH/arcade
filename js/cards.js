@@ -846,6 +846,7 @@
       g.addColorStop(1, 'rgba(46, 50, 38, 0.24)');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
+      ARCADE_FX.grain(ctx);
       if (C.view === 'poker' && HU.state === 'cpu' && performance.now() >= HU.at) cpuAct();
       if (C.view === 'poker') drawPoker();
       else if (C.view === 'blackjack') drawBlackjack();

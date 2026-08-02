@@ -1221,6 +1221,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     blg.addColorStop(1, 'rgba(214, 226, 168, 0)');
     ctx.fillStyle = blg;
     ctx.fillRect(0, 0, W, H);
+    ARCADE_FX.grain(ctx);
 
     ctx.save();
     if (game.shake > 0 && !reducedMotion) {
