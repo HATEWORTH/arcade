@@ -349,6 +349,10 @@
     color: #2a2e22;
     text-shadow: 2px 3px 3px rgba(42, 46, 34, .35);
   }
+  .lcdsub {
+    color: #565b48;
+    text-shadow: 1px 2px 2px rgba(42, 46, 34, .25);
+  }
   .vertag {
     position: absolute;
     right: 1.4rem;
@@ -474,14 +478,17 @@ window.ARCADE_LOCK = (() => {
   <p class="prompt">Enter or click to retry</p>
 </div>
 
-<div class="overlay hidden" id="cardsMenu">
-  <h1 class="title">NEON<em>CARDS</em></h1>
-  <div class="gamemenu">
-    <button class="gamecard" id="pickPoker"><b>POKER</b><span>heads-up hold'em</span></button>
-    <button class="gamecard magenta" id="pickBlackjack"><b>BLACKJACK</b><span>beat the dealer</span></button>
-    <button class="gamecard lime" id="pickSolitaire"><b>SOLITAIRE</b><span>klondike &middot; draw one</span></button>
+<div class="overlay nes hidden" id="cardsMenu">
+  <h1 class="nestitle">CARDS</h1>
+  <div class="menublock">
+    <p class="menulabel">SELECT GAME</p>
+    <div class="gamemenu">
+      <button class="gamecard" id="pickPoker"><b>POKER</b><span>heads-up hold'em</span></button>
+      <button class="gamecard" id="pickBlackjack"><b>BLACKJACK</b><span>beat the dealer</span></button>
+      <button class="gamecard" id="pickSolitaire"><b>SOLITAIRE</b><span>klondike &middot; draw one</span></button>
+    </div>
   </div>
-  <p class="sub">Esc returns here &middot; Q quits to the arcade</p>
+  <p class="sub lcdsub">Esc returns here &middot; Q quits to the arcade</p>
 </div>
 
 <div class="overlay hidden" id="endOverlay">
@@ -3523,7 +3530,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   const SUITS = ['♠', '♥', '♦', '♣'];
   const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
   const isRed = s => s === 1 || s === 2;
-  const suitColor = s => isRed(s) ? MAGENTA : CYAN;
   const MONO = 'Consolas, "Courier New", monospace';
 
   const stageEl = document.getElementById('stage');
@@ -3555,80 +3561,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     ctx.arcTo(x, y + h, x, y, r);
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
-  }
-  function drawCard(x, y, w, h, card, faceUp, held, hover) {
-    if (!faceUp) {
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = hover ? 'rgba(143, 206, 154, 0.12)' : 'rgba(143, 206, 154, 0.06)';
-      rr(x, y, w, h, 6); ctx.fill();
-      ctx.globalAlpha = hover ? 0.9 : 0.4;
-      ctx.strokeStyle = CYAN;
-      if (hover) { ctx.shadowColor = CYAN; ctx.shadowBlur = 12; }
-      ctx.lineWidth = hover ? 1.6 : 1;
-      rr(x + 0.5, y + 0.5, w - 1, h - 1, 6); ctx.stroke();
-      ctx.shadowBlur = 0;
-      // hatch pattern on the back
-      ctx.save();
-      rr(x + 5, y + 5, w - 10, h - 10, 4); ctx.clip();
-      ctx.globalAlpha = 0.18;
-      ctx.beginPath();
-      for (let d = -h; d < w; d += 8) {
-        ctx.moveTo(x + d, y + h); ctx.lineTo(x + d + h, y);
-      }
-      ctx.stroke();
-      ctx.restore();
-      return;
-    }
-    const col = suitColor(card.s);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = hover ? 'rgba(255, 255, 255, 0.09)' : 'rgba(255, 255, 255, 0.035)';
-    rr(x, y, w, h, 6); ctx.fill();
-    ctx.globalAlpha = held || hover ? 1 : 0.75;
-    ctx.strokeStyle = held ? LIME : col;
-    ctx.shadowColor = held ? LIME : col;
-    ctx.shadowBlur = held ? 14 : (hover ? 14 : 8);
-    ctx.lineWidth = held ? 2 : (hover ? 1.8 : 1.2);
-    rr(x + 0.5, y + 0.5, w - 1, h - 1, 6); ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 0.95;
-    ctx.fillStyle = col;
-    ctx.font = '600 ' + Math.round(w * 0.28) + 'px ' + MONO;
-    ctx.textAlign = 'left';
-    ctx.fillText(RANKS[card.r - 1], x + w * 0.1, y + w * 0.36);
-    ctx.textAlign = 'center';
-    ctx.font = Math.round(w * 0.5) + 'px ' + MONO;
-    ctx.fillText(SUITS[card.s], x + w / 2, y + h * 0.68);
-    if (held) {
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = LIME;
-      ctx.font = '600 ' + Math.round(w * 0.18) + 'px ' + MONO;
-      ctx.fillText('HELD', x + w / 2, y + h + w * 0.24);
-    }
-    ctx.textAlign = 'left';
-  }
-  function hudText(txt, x, y, size, color, align) {
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = color || INK;
-    ctx.font = '600 ' + size + 'px ' + MONO;
-    ctx.textAlign = align || 'left';
-    ctx.fillText(txt, x, y);
-    ctx.textAlign = 'left';
-  }
-  function button(label, x, y, w, h, active) {
-    const hover = active && C.mx >= x && C.mx <= x + w && C.my >= y && C.my <= y + h;
-    if (hover) {
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = 'rgba(236, 236, 241, 0.12)';
-      rr(x, y, w, h, 5); ctx.fill();
-      ctx.shadowColor = INK; ctx.shadowBlur = 12;
-    }
-    ctx.globalAlpha = hover ? 1 : (active ? 0.95 : 0.35);
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = hover ? 1.6 : 1;
-    rr(x + 0.5, y + 0.5, w - 1, h - 1, 5); ctx.stroke();
-    ctx.shadowBlur = 0;
-    hudText(label, x + w / 2, y + h / 2 + 5, 14, INK, 'center');
-    return { x, y, w, h, label };
   }
   const inRect = (px, py, b) => b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
 
@@ -4166,31 +4098,41 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   function drawBlackjack() {
     const W = innerWidth, H = innerHeight;
     const cw = Math.min(92, W / 9), chh = cw * 1.45, gap = cw * 0.28;
-    hudText('BLACKJACK', W / 2, 54, 22, INK, 'center');
-    hudText('CHIPS ' + C.chips, 30, 40, 17);
-    hudText('BET ' + BJ.bet, 30, 64, 13, '#9a9aa5');
+    // big bold title in the left slot, like the poker table
+    const tg = refGeom();
+    ctx.shadowColor = 'rgba(42, 46, 34, .3)';
+    ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 5; ctx.shadowBlur = 3;
+    ctx.fillStyle = LINK;
+    ctx.font = '800 44px ' + MONO;
+    ctx.textAlign = 'center';
+    ctx.fillText('BLACK', tg.pxL + tg.pw / 2, H * 0.25 - 24);
+    ctx.fillText('JACK', tg.pxL + tg.pw / 2, H * 0.25 + 24);
+    lcdShadow(false);
+    ctx.textAlign = 'left';
+    lcdText('CHIPS ' + C.chips, tg.pxL + tg.pw / 2, H * 0.25 + 64, 16, LINK, 'center');
+    lcdText('BET ' + BJ.bet, tg.pxL + tg.pw / 2, H * 0.25 + 86, 13, LDIM, 'center');
     const drawHand = (hand, y, hideFirst) => {
       const x0 = W / 2 - (hand.length * cw + (hand.length - 1) * gap) / 2;
       for (let i = 0; i < hand.length; i++) {
-        drawCard(x0 + i * (cw + gap), y, cw, chh, hand[i], !(hideFirst && i === 0), false);
+        lcdCard(x0 + i * (cw + gap), y, cw, chh, hand[i], !(hideFirst && i === 0), false);
       }
     };
     const hide = BJ.phase === 'play';
-    drawHand(BJ.dealer, H * 0.16, hide);
-    hudText('DEALER' + (hide ? '' : '  ' + bjValue(BJ.dealer)), W / 2, H * 0.16 - 12, 13, '#9a9aa5', 'center');
+    drawHand(BJ.dealer, H * 0.17, hide);
+    lcdText('DEALER' + (hide ? '' : '  ' + bjValue(BJ.dealer)), W / 2, H * 0.17 - 14, 13, LDIM, 'center');
     drawHand(BJ.player, H * 0.56, false);
-    hudText('YOU  ' + bjValue(BJ.player), W / 2, H * 0.56 - 12, 13, '#9a9aa5', 'center');
-    if (BJ.msg) hudText(BJ.msg, W / 2, H * 0.47, 22, BJ.msg.includes('+') ? LIME : INK, 'center');
+    lcdText('YOU  ' + bjValue(BJ.player), W / 2, H * 0.56 - 14, 13, LDIM, 'center');
+    if (BJ.msg) lcdText(BJ.msg, W / 2, H * 0.47, 22, LINK, 'center');
     BJ.btns = [];
     const by = H * 0.56 + chh + 40, bw = 130, bh2 = 38, bg = 18;
     if (BJ.phase === 'play') {
       const x0 = W / 2 - (3 * bw + 2 * bg) / 2;
-      BJ.btns.push(button('HIT [H]', x0, by, bw, bh2, true));
-      BJ.btns.push(button('STAND [S]', x0 + bw + bg, by, bw, bh2, true));
-      BJ.btns.push(button('DOUBLE [D]', x0 + 2 * (bw + bg), by, bw, bh2, BJ.canDouble));
+      BJ.btns.push(lcdButton('HIT [H]', x0, by, bw, bh2, true));
+      BJ.btns.push(lcdButton('STAND [S]', x0 + bw + bg, by, bw, bh2, true));
+      BJ.btns.push(lcdButton('DOUBLE [D]', x0 + 2 * (bw + bg), by, bw, bh2, BJ.canDouble));
     } else {
-      BJ.btns.push(button('DEAL', W / 2 - bw / 2, by, bw, bh2, true));
-      hudText('enter deals again', W / 2, by + bh2 + 30, 12, '#9a9aa5', 'center');
+      BJ.btns.push(lcdButton('DEAL', W / 2 - bw / 2, by, bw, bh2, true));
+      lcdText('enter deals again', W / 2, by + bh2 + 30, 12, LDIM, 'center');
     }
   }
   function bjClick(x, y) {
@@ -4317,26 +4259,32 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   function drawSolitaire() {
     const W = innerWidth, H = innerHeight;
     const L = solLayout();
-    hudText('SOLITAIRE', W - 30, 40, 17, INK, 'right');
-    hudText('R redeals', W - 30, 62, 12, '#9a9aa5', 'right');
+    lcdText('SOLITAIRE', W - 34, 46, 17, LINK, 'right');
+    lcdText('R redeals', W - 34, 68, 12, LDIM, 'right');
     const hov = SOL.won ? null : solHit(C.mx, C.my);
     // stock
-    if (SOL.stock.length) drawCard(L.colX(0), L.y0, L.cw, L.chh, null, false, false, hov && hov.type === 'stock');
+    if (SOL.stock.length) lcdCard(L.colX(0), L.y0, L.cw, L.chh, null, false, hov && hov.type === 'stock');
     else {
-      ctx.globalAlpha = hov && hov.type === 'stock' ? 0.6 : 0.2;
-      ctx.strokeStyle = INK; ctx.lineWidth = 1;
+      ctx.globalAlpha = hov && hov.type === 'stock' ? 0.8 : 0.35;
+      ctx.strokeStyle = LDIM; ctx.lineWidth = 1;
+      ctx.setLineDash([4, 5]);
       rr(L.colX(0) + 0.5, L.y0 + 0.5, L.cw - 1, L.chh - 1, 6); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
     }
     // waste
-    if (SOL.waste.length) drawCard(L.colX(1), L.y0, L.cw, L.chh, SOL.waste[SOL.waste.length - 1], true, false, hov && hov.type === 'waste');
+    if (SOL.waste.length) lcdCard(L.colX(1), L.y0, L.cw, L.chh, SOL.waste[SOL.waste.length - 1], true, hov && hov.type === 'waste');
     // foundations
     for (let i = 0; i < 4; i++) {
       const f = SOL.found[i], fx = L.colX(3 + i);
-      if (f.length) drawCard(fx, L.y0, L.cw, L.chh, f[f.length - 1], true, false);
+      if (f.length) lcdCard(fx, L.y0, L.cw, L.chh, f[f.length - 1], true, false);
       else {
-        ctx.globalAlpha = 0.18; ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.35; ctx.strokeStyle = LDIM; ctx.lineWidth = 1;
+        ctx.setLineDash([4, 5]);
         rr(fx + 0.5, L.y0 + 0.5, L.cw - 1, L.chh - 1, 6); ctx.stroke();
-        hudText('A', fx + L.cw / 2, L.y0 + L.chh / 2 + 6, 16, '#9a9aa5', 'center');
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+        lcdText('A', fx + L.cw / 2, L.y0 + L.chh / 2 + 6, 16, LDIM, 'center');
       }
     }
     // tableau: hovering a face-up card lights it and the run below it
@@ -4345,13 +4293,13 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       let cy = L.y1;
       for (let j = 0; j < pile.length; j++) {
         const lit = hov && hov.type === 'tab' && hov.i === i && j >= hov.j;
-        drawCard(L.colX(i), cy, L.cw, L.chh, pile[j].c, pile[j].up, false, lit);
+        lcdCard(L.colX(i), cy, L.cw, L.chh, pile[j].c, pile[j].up, lit);
         cy += pile[j].up ? L.dyUp : L.dyDown;
       }
     }
     if (SOL.won) {
-      hudText('CLEARED', W / 2, H / 2, 34, LIME, 'center');
-      hudText('click or enter for a new deal', W / 2, H / 2 + 34, 13, '#9a9aa5', 'center');
+      lcdText('CLEARED', W / 2, H / 2, 34, LINK, 'center');
+      lcdText('click or enter for a new deal', W / 2, H / 2 + 34, 13, LDIM, 'center');
     }
   }
 
@@ -4423,35 +4371,25 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     if (window.MODE === 'cards') {
       const W = innerWidth, H = innerHeight;
       ctx.globalAlpha = 1;
-      if (C.view === 'poker') {
-        // LCD screen, same treatment as the splash: pale sage with a
-        // center highlight and darkened edges
-        ctx.fillStyle = LBG;
-        ctx.fillRect(0, 0, W, H);
-        let g = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.62);
-        g.addColorStop(0, 'rgba(255, 255, 255, 0.16)');
-        g.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, W, H);
-        g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.78);
-        g.addColorStop(0, 'rgba(46, 50, 38, 0)');
-        g.addColorStop(1, 'rgba(46, 50, 38, 0.24)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, W, H);
-      } else {
-        ctx.fillStyle = '#050507';
-        ctx.fillRect(0, 0, W, H);
-        // felt glow: a faint centered wash so the table isn't a void
-        const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.6);
-        grad.addColorStop(0, 'rgba(143, 206, 154, 0.045)');
-        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, W, H);
-      }
+      // LCD screen, same treatment as the splash: pale sage with a
+      // center highlight and darkened edges
+      ctx.fillStyle = LBG;
+      ctx.fillRect(0, 0, W, H);
+      let g = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.62);
+      g.addColorStop(0, 'rgba(255, 255, 255, 0.16)');
+      g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.78);
+      g.addColorStop(0, 'rgba(46, 50, 38, 0)');
+      g.addColorStop(1, 'rgba(46, 50, 38, 0.24)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
       if (C.view === 'poker' && HU.state === 'cpu' && performance.now() >= HU.at) cpuAct();
-      if (C.view === 'poker') { drawPoker(); drawBezel(); }
+      if (C.view === 'poker') drawPoker();
       else if (C.view === 'blackjack') drawBlackjack();
       else if (C.view === 'solitaire') drawSolitaire();
+      if (C.view !== 'menu') drawBezel();
     }
     requestAnimationFrame(frame);
   }
