@@ -380,6 +380,7 @@
       <button class="gamecard" id="pickPong"><b>PONG 3D</b><span>defend the tunnel core</span></button>
       <button class="gamecard magenta" id="pickTetris"><b>TETRIS</b><span>stack in the void</span></button>
       <button class="gamecard lime" id="pickSnake"><b>SNAKE</b><span>hunt the signal</span></button>
+      <button class="gamecard" id="pickGeo"><b>GEO WARS</b><span>survive the swarm</span></button>
     </div>
   </div>
   <pre class="lcdgame" id="lcdDemo" aria-hidden="true"></pre>
@@ -421,6 +422,12 @@
   <p class="prompt">Enter or click to retry</p>
 </div>
 
+<div class="overlay strategy hidden" id="geoEnd">
+  <p class="verdict lose">SWARM WINS</p>
+  <p class="sub" id="geoScoreLine"></p>
+  <p class="prompt">Enter or click to retry</p>
+</div>
+
 <div class="overlay hidden" id="endOverlay">
   <p class="verdict win" id="verdict">YOU WIN</p>
   <p class="sub" id="finalScore">7 &ndash; 0</p>
@@ -429,7 +436,7 @@
 
 <script>
 'use strict';
-window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
+window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo'
 (() => {
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
@@ -2493,6 +2500,392 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
 
 <script>
 'use strict';
+// ---- GEO WARS -----------------------------------------------------------
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const A = window.ARCADE;
+  const endEl = document.getElementById('geoEnd');
+  const scoreLineEl = document.getElementById('geoScoreLine');
+  const pauseEl = document.getElementById('pauseOverlay');
+  const launchEl = document.getElementById('launchOverlay');
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const CYAN = '#8fce9a', MAGENTA = '#e0459b', LIME = '#e6cf5e', WHITE = '#ffffff';
+  const ENEMY_COLOR = { chaser: MAGENTA, drifter: CYAN, weaver: LIME };
+
+  const G = {
+    running: false, paused: false,
+    ship: { x: 0, y: 0, vx: 0, vy: 0 },
+    aim: { x: 0, y: 0 },
+    firing: false, fireT: 0,
+    bullets: [], enemies: [], parts: [],
+    score: 0, kills: 0, lives: 3, inv: 0,
+    spawnT: 1, time: 0, shake: 0,
+  };
+  const keys = {};
+  let t = 0;
+
+  function arena() {
+    const W = innerWidth, H = innerHeight;
+    const bw = W * 0.84, bh = H * 0.8;
+    return { bx: (W - bw) / 2, by: (H - bh) / 2, bw, bh };
+  }
+  function mult() { return 1 + Math.floor(G.kills / 12); }
+
+  function burst(x, y, color, n, power) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = (30 + Math.pow(Math.random(), 2) * 380) * power;
+      G.parts.push({
+        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: 1, decay: 1 + Math.random() * 2.2,
+        color: Math.random() < 0.22 ? WHITE : color,
+        len: 4 + Math.random() * 14,
+      });
+    }
+  }
+
+  function prime() {
+    const { bx, by, bw, bh } = arena();
+    G.ship.x = bx + bw / 2; G.ship.y = by + bh / 2;
+    G.ship.vx = 0; G.ship.vy = 0;
+    G.aim.x = G.ship.x; G.aim.y = by + bh * 0.3;
+    G.bullets.length = 0; G.enemies.length = 0; G.parts.length = 0;
+    G.score = 0; G.kills = 0; G.lives = 3; G.inv = 0;
+    G.spawnT = 1; G.time = 0; G.shake = 0; G.fireT = 0; G.firing = false;
+  }
+  function start() {
+    prime();
+    G.running = true;
+    A.audio(); A.startMusic();
+    endEl.classList.add('hidden');
+  }
+  function die() {
+    G.running = false; G.firing = false;
+    burst(G.ship.x, G.ship.y, WHITE, 60, 1.6);
+    G.shake = 16;
+    scoreLineEl.innerHTML = 'Score ' + G.score + ' &middot; ' + G.kills + ' kills &middot; ' + Math.floor(G.time) + 's survived';
+    A.bleep(220, 0.25, 'sawtooth', 0.06);
+    setTimeout(() => A.bleep(150, 0.35, 'sawtooth', 0.06), 160);
+    setTimeout(() => endEl.classList.remove('hidden'), 600);
+  }
+  function togglePause() {
+    if (!G.running) return;
+    G.paused = !G.paused;
+    pauseEl.classList.toggle('hidden', !G.paused);
+    if (G.paused) A.suspend(); else A.resume();
+  }
+  function quitToMenu() {
+    G.running = false; G.paused = false;
+    A.resume();
+    pauseEl.classList.add('hidden');
+    endEl.classList.add('hidden');
+    launchEl.classList.remove('hidden');
+    window.MODE = 'menu';
+  }
+
+  document.getElementById('pickGeo').addEventListener('click', () => {
+    window.MODE = 'geo';
+    launchEl.classList.add('hidden');
+    endEl.classList.add('hidden');
+    prime();
+  });
+
+  addEventListener('keydown', e => {
+    if (window.MODE !== 'geo') return;
+    if (e.key === 'Escape') { togglePause(); return; }
+    if ((e.key === 'q' || e.key === 'Q') && (G.paused || !G.running)) { quitToMenu(); return; }
+    if (e.key === 'Enter' && !G.running && !G.paused) { start(); return; }
+    keys[e.key.toLowerCase()] = true;
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) e.preventDefault();
+  });
+  addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+  addEventListener('pointermove', e => {
+    if (window.MODE === 'geo') { G.aim.x = e.clientX; G.aim.y = e.clientY; }
+  });
+  addEventListener('pointerdown', e => {
+    if (window.MODE !== 'geo') return;
+    if (G.paused) { togglePause(); return; }
+    if (!G.running) { start(); return; }
+    if (e.button === 0) G.firing = true;
+  });
+  addEventListener('pointerup', () => { G.firing = false; });
+  addEventListener('contextmenu', e => { if (window.MODE === 'geo') e.preventDefault(); });
+
+  function spawnEnemy() {
+    const { bx, by, bw, bh } = arena();
+    const side = Math.floor(Math.random() * 4);
+    let x, y;
+    if (side === 0) { x = bx + Math.random() * bw; y = by + 10; }
+    else if (side === 1) { x = bx + Math.random() * bw; y = by + bh - 10; }
+    else if (side === 2) { x = bx + 10; y = by + Math.random() * bh; }
+    else { x = bx + bw - 10; y = by + Math.random() * bh; }
+    // never materialize on top of the ship — mirror across the arena instead
+    if (Math.hypot(x - G.ship.x, y - G.ship.y) < 200) {
+      x = bx + bw - (x - bx); y = by + bh - (y - by);
+    }
+    const roll = Math.random();
+    if (G.time > 25 && roll < 0.25) {
+      G.enemies.push({ x, y, type: 'weaver', r: 9, spd: 200 + G.time, wob: Math.random() * 6.28 });
+    } else if (roll < 0.62) {
+      G.enemies.push({ x, y, type: 'chaser', r: 12, spd: 110 + G.time * 1.4 });
+    } else {
+      const a = Math.random() * Math.PI * 2;
+      G.enemies.push({ x, y, type: 'drifter', r: 11, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150 });
+    }
+  }
+
+  function shipHit() {
+    G.lives--;
+    burst(G.ship.x, G.ship.y, WHITE, 46, 1.5);
+    G.shake = 14;
+    A.sweep(500, 40, 0.4, 'sawtooth', 0.07);
+    A.hat(0.09, 0.12);
+    // the blast clears the space around you for the respawn
+    for (let i = G.enemies.length - 1; i >= 0; i--) {
+      const en = G.enemies[i];
+      if (Math.hypot(en.x - G.ship.x, en.y - G.ship.y) < 260) {
+        burst(en.x, en.y, ENEMY_COLOR[en.type], 8, 1);
+        G.enemies.splice(i, 1);
+      }
+    }
+    G.inv = 2;
+    if (G.lives <= 0) die();
+  }
+
+  function update(dt) {
+    G.time += dt;
+    const { bx, by, bw, bh } = arena();
+
+    // thrust + friction + speed cap
+    let ax = 0, ay = 0;
+    if (keys['a'] || keys['arrowleft']) ax -= 1;
+    if (keys['d'] || keys['arrowright']) ax += 1;
+    if (keys['w'] || keys['arrowup']) ay -= 1;
+    if (keys['s'] || keys['arrowdown']) ay += 1;
+    const m = Math.hypot(ax, ay) || 1;
+    G.ship.vx += (ax / m) * 2600 * dt;
+    G.ship.vy += (ay / m) * 2600 * dt;
+    G.ship.vx *= Math.max(0, 1 - dt * 6);
+    G.ship.vy *= Math.max(0, 1 - dt * 6);
+    const sp = Math.hypot(G.ship.vx, G.ship.vy);
+    if (sp > 460) { G.ship.vx *= 460 / sp; G.ship.vy *= 460 / sp; }
+    G.ship.x = Math.max(bx + 14, Math.min(bx + bw - 14, G.ship.x + G.ship.vx * dt));
+    G.ship.y = Math.max(by + 14, Math.min(by + bh - 14, G.ship.y + G.ship.vy * dt));
+
+    // fire toward the cursor
+    G.fireT -= dt;
+    if (G.firing && G.fireT <= 0) {
+      const dx = G.aim.x - G.ship.x, dy = G.aim.y - G.ship.y;
+      const d = Math.hypot(dx, dy) || 1;
+      G.bullets.push({ x: G.ship.x + (dx / d) * 16, y: G.ship.y + (dy / d) * 16, vx: (dx / d) * 950, vy: (dy / d) * 950 });
+      G.fireT = 0.1;
+      A.bleep(880, 0.018, 'square', 0.012);
+    }
+    for (let i = G.bullets.length - 1; i >= 0; i--) {
+      const b = G.bullets[i];
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.x < bx + 3 || b.x > bx + bw - 3 || b.y < by + 3 || b.y > by + bh - 3) G.bullets.splice(i, 1);
+    }
+
+    // swarm pressure ramps over time
+    G.spawnT -= dt;
+    if (G.spawnT <= 0) {
+      spawnEnemy();
+      G.spawnT = Math.max(0.22, 1.05 - G.time * 0.012);
+    }
+    for (const en of G.enemies) {
+      if (en.type === 'drifter') {
+        en.x += en.vx * dt; en.y += en.vy * dt;
+        if (en.x < bx + en.r || en.x > bx + bw - en.r) { en.vx *= -1; en.x = Math.max(bx + en.r, Math.min(bx + bw - en.r, en.x)); }
+        if (en.y < by + en.r || en.y > by + bh - en.r) { en.vy *= -1; en.y = Math.max(by + en.r, Math.min(by + bh - en.r, en.y)); }
+      } else {
+        const dx = G.ship.x - en.x, dy = G.ship.y - en.y;
+        const d = Math.hypot(dx, dy) || 1;
+        let vx = (dx / d) * en.spd, vy = (dy / d) * en.spd;
+        if (en.type === 'weaver') {
+          en.wob += dt * 7;
+          const w = Math.sin(en.wob) * en.spd * 0.7;
+          vx += (-dy / d) * w; vy += (dx / d) * w;
+        }
+        en.x += vx * dt; en.y += vy * dt;
+      }
+    }
+
+    // bullets vs enemies
+    for (let i = G.enemies.length - 1; i >= 0; i--) {
+      const en = G.enemies[i];
+      for (let j = G.bullets.length - 1; j >= 0; j--) {
+        const b = G.bullets[j];
+        if (Math.hypot(b.x - en.x, b.y - en.y) < en.r + 4) {
+          G.bullets.splice(j, 1);
+          G.enemies.splice(i, 1);
+          G.kills++;
+          G.score += 15 * mult();
+          burst(en.x, en.y, ENEMY_COLOR[en.type], 16, 1.1);
+          G.shake = Math.max(G.shake, 5);
+          A.bleep(280 + Math.random() * 220, 0.05, 'sawtooth', 0.032);
+          if (G.kills % 4 === 0) A.hat(0.04, 0.05);
+          break;
+        }
+      }
+    }
+
+    // enemies vs ship
+    if (G.inv > 0) G.inv -= dt;
+    else {
+      for (const en of G.enemies) {
+        if (Math.hypot(en.x - G.ship.x, en.y - G.ship.y) < en.r + 10) { shipHit(); break; }
+      }
+    }
+  }
+
+  function fx(dt) {
+    t += dt;
+    for (let i = G.parts.length - 1; i >= 0; i--) {
+      const p = G.parts[i];
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vx *= (1 - dt * 2.5); p.vy *= (1 - dt * 2.5);
+      p.life -= p.decay * dt;
+      if (p.life <= 0) G.parts.splice(i, 1);
+    }
+    G.shake = Math.max(0, G.shake - dt * 30);
+  }
+
+  function drawEnemy(en) {
+    ctx.strokeStyle = ENEMY_COLOR[en.type];
+    ctx.shadowColor = ENEMY_COLOR[en.type];
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    if (en.type === 'chaser') {
+      ctx.moveTo(en.x, en.y - en.r); ctx.lineTo(en.x + en.r, en.y);
+      ctx.lineTo(en.x, en.y + en.r); ctx.lineTo(en.x - en.r, en.y);
+    } else if (en.type === 'drifter') {
+      ctx.rect(en.x - en.r, en.y - en.r, en.r * 2, en.r * 2);
+    } else {
+      ctx.moveTo(en.x, en.y - en.r); ctx.lineTo(en.x + en.r, en.y + en.r);
+      ctx.lineTo(en.x - en.r, en.y + en.r);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  function draw() {
+    const W = innerWidth, H = innerHeight;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#050507';
+    ctx.fillRect(0, 0, W, H);
+    const { bx, by, bw, bh } = arena();
+    ctx.save();
+    if (G.shake > 0 && !reducedMotion) {
+      ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
+    }
+
+    // arena grid + wall
+    ctx.globalAlpha = 0.07;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = bx; x <= bx + bw + 0.5; x += 44) { ctx.moveTo(x + 0.5, by); ctx.lineTo(x + 0.5, by + bh); }
+    for (let y = by; y <= by + bh + 0.5; y += 44) { ctx.moveTo(bx, y + 0.5); ctx.lineTo(bx + bw, y + 0.5); }
+    ctx.stroke();
+    ctx.globalAlpha = 0.45;
+    ctx.strokeStyle = CYAN;
+    ctx.shadowColor = CYAN;
+    ctx.shadowBlur = 10;
+    ctx.strokeRect(bx + 0.5, by + 0.5, bw, bh);
+    ctx.shadowBlur = 0;
+
+    // bullets
+    ctx.strokeStyle = LIME;
+    ctx.shadowColor = LIME;
+    ctx.shadowBlur = 8;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    for (const b of G.bullets) {
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - b.vx * 0.013, b.y - b.vy * 0.013);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    for (const en of G.enemies) drawEnemy(en);
+
+    // ship: triangle nosed toward the cursor, blinking while invulnerable
+    if (!(G.inv > 0 && Math.floor(t * 12) % 2)) {
+      const a = Math.atan2(G.aim.y - G.ship.y, G.aim.x - G.ship.x);
+      ctx.strokeStyle = WHITE;
+      ctx.shadowColor = CYAN;
+      ctx.shadowBlur = 14;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.moveTo(G.ship.x + Math.cos(a) * 15, G.ship.y + Math.sin(a) * 15);
+      ctx.lineTo(G.ship.x + Math.cos(a + 2.5) * 11, G.ship.y + Math.sin(a + 2.5) * 11);
+      ctx.lineTo(G.ship.x + Math.cos(a - 2.5) * 11, G.ship.y + Math.sin(a - 2.5) * 11);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // particles
+    ctx.lineWidth = 1.4;
+    ctx.lineCap = 'round';
+    for (const p of G.parts) {
+      const s = Math.hypot(p.vx, p.vy) || 1;
+      ctx.globalAlpha = Math.max(0, p.life) * 0.7;
+      ctx.strokeStyle = p.color;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x + (p.vx / s) * p.len, p.y + (p.vy / s) * p.len);
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+
+    // HUD
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#ececf1';
+    ctx.font = '600 17px Consolas, "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('SCORE ' + G.score, bx + 14, by + 28);
+    ctx.globalAlpha = 0.5;
+    ctx.fillText('x' + mult(), bx + 14, by + 50);
+    ctx.globalAlpha = 0.85;
+    for (let i = 0; i < G.lives; i++) {
+      const lx = bx + bw - 22 - i * 24, ly = by + 22;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly - 8); ctx.lineTo(lx + 7, ly + 6); ctx.lineTo(lx - 7, ly + 6);
+      ctx.closePath();
+      ctx.strokeStyle = WHITE;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    let dt = (now - last) / 1000;
+    last = now;
+    dt = Math.min(dt, 1 / 30);
+    if (window.MODE === 'geo' && !G.paused) {
+      if (G.running) update(dt);
+      fx(dt);
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+
+<script>
+'use strict';
 // ---- splash LCD demo: mini vignette of whichever game is hovered --------
 (() => {
   const el = document.getElementById('lcdDemo');
@@ -2599,13 +2992,38 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     return g;
   }
 
-  const anims = { pong: pongTick, tetris: tetTick, snake: snakeTick };
+  // geo wars: foes converge on the center ship and pop on contact
+  const geoV = {
+    foes: [{ r: 0, c: 2 }, { r: 5, c: 18 }, { r: 0, c: 20 }, { r: 5, c: 4 }],
+    spawns: [[0, 6], [5, 14], [0, 18], [5, 0], [0, 10], [5, 20], [0, 0], [5, 8]],
+    si: 0, flashes: [],
+  };
+  function geoTick() {
+    const g = blank();
+    const cr = 2, cc = 10;
+    for (const f of geoV.flashes) g[f.r][f.c] = '*';
+    geoV.flashes = geoV.flashes.filter(f => --f.ttl > 0);
+    for (const f of geoV.foes) {
+      if (f.r < cr) f.r++; else if (f.r > cr) f.r--;
+      if (f.c < cc) f.c++; else if (f.c > cc) f.c--;
+      if (Math.abs(f.r - cr) + Math.abs(f.c - cc) <= 1) {
+        geoV.flashes.push({ r: f.r, c: f.c, ttl: 2 });
+        const s = geoV.spawns[geoV.si++ % geoV.spawns.length];
+        f.r = s[0]; f.c = s[1];
+      }
+    }
+    for (const f of geoV.foes) g[f.r][f.c] = '■';
+    g[cr][cc] = '█';
+    return g;
+  }
+
+  const anims = { pong: pongTick, tetris: tetTick, snake: snakeTick, geo: geoTick };
   let mode = 'pong';
   show(anims[mode]());
   if (!reducedMotion) setInterval(() => show(anims[mode]()), 220);
 
   // hovered title picks the vignette; leaving falls back to pong
-  const picks = { pickPong: 'pong', pickTetris: 'tetris', pickSnake: 'snake' };
+  const picks = { pickPong: 'pong', pickTetris: 'tetris', pickSnake: 'snake', pickGeo: 'geo' };
   for (const [id, m] of Object.entries(picks)) {
     const b = document.getElementById(id);
     const set = to => { mode = to; if (reducedMotion) show(anims[mode]()); };
