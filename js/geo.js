@@ -86,25 +86,28 @@
     return { a, b, k: 0.4, d: 0.14, target: Math.hypot(a.x - b.x, a.y - b.y) * 0.95 };
   }
   function buildGrid() {
-    const { bx, by, bw, bh } = arena();
     grid.w = innerWidth; grid.h = innerHeight;
     const spacing = 44;
-    const cols = Math.max(4, Math.round(bw / spacing));
-    const rows = Math.max(4, Math.round(bh / spacing));
+    // overscan one and a half cells past every screen edge so warping can
+    // never pull the visible grid in and expose bare background
+    const over = spacing * 1.5;
+    const gx = -over, gy = -over;
+    const gw = innerWidth + over * 2, gh = innerHeight + over * 2;
+    const cols = Math.max(4, Math.round(gw / spacing));
+    const rows = Math.max(4, Math.round(gh / spacing));
     grid.cols = cols; grid.rows = rows;
     grid.pts = []; grid.springs = [];
     for (let r = 0; r <= rows; r++) {
       for (let c = 0; c <= cols; c++) {
-        const x = bx + (c / cols) * bw, y = by + (r / rows) * bh;
-        grid.pts.push({ x, y, ox: x, oy: y, vx: 0, vy: 0, fx: 0, fy: 0, damp: 0.98 });
+        const x = gx + (c / cols) * gw, y = gy + (r / rows) * gh;
+        const pin = c === 0 || r === 0 || c === cols || r === rows;
+        grid.pts.push({ x, y, ox: x, oy: y, vx: 0, vy: 0, fx: 0, fy: 0, damp: 0.98, pin });
       }
     }
     const P = (c, r) => grid.pts[r * (cols + 1) + c];
     for (let r = 0; r <= rows; r++) {
       for (let c = 0; c <= cols; c++) {
-        if (c === 0 || r === 0 || c === cols || r === rows)
-          grid.springs.push({ a: null, b: P(c, r), k: 0.1, d: 0.1 });     // hard border anchor
-        else if (c % 2 === 0 && r % 2 === 0)
+        if (c % 2 === 0 && r % 2 === 0 && !P(c, r).pin)
           grid.springs.push({ a: null, b: P(c, r), k: 0.012, d: 0.06 });  // firmer interior anchors
         if (c > 0) grid.springs.push(spring(P(c - 1, r), P(c, r)));
         if (r > 0) grid.springs.push(spring(P(c, r - 1), P(c, r)));
@@ -130,6 +133,8 @@
       s.b.fx += fx; s.b.fy += fy;
     }
     for (const p of grid.pts) {
+      // border points are pinned solid — the edges never move
+      if (p.pin) { p.fx = 0; p.fy = 0; p.vx = 0; p.vy = 0; p.damp = 0.95; continue; }
       p.vx += p.fx; p.vy += p.fy;
       p.x += p.vx; p.y += p.vy;
       p.fx = 0; p.fy = 0;
