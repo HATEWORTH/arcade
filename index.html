@@ -19,6 +19,7 @@
     -webkit-user-select: none;
   }
   #stage { position: fixed; inset: 0; cursor: none; touch-action: none; }
+  #stage.freecursor { cursor: default; }
   canvas { display: block; width: 100%; height: 100%; }
 
   .hud {
@@ -3525,7 +3526,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   const suitColor = s => isRed(s) ? MAGENTA : CYAN;
   const MONO = 'Consolas, "Courier New", monospace';
 
-  const C = { view: 'menu', chips: 200 };
+  const stageEl = document.getElementById('stage');
+  const C = { view: 'menu', chips: 200, mx: -1, my: -1 };
   try { C.chips = parseInt(localStorage.getItem('cardChips'), 10) || 200; } catch (e) {}
   function saveChips() {
     try { localStorage.setItem('cardChips', String(C.chips)); } catch (e) {}
@@ -3554,15 +3556,17 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   }
-  function drawCard(x, y, w, h, card, faceUp, held) {
+  function drawCard(x, y, w, h, card, faceUp, held, hover) {
     if (!faceUp) {
       ctx.globalAlpha = 1;
-      ctx.fillStyle = 'rgba(143, 206, 154, 0.06)';
+      ctx.fillStyle = hover ? 'rgba(143, 206, 154, 0.12)' : 'rgba(143, 206, 154, 0.06)';
       rr(x, y, w, h, 6); ctx.fill();
-      ctx.globalAlpha = 0.4;
+      ctx.globalAlpha = hover ? 0.9 : 0.4;
       ctx.strokeStyle = CYAN;
-      ctx.lineWidth = 1;
+      if (hover) { ctx.shadowColor = CYAN; ctx.shadowBlur = 12; }
+      ctx.lineWidth = hover ? 1.6 : 1;
       rr(x + 0.5, y + 0.5, w - 1, h - 1, 6); ctx.stroke();
+      ctx.shadowBlur = 0;
       // hatch pattern on the back
       ctx.save();
       rr(x + 5, y + 5, w - 10, h - 10, 4); ctx.clip();
@@ -3577,13 +3581,13 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     }
     const col = suitColor(card.s);
     ctx.globalAlpha = 1;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
+    ctx.fillStyle = hover ? 'rgba(255, 255, 255, 0.09)' : 'rgba(255, 255, 255, 0.035)';
     rr(x, y, w, h, 6); ctx.fill();
-    ctx.globalAlpha = held ? 1 : 0.75;
+    ctx.globalAlpha = held || hover ? 1 : 0.75;
     ctx.strokeStyle = held ? LIME : col;
     ctx.shadowColor = held ? LIME : col;
-    ctx.shadowBlur = held ? 14 : 8;
-    ctx.lineWidth = held ? 2 : 1.2;
+    ctx.shadowBlur = held ? 14 : (hover ? 14 : 8);
+    ctx.lineWidth = held ? 2 : (hover ? 1.8 : 1.2);
     rr(x + 0.5, y + 0.5, w - 1, h - 1, 6); ctx.stroke();
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 0.95;
@@ -3611,10 +3615,18 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     ctx.textAlign = 'left';
   }
   function button(label, x, y, w, h, active) {
-    ctx.globalAlpha = active ? 0.95 : 0.35;
+    const hover = active && C.mx >= x && C.mx <= x + w && C.my >= y && C.my <= y + h;
+    if (hover) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(236, 236, 241, 0.12)';
+      rr(x, y, w, h, 5); ctx.fill();
+      ctx.shadowColor = INK; ctx.shadowBlur = 12;
+    }
+    ctx.globalAlpha = hover ? 1 : (active ? 0.95 : 0.35);
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = hover ? 1.6 : 1;
     rr(x + 0.5, y + 0.5, w - 1, h - 1, 5); ctx.stroke();
+    ctx.shadowBlur = 0;
     hudText(label, x + w / 2, y + h / 2 + 5, 14, INK, 'center');
     return { x, y, w, h, label };
   }
@@ -3678,7 +3690,10 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     hudText('CHIPS ' + C.chips, 30, 40, 17);
     hudText('BET ' + PK.bet, 30, 64, 13, '#9a9aa5');
     for (let i = 0; i < 5; i++) {
-      drawCard(L.x0 + i * (L.cw + L.gap), L.cy, L.cw, L.chh, PK.hand[i], true, !!PK.held[i]);
+      const cx2 = L.x0 + i * (L.cw + L.gap);
+      const hov = PK.phase === 'hold' &&
+        C.mx >= cx2 && C.mx <= cx2 + L.cw && C.my >= L.cy && C.my <= L.cy + L.chh;
+      drawCard(cx2, L.cy, L.cw, L.chh, PK.hand[i], true, !!PK.held[i], hov);
     }
     if (PK.msg) hudText(PK.msg, W / 2, L.cy - 46, 20, PK.msg.includes('+') ? LIME : '#9a9aa5', 'center');
     const bw = 150, bh2 = 38;
@@ -3860,23 +3875,11 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     }
     return false;
   }
-  function solClick(x, y) {
-    if (SOL.won) { startSolitaire(); return; }
+  // shared hit-test so clicking and hover highlighting always agree
+  function solHit(x, y) {
     const L = solLayout();
-    // stock
-    if (inRect(x, y, { x: L.colX(0), y: L.y0, w: L.cw, h: L.chh })) {
-      if (SOL.stock.length) SOL.waste.push(SOL.stock.pop());
-      else { SOL.stock = SOL.waste.reverse(); SOL.waste = []; }
-      A.bleep(520, 0.02, 'square', 0.02);
-      return;
-    }
-    // waste
-    if (SOL.waste.length && inRect(x, y, { x: L.colX(1), y: L.y0, w: L.cw, h: L.chh })) {
-      const card = SOL.waste[SOL.waste.length - 1];
-      solMoveSingle(card, () => SOL.waste.pop());
-      return;
-    }
-    // tableau: topmost card whose rect contains the point wins
+    if (inRect(x, y, { x: L.colX(0), y: L.y0, w: L.cw, h: L.chh })) return { type: 'stock' };
+    if (SOL.waste.length && inRect(x, y, { x: L.colX(1), y: L.y0, w: L.cw, h: L.chh })) return { type: 'waste' };
     for (let i = 0; i < 7; i++) {
       const pile = SOL.tab[i];
       if (x < L.colX(i) || x > L.colX(i) + L.cw) continue;
@@ -3888,23 +3891,36 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       }
       for (let j = pile.length - 1; j >= 0; j--) {
         const bottom = j === pile.length - 1 ? tops[j] + L.chh : tops[j + 1];
-        if (y >= tops[j] && y <= bottom) {
-          if (!pile[j].up) return;
-          const run = pile.slice(j);
-          if (run.length === 1) {
-            if (solMoveSingle(run[0].c, () => pile.pop())) solFlip(pile);
-          } else {
-            for (const dest of SOL.tab) {
-              if (dest !== pile && canTab(run[0].c, dest)) {
-                pile.splice(j);
-                for (const e of run) dest.push(e);
-                solFlip(pile);
-                A.bleep(600, 0.03, 'triangle', 0.025);
-                break;
-              }
-            }
+        if (y >= tops[j] && y <= bottom) return pile[j].up ? { type: 'tab', i, j } : null;
+      }
+    }
+    return null;
+  }
+  function solClick(x, y) {
+    if (SOL.won) { startSolitaire(); return; }
+    const hit = solHit(x, y);
+    if (!hit) return;
+    if (hit.type === 'stock') {
+      if (SOL.stock.length) SOL.waste.push(SOL.stock.pop());
+      else { SOL.stock = SOL.waste.reverse(); SOL.waste = []; }
+      A.bleep(520, 0.02, 'square', 0.02);
+    } else if (hit.type === 'waste') {
+      const card = SOL.waste[SOL.waste.length - 1];
+      solMoveSingle(card, () => SOL.waste.pop());
+    } else {
+      const pile = SOL.tab[hit.i];
+      const run = pile.slice(hit.j);
+      if (run.length === 1) {
+        if (solMoveSingle(run[0].c, () => pile.pop())) solFlip(pile);
+      } else {
+        for (const dest of SOL.tab) {
+          if (dest !== pile && canTab(run[0].c, dest)) {
+            pile.splice(hit.j);
+            for (const e of run) dest.push(e);
+            solFlip(pile);
+            A.bleep(600, 0.03, 'triangle', 0.025);
+            break;
           }
-          return;
         }
       }
     }
@@ -3914,14 +3930,16 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     const L = solLayout();
     hudText('SOLITAIRE', W - 30, 40, 17, INK, 'right');
     hudText('R redeals', W - 30, 62, 12, '#9a9aa5', 'right');
+    const hov = SOL.won ? null : solHit(C.mx, C.my);
     // stock
-    if (SOL.stock.length) drawCard(L.colX(0), L.y0, L.cw, L.chh, null, false, false);
+    if (SOL.stock.length) drawCard(L.colX(0), L.y0, L.cw, L.chh, null, false, false, hov && hov.type === 'stock');
     else {
-      ctx.globalAlpha = 0.2; ctx.strokeStyle = INK; ctx.lineWidth = 1;
+      ctx.globalAlpha = hov && hov.type === 'stock' ? 0.6 : 0.2;
+      ctx.strokeStyle = INK; ctx.lineWidth = 1;
       rr(L.colX(0) + 0.5, L.y0 + 0.5, L.cw - 1, L.chh - 1, 6); ctx.stroke();
     }
     // waste
-    if (SOL.waste.length) drawCard(L.colX(1), L.y0, L.cw, L.chh, SOL.waste[SOL.waste.length - 1], true, false);
+    if (SOL.waste.length) drawCard(L.colX(1), L.y0, L.cw, L.chh, SOL.waste[SOL.waste.length - 1], true, false, hov && hov.type === 'waste');
     // foundations
     for (let i = 0; i < 4; i++) {
       const f = SOL.found[i], fx = L.colX(3 + i);
@@ -3932,12 +3950,13 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
         hudText('A', fx + L.cw / 2, L.y0 + L.chh / 2 + 6, 16, '#9a9aa5', 'center');
       }
     }
-    // tableau
+    // tableau: hovering a face-up card lights it and the run below it
     for (let i = 0; i < 7; i++) {
       const pile = SOL.tab[i];
       let cy = L.y1;
       for (let j = 0; j < pile.length; j++) {
-        drawCard(L.colX(i), cy, L.cw, L.chh, pile[j].c, pile[j].up, false);
+        const lit = hov && hov.type === 'tab' && hov.i === i && j >= hov.j;
+        drawCard(L.colX(i), cy, L.cw, L.chh, pile[j].c, pile[j].up, false, lit);
         cy += pile[j].up ? L.dyUp : L.dyDown;
       }
     }
@@ -3954,14 +3973,19 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   }
   function quitToArcade() {
     C.view = 'menu';
+    stageEl.classList.remove('freecursor');
     menuEl.classList.add('hidden');
     launchEl.classList.remove('hidden');
     window.MODE = 'menu';
   }
   document.getElementById('pickCards').addEventListener('click', () => {
     window.MODE = 'cards';
+    stageEl.classList.add('freecursor');
     launchEl.classList.add('hidden');
     showMenu();
+  });
+  addEventListener('pointermove', e => {
+    if (window.MODE === 'cards') { C.mx = e.clientX; C.my = e.clientY; }
   });
   const startFns = { poker: startPoker, blackjack: startBlackjack, solitaire: startSolitaire };
   for (const view of ['poker', 'blackjack', 'solitaire']) {
