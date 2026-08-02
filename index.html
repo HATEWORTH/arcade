@@ -264,14 +264,14 @@
     filter: drop-shadow(3px 5px 3px rgba(42, 46, 34, .4));
     animation: none;
   }
-  .overlay.nes .gamemenu { flex-direction: column; gap: .85rem; align-items: flex-start; }
+  .overlay.nes .gamemenu { flex-direction: column; gap: .85rem; align-items: center; }
   .overlay.nes .gamecard,
   .overlay.nes .gamecard:hover,
   .overlay.nes .gamecard:focus-visible {
     background: none;
     border: none;
     box-shadow: none;
-    padding: .1em .5em .1em 1.6em;
+    padding: .1em 1.6em;
     transform: none;
     font-family: Consolas, "Courier New", monospace;
     font-weight: 400;
@@ -313,7 +313,7 @@
   .menublock {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
     gap: 1.3rem;
   }
   .menulabel {
@@ -321,8 +321,7 @@
     font-family: Consolas, "Courier New", monospace;
     font-size: .72rem;
     letter-spacing: .5em;
-    /* line up with the game titles, which sit 1.6em into their buttons */
-    padding-left: 2.8em;
+    padding-left: .5em;
     color: #565b48;
     text-shadow: 1px 2px 2px rgba(42, 46, 34, .25);
   }
