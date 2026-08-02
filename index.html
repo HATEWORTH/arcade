@@ -268,29 +268,24 @@
   .overlay.nes .gamecard,
   .overlay.nes .gamecard:hover,
   .overlay.nes .gamecard:focus-visible {
-    background: none;
     border: none;
-    box-shadow: none;
     padding: .1em 1.6em;
     transform: none;
     font-family: Consolas, "Courier New", monospace;
     font-weight: 400;
     font-size: calc(.9rem + 2px);
     letter-spacing: .08em;
-    color: #2a2e22;
-    position: relative;
-    transition: none;
-    /* LCD segment shadow under the menu text */
-    text-shadow: 2px 3px 3px rgba(42, 46, 34, .35);
-  }
-  /* hard block highlight — the row fills like an active LCD segment */
-  .overlay.nes .gamecard:hover,
-  .overlay.nes .gamecard:focus-visible {
+    /* always-on block: solid dark box, text in the screen color */
     background: #2a2e22;
     color: #c3c8b2;
-    outline: none;
+    position: relative;
+    transition: none;
     text-shadow: none;
     box-shadow: 3px 5px 4px rgba(42, 46, 34, .35);
+  }
+  .overlay.nes .gamecard:hover,
+  .overlay.nes .gamecard:focus-visible {
+    outline: none;
   }
   .overlay.nes .gamecard b {
     display: inline;
@@ -311,10 +306,7 @@
   }
   .overlay.nes .gamecard:hover::before,
   .overlay.nes .gamecard:focus-visible::before { opacity: 1; }
-  /* muted RGB inks per title, like colored LCD segments */
-  .overlay.nes #pickPong { color: #a4372e; }
-  .overlay.nes #pickTetris { color: #2f4f8f; }
-  .overlay.nes #pickSnake { color: #3c7a41; }
+  /* muted RGB inks fill the boxes on hover */
   .overlay.nes #pickPong:hover, .overlay.nes #pickPong:focus-visible { background: #a4372e; color: #c3c8b2; }
   .overlay.nes #pickTetris:hover, .overlay.nes #pickTetris:focus-visible { background: #2f4f8f; color: #c3c8b2; }
   .overlay.nes #pickSnake:hover, .overlay.nes #pickSnake:focus-visible { background: #3c7a41; color: #c3c8b2; }
