@@ -914,7 +914,6 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
   document.getElementById('pickPong').addEventListener('click', () => {
     window.MODE = 'pong';
     launchOverlay.classList.add('hidden');
-    startOverlay.classList.remove('hidden');
     hudEl.classList.remove('hidden');
   });
   addEventListener('pointerdown', e => {
@@ -1746,7 +1745,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     setTimeout(() => endEl.classList.remove('hidden'), 500);
   }
 
-  function start() {
+  // set up a fresh board without starting play — shown frozen after picking
+  function prime() {
     T.board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     heat = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
     T.score = 0; T.lines = 0; T.level = 1; T.bag = [];
@@ -1754,6 +1754,9 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     particles.length = 0;
     rowFlashes.length = 0;
     spawn();
+  }
+  function start() {
+    prime();
     T.running = true;
     A.audio(); A.startMusic();
     startEl.classList.add('hidden');
@@ -1779,7 +1782,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     window.MODE = 'tetris';
     launchEl.classList.add('hidden');
     endEl.classList.add('hidden');
-    startEl.classList.remove('hidden');
+    prime();
   });
   addEventListener('pointerdown', () => {
     if (window.MODE !== 'tetris') return;
@@ -2181,7 +2184,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     setTimeout(() => endEl.classList.remove('hidden'), 500);
   }
 
-  function start() {
+  // set up a fresh run without starting it — shown frozen after picking
+  function prime() {
     heat = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
     const cx0 = Math.floor(COLS / 2), cy0 = Math.floor(ROWS / 2);
     S.body = [{ x: cx0, y: cy0 }, { x: cx0 - 1, y: cy0 }, { x: cx0 - 2, y: cy0 }];
@@ -2193,6 +2197,9 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     cellFlashes.length = 0;
     rings.length = 0;
     spawnFood();
+  }
+  function start() {
+    prime();
     S.running = true;
     A.audio(); A.startMusic();
     startEl.classList.add('hidden');
@@ -2218,7 +2225,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     window.MODE = 'snake';
     launchEl.classList.add('hidden');
     endEl.classList.add('hidden');
-    startEl.classList.remove('hidden');
+    prime();
   });
   addEventListener('pointerdown', () => {
     if (window.MODE !== 'snake') return;
@@ -2379,7 +2386,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake'
     }
 
     // food signal: tile in this spawn's hue, pulsing gently with the arpeggio
-    if (S.food && S.running) {
+    if (S.food) {
       const pulse = 0.72 + 0.14 * Math.sin(t * 4) + beat.arp * 0.1;
       drawCell(bx + S.food.x * cell, by + S.food.y * cell, cell, S.foodColor, pulse * flick, 14 + beat.arp * 8);
     }
