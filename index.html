@@ -237,23 +237,27 @@
   }
   .nestitle {
     margin: 0 0 1rem;
+    font-family: inherit;
     font-weight: 700;
-    font-size: clamp(3rem, 13vw, 7.5rem);
-    letter-spacing: .04em;
+    font-size: clamp(.55rem, 2.1vw, 1.25rem);
+    line-height: 1.12;
+    letter-spacing: 0;
+    white-space: pre;
+    text-align: left;
     color: #fff;
     transform: rotate(-6deg);
     position: relative;
     text-shadow:
-      .045em .045em 0 #f7a046,
-      .095em .095em 0 #e0459b,
-      .15em .15em 0 #4a4a4a;
+      2px 2px 0 #f7a046,
+      4px 4px 0 #e0459b,
+      6px 6px 0 #4a4a4a;
     animation: none;
   }
   .nestitle .tm {
     position: absolute;
-    right: -1.4em;
-    bottom: .5em;
-    font-size: .14em;
+    right: -2.2em;
+    bottom: 0;
+    font-size: .7em;
     letter-spacing: .1em;
     text-shadow: none;
   }
@@ -283,7 +287,7 @@
   }
   .overlay.nes .gamecard span { display: none; }
   .overlay.nes .gamecard::before {
-    content: '\2605';
+    content: '*';
     position: absolute;
     left: 0;
     color: #c2255e;
@@ -315,7 +319,12 @@
 <div id="trackToast" class="track" aria-live="polite"></div>
 
 <div class="overlay nes" id="launchOverlay">
-  <h1 class="nestitle">ARCADE<span class="tm">TM</span></h1>
+  <pre class="nestitle" role="heading" aria-level="1" aria-label="Arcade">
+    _    ____   ____    _    ____  _____
+   / \  |  _ \ / ___|  / \  |  _ \| ____|
+  / _ \ | |_) | |     / _ \ | | | |  _|
+ / ___ \|  _ &lt;| |___ / ___ \| |_| | |___
+/_/   \_\_| \_\\____/_/   \_\____/|_____|<span class="tm">TM</span></pre>
   <div class="gamemenu">
     <button class="gamecard" id="pickPong"><b>PONG 3D</b><span>defend the tunnel core</span></button>
     <button class="gamecard magenta" id="pickTetris"><b>TETRIS</b><span>stack in the void</span></button>
