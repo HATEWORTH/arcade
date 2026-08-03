@@ -538,7 +538,12 @@
       A.sweep(300, 900, 0.5, 'sine', 0.05);
     }
   }
-  const activeSpell = () => (D.st.spells.length ? D.st.spells[D.st.spells.length - 1] : null);
+  // raise dead lives on its own key [E]; F cycles to the newest other spell
+  const knowsRaise = () => D.st.spells.includes('raise');
+  const activeSpell = () => {
+    const others = D.st.spells.filter(s => s !== 'raise');
+    return others.length ? others[others.length - 1] : null;
+  };
 
   // ---- generation: Isaac-style room grid ---------------------------------
   const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -1008,6 +1013,10 @@
       castSpell();
       return;
     }
+    if ((e.key === 'e' || e.key === 'E') && D.running && !D.paused && !D.inv) {
+      castRaise();
+      return;
+    }
     if (e.key === ' ' && D.running && !D.paused && !D.inv) {
       attack();
       e.preventDefault();
@@ -1163,21 +1172,23 @@
       }
       D.novaT = 0.3;
       A.sweep(900, 90, 0.4, 'sine', 0.07);
-    } else if (sp === 'raise') {
-      if (D.allies.length >= 4) { say('Your host is full', '#9fd8a8'); return; }
-      if (D.mana < 20) { say('Not enough mana', '#5aa2e8'); return; }
-      let best = -1, bd = 150;
-      for (let i = 0; i < D.corpses.length; i++) {
-        const dd = Math.hypot(D.corpses[i].x - D.hero.x, D.corpses[i].y - D.hero.y);
-        if (dd < bd) { bd = dd; best = i; }
-      }
-      if (best < 0) { say('No corpse near enough to raise', '#9fd8a8'); return; }
-      D.mana -= 20;
-      const c = D.corpses.splice(best, 1)[0];
-      D.allies.push({ x: c.x, y: c.y, ttl: 30, cd: 0, face: c.face || 1, type: c.type });
-      floatText(c.x, c.y - 18, 'RISE', '#9fd8a8');
-      A.sweep(100, 400, 0.5, 'sine', 0.06);
     }
+  }
+  function castRaise() {
+    if (!knowsRaise()) return;
+    if (D.allies.length >= 4) { say('Your host is full', '#9fd8a8'); return; }
+    if (D.mana < 20) { say('Not enough mana', '#5aa2e8'); return; }
+    let best = -1, bd = 150;
+    for (let i = 0; i < D.corpses.length; i++) {
+      const dd = Math.hypot(D.corpses[i].x - D.hero.x, D.corpses[i].y - D.hero.y);
+      if (dd < bd) { bd = dd; best = i; }
+    }
+    if (best < 0) { say('No corpse near enough to raise', '#9fd8a8'); return; }
+    D.mana -= 20;
+    const c = D.corpses.splice(best, 1)[0];
+    D.allies.push({ x: c.x, y: c.y, ttl: 30, cd: 0, face: c.face || 1, type: c.type });
+    floatText(c.x, c.y - 18, 'RISE', '#9fd8a8');
+    A.sweep(100, 400, 0.5, 'sine', 0.06);
   }
   function bossLoot(en) {
     const nItems = 3 + Math.floor(Math.random() * 3);
@@ -2322,11 +2333,17 @@
     ctx.fillText('ARMOR ' + D.st.def + (D.equip.shield ? '  ·  BLOCK ' + D.st.blk : ''), 26, 96);
     ctx.fillStyle = '#d9a94e';
     ctx.fillText('GOLD ' + D.hero.gold, 26, 116);
+    let spellY = 136;
+    if (knowsRaise()) {
+      ctx.fillStyle = '#9fd8a8';
+      ctx.fillText('[E] RAISE DEAD 20mp', 26, spellY);
+      spellY += 20;
+    }
     const sp = activeSpell();
     if (sp) {
-      const spInfo = { bolt: ['#e8763d', 'FIREBOLT 12mp'], nova: ['#5aa2e8', 'FROST NOVA 22mp'], raise: ['#9fd8a8', 'RAISE DEAD 20mp'] }[sp];
+      const spInfo = { bolt: ['#e8763d', 'FIREBOLT 12mp'], nova: ['#5aa2e8', 'FROST NOVA 22mp'] }[sp];
       ctx.fillStyle = spInfo[0];
-      ctx.fillText('[F] ' + spInfo[1], 26, 136);
+      ctx.fillText('[F] ' + spInfo[1], 26, spellY);
     }
     const hbX = W / 2 - (4 * (SLOT + GAP) - GAP) / 2;
     for (let i = 0; i < 4; i++) {
