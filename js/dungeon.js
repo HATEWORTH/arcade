@@ -51,8 +51,10 @@
     '..kgddddgk..',
     '..kdssssdk..',
   ];
-  const HERO_F1 = sprite(HERO_ROWS_TOP.concat(['..kdk..kdk..', '..kbk..kbk..', '.kbbk..kbbk.']));
-  const HERO_F2 = sprite(HERO_ROWS_TOP.concat(['...kdkkdk...', '...kbkkbk...', '..kbbkkbbk..']));
+  const FRONT_L1 = ['..kdk..kdk..', '..kbk..kbk..', '.kbbk..kbbk.'];
+  const FRONT_L2 = ['...kdkkdk...', '...kbkkbk...', '..kbbkkbbk..'];
+  const SIDE_L1 = ['....kdkdk...', '....kbkbk...', '...kbbkbbk..'];
+  const SIDE_L2 = ['...kdk.kdk..', '...kb...bk..', '..kbb..kbb..'];
   const HERO_SIDE_TOP = [
     '....kkkk....',
     '...kssssk...',
@@ -65,8 +67,17 @@
     '.kkcgdddk...',
     '...kdssdk...',
   ];
-  const HERO_S1 = sprite(HERO_SIDE_TOP.concat(['....kdkdk...', '....kbkbk...', '...kbbkbbk..']));
-  const HERO_S2 = sprite(HERO_SIDE_TOP.concat(['...kdk.kdk..', '...kb...bk..', '..kbb..kbb..']));
+  // classes share the pose set, recolored per palette
+  function buildHero(pal) {
+    return {
+      F1: sprite(HERO_ROWS_TOP.concat(FRONT_L1), pal),
+      F2: sprite(HERO_ROWS_TOP.concat(FRONT_L2), pal),
+      S1: sprite(HERO_SIDE_TOP.concat(SIDE_L1), pal),
+      S2: sprite(HERO_SIDE_TOP.concat(SIDE_L2), pal),
+      B1: sprite(HERO_BACK_TOP.concat(FRONT_L1), pal),
+      B2: sprite(HERO_BACK_TOP.concat(FRONT_L2), pal),
+    };
+  }
   const HERO_BACK_TOP = [
     '....kkkk....',
     '...kssssk...',
@@ -79,8 +90,11 @@
     '.kccccccck..',
     '..kcccccck..',
   ];
-  const HERO_B1 = sprite(HERO_BACK_TOP.concat(['..kdk..kdk..', '..kbk..kbk..', '.kbbk..kbbk.']));
-  const HERO_B2 = sprite(HERO_BACK_TOP.concat(['...kdkkdk...', '...kbkkbk...', '..kbbkkbbk..']));
+  const HERO_SETS = {
+    knight: buildHero(),
+    wizard: buildHero({ c: '#3a6ea8', s: '#7a72b8', d: '#4a4488', g: '#5aa2e8' }),
+    necro: buildHero({ c: '#4a3a5a', s: '#8a8f80', d: '#565b48', g: '#7ec96f' }),
+  };
   const TORCH = sprite(['..ww..', '.wggw.', '..gg..', '..bb..', '..bb..', '.kbbk.']);
   const SKEL_ROWS = [
     '....kkkk....',
@@ -99,6 +113,7 @@
   ];
   const SKELETON = sprite(SKEL_ROWS);
   const WRAITH = sprite(SKEL_ROWS, { W: '#9db8e8' });
+  const MINION = sprite(SKEL_ROWS, { W: '#9fd8a8' });
   const SLIME = sprite([
     '...kkkkkk...',
     '..keeeeeek..',
@@ -338,6 +353,14 @@
     return RELICS[Math.floor(Math.random() * RELICS.length)];
   }
 
+  // ---- classes -----------------------------------------------------------
+  const CLASSES = {
+    knight: { name: 'KNIGHT', blurb: 'sword & board · 100 hp', hp: 100, mana: 50, regen: 5, spellMult: 1, melee: 3, color: '#a4372e' },
+    wizard: { name: 'WIZARD', blurb: 'firebolt · 110 mana · frail', hp: 70, mana: 110, regen: 9, spellMult: 1.6, melee: 2, spell: 'bolt', color: '#5aa2e8' },
+    necro: { name: 'NECROMANCER', blurb: 'raise the dead as thralls', hp: 80, mana: 90, regen: 7, spellMult: 1.2, melee: 2, spell: 'raise', color: '#7ec96f' },
+  };
+  const CLASS_KEYS = ['knight', 'wizard', 'necro'];
+
   // ---- enemy catalogue ---------------------------------------------------
   const ETYPES = {
     slime:      { spr: SLIME,    w: 26, h: 18, r: 11, spd: 52,  move: 'chase',   hp: f => 9 + f * 2,  dmg: f => 10 + f * 2,  gold: f => 3 + f },
@@ -378,7 +401,8 @@
   const D = {
     running: false, paused: false, over: false,
     tiles: null, seen: null, rooms: [], torches: [], chests: [], enemies: [],
-    drops: [], pedestals: [], bolts: [],
+    drops: [], pedestals: [], bolts: [], corpses: [], allies: [],
+    cls: null, clsBtns: [], sealedRoom: null,
     stairs: { x: 0, y: 0 },
     hero: { x: 0, y: 0, face: 1, moving: false, hp: 100, maxHp: 100, gold: 0 },
     mana: 50,
@@ -438,19 +462,20 @@
 
   // ---- derived stats: base + equipment + every relic stacked -------------
   function recalc() {
+    const cls = CLASSES[D.cls || 'knight'];
     const st = {
-      dmg: D.equip.sword ? D.equip.sword.dmg : 3,
+      dmg: D.equip.sword ? D.equip.sword.dmg : cls.melee,
       def: D.equip.armor ? D.equip.armor.def : 0,
       blk: D.equip.shield ? D.equip.shield.blk : 0,
-      maxHp: 100, spd: 165,
+      maxHp: cls.hp, spd: 165,
       atkCd: D.equip.sword ? D.equip.sword.cd : 0.34,
       range: D.equip.sword ? D.equip.sword.range : 46,
       arc: D.equip.sword ? D.equip.sword.arc : 1.05,
       knock: D.equip.sword ? D.equip.sword.knock : 1,
-      manaMax: 50, manaRegen: 5, spellMult: 1,
+      manaMax: cls.mana, manaRegen: cls.regen, spellMult: cls.spellMult,
       light: 205, goldMult: 1, crit: 0,
       lifesteal: 0, thorns: 0, manaKill: 0,
-      spells: [], berserk: 0,
+      spells: cls.spell ? [cls.spell] : [], berserk: 0,
     };
     for (const r of D.relics) {
       if (r.dmg) st.dmg += r.dmg;
@@ -566,8 +591,8 @@
     D.tiles = new Uint8Array(MW * MH);
     D.seen = new Uint8Array(MW * MH);
     D.rooms = []; D.torches = []; D.chests = []; D.enemies = [];
-    D.drops = []; D.pedestals = []; D.bolts = [];
-    D.bossDoors = []; D.stairsLocked = true;
+    D.drops = []; D.pedestals = []; D.bolts = []; D.corpses = []; D.allies = [];
+    D.bossDoors = []; D.stairsLocked = true; D.sealedRoom = null;
     D.floats.length = 0;
     // carve room interiors
     for (const c of L.cells) {
@@ -613,7 +638,7 @@
     const bossHp = Math.round(240 + (D.floor - 1) * 110 + heroDmgSafe() * 8);
     D.enemies.push({
       type: BOSS_KINDS[Math.floor(Math.random() * BOSS_KINDS.length)],
-      isBoss: true, room: bossRoom,
+      isBoss: true, room: bossRoom, homeRoom: bossRoom,
       x: (bossRoom.cx + 0.5) * TILE, y: (bossRoom.y + 1.2) * TILE,
       hp: bossHp, maxHp: bossHp,
       dmgv: 25 + D.floor * 4,
@@ -683,7 +708,7 @@
       const type = pickEnemyType(D.floor);
       const et = ETYPES[type];
       D.enemies.push({
-        type, x: px, y: py,
+        type, x: px, y: py, homeRoom: r,
         hp: et.hp(D.floor), maxHp: et.hp(D.floor),
         cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1,
         fa: Math.random() * Math.PI * 2, hurt: 0, aggro: false,
@@ -692,8 +717,9 @@
     }
   }
 
-  // ---- boss room lockdown ------------------------------------------------
-  function sealBossRoom(room) {
+  // ---- room lockdown -----------------------------------------------------
+  function sealRoom(room) {
+    D.sealedRoom = room;
     D.bossDoors = [];
     const tryDoor = (x, y) => {
       if (x < 0 || y < 0 || x >= MW || y >= MH) return;
@@ -720,12 +746,25 @@
     }
     A.sweep(200, 50, 0.5, 'sawtooth', 0.07);
     say('The doors slam shut!', '#a4372e');
+    // everything living in this room wakes at once
+    for (const en of D.enemies) {
+      if (en.homeRoom === room && !en.aggro) {
+        en.aggro = true;
+        floatText(en.x, en.y - 22, '!', '#e8a33d');
+      }
+    }
   }
-  function openBossRoom() {
+  function openSeal(unlockStairs) {
     for (const dr of D.bossDoors) D.tiles[idx(dr.x, dr.y)] = 1;
     D.bossDoors = [];
-    D.stairsLocked = false;
-    say('The doors grind open — the way down is unsealed', '#7ec96f');
+    if (D.sealedRoom) D.sealedRoom.cleared = true;
+    D.sealedRoom = null;
+    if (unlockStairs) {
+      D.stairsLocked = false;
+      say('The doors grind open — the way down is unsealed', '#7ec96f');
+    } else {
+      say('Room cleared — the doors release', '#7ec96f');
+    }
     A.sweep(80, 300, 0.7, 'sine', 0.06);
   }
 
@@ -828,7 +867,17 @@
       return;
     }
     if ((e.key === 'q' || e.key === 'Q') && (D.paused || !D.running)) { quitToMenu(); return; }
-    if (e.key === 'Enter' && !D.running && !D.paused) { start(); return; }
+    if (e.key === 'Enter' && !D.running && !D.paused) {
+      if (D.over) { D.over = false; return; }
+      D.cls = D.cls || 'knight';
+      start();
+      return;
+    }
+    if (!D.running && !D.over && !D.paused && ['1', '2', '3'].includes(e.key)) {
+      D.cls = CLASS_KEYS[+e.key - 1];
+      start();
+      return;
+    }
     if (e.key === 'Tab') { e.preventDefault(); toggleInv(); return; }
     if (D.running && !D.paused && !D.inv && ['1', '2', '3', '4'].includes(e.key)) {
       useHotbar(+e.key - 1);
@@ -847,6 +896,9 @@
   });
   addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
   addEventListener('pointermove', e => {
+    if (window.MODE === 'dungeon' && !D.running && !ARCADE_LOCK.locked()) {
+      D.invMx = e.clientX; D.invMy = e.clientY;
+    }
     if (window.MODE === 'dungeon' && D.inv) {
       if (!ARCADE_LOCK.locked()) { D.invMx = e.clientX; D.invMy = e.clientY; }
       const p = invPos();
@@ -868,7 +920,17 @@
       }
       return;
     }
-    if (!D.running) { start(); return; }
+    if (!D.running) {
+      if (D.over) { D.over = false; return; } // back to class select
+      for (const b of D.clsBtns) {
+        if (e.clientX >= b.x && e.clientX <= b.x + b.w && e.clientY >= b.y && e.clientY <= b.y + b.h) {
+          D.cls = b.cls;
+          start();
+          return;
+        }
+      }
+      return;
+    }
     if (e.button === 0) attack();
     if (e.button === 2 && D.equip.shield) D.block = true;
   });
@@ -965,6 +1027,20 @@
       }
       D.novaT = 0.3;
       A.sweep(900, 90, 0.4, 'sine', 0.07);
+    } else if (sp === 'raise') {
+      if (D.allies.length >= 4) { say('Your host is full', '#9fd8a8'); return; }
+      if (D.mana < 20) { say('Not enough mana', '#5aa2e8'); return; }
+      let best = -1, bd = 150;
+      for (let i = 0; i < D.corpses.length; i++) {
+        const dd = Math.hypot(D.corpses[i].x - D.hero.x, D.corpses[i].y - D.hero.y);
+        if (dd < bd) { bd = dd; best = i; }
+      }
+      if (best < 0) { say('No corpse near enough to raise', '#9fd8a8'); return; }
+      D.mana -= 20;
+      const c = D.corpses.splice(best, 1)[0];
+      D.allies.push({ x: c.x, y: c.y, ttl: 30, cd: 0, face: 1 });
+      floatText(c.x, c.y - 18, 'RISE', '#9fd8a8');
+      A.sweep(100, 400, 0.5, 'sine', 0.06);
     }
   }
   function bossLoot(en) {
@@ -986,6 +1062,8 @@
     const et = ETYPES[en.type];
     gainGold(et.gold(D.floor) + Math.floor(Math.random() * 4), en.x, en.y - 26);
     D.enemies.splice(D.enemies.indexOf(en), 1);
+    // the fallen stay where they fell, all floor long
+    D.corpses.push({ x: en.x, y: en.y, type: en.type, face: en.face, rot: Math.random() < 0.5 ? 1 : -1 });
     D.shake = Math.max(D.shake, en.isBoss ? 14 : 4);
     A.bleep(160, 0.1, 'sawtooth', 0.045);
     if (D.st.lifesteal) D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + D.st.lifesteal);
@@ -994,9 +1072,17 @@
       say('BOSS SLAIN', '#e8a33d');
       A.sweep(600, 40, 0.7, 'sawtooth', 0.09);
       bossLoot(en);
-      openBossRoom();
-    } else if (Math.random() < 0.1) {
-      D.drops.push({ x: en.x, y: en.y, it: makeItem('potion', D.floor) });
+      openSeal(true);
+    } else {
+      if (Math.random() < 0.1) {
+        D.drops.push({ x: en.x, y: en.y, it: makeItem('potion', D.floor) });
+      }
+      // room cleared? the doors release
+      if (D.sealedRoom && en.homeRoom === D.sealedRoom &&
+          !D.enemies.some(x => x.homeRoom === D.sealedRoom)) {
+        D.sealedRoom.cleared = true;
+        openSeal(false);
+      }
     }
   }
   function hurtHeroFrom(en, raw) {
@@ -1221,6 +1307,26 @@
     if (D.hero.moving) reveal();
     D.cam.x = D.hero.x; D.cam.y = D.hero.y;
 
+    // stepping fully into an uncleared room slams its doors shut
+    if (!D.sealedRoom) {
+      const hx = D.hero.x / TILE, hy = D.hero.y / TILE;
+      for (const r of D.rooms) {
+        if (r.cleared || r.type === 'start' || r.type === 'treasure') continue;
+        if (hx > r.x + 0.2 && hx < r.x + r.w - 0.2 && hy > r.y + 0.2 && hy < r.y + r.h - 0.2) {
+          if (D.enemies.some(en => en.homeRoom === r)) {
+            sealRoom(r);
+            if (r.type === 'boss') {
+              say('The floor guardian stirs…', '#a4372e');
+              A.sweep(120, 45, 0.6, 'sawtooth', 0.08);
+            }
+          } else {
+            r.cleared = true;
+          }
+          break;
+        }
+      }
+    }
+
     D.stairMsgT = Math.max(0, D.stairMsgT - dt);
     if (Math.hypot(D.hero.x - (D.stairs.x + 0.5) * TILE, D.hero.y - (D.stairs.y + 0.5) * TILE) < 20) {
       if (D.stairsLocked) {
@@ -1318,18 +1424,15 @@
       const dx = D.hero.x - en.x, dy = D.hero.y - en.y;
       const d = Math.hypot(dx, dy);
 
+      // keep every mob inside its own room, always
+      const clampRoom = () => {
+        const r = en.homeRoom;
+        if (!r) return;
+        en.x = Math.max(r.x * TILE + et.r, Math.min((r.x + r.w) * TILE - et.r, en.x));
+        en.y = Math.max(r.y * TILE + et.r, Math.min((r.y + r.h) * TILE - et.r, en.y));
+      };
       if (!en.aggro) {
-        if (en.isBoss) {
-          const r = en.room;
-          const hx = D.hero.x / TILE, hy = D.hero.y / TILE;
-          if (hx >= r.x - 0.3 && hx <= r.x + r.w + 0.3 && hy >= r.y - 0.3 && hy <= r.y + r.h + 0.3) {
-            en.aggro = true;
-            floatText(en.x, en.y - 34, '!', '#a4372e');
-            say('The floor guardian stirs…', '#a4372e');
-            A.sweep(120, 45, 0.6, 'sawtooth', 0.08);
-            sealBossRoom(r);
-          }
-        } else {
+        if (!en.isBoss) {
           en.wanderT -= dt;
           if (en.wanderT <= 0) {
             en.wanderT = 1 + Math.random() * 2.5;
@@ -1341,6 +1444,7 @@
             en.face = Math.cos(a) >= 0 ? 1 : -1;
           }
           moveWith(en, en.wx * et.spd * 0.4 * slowMul, en.wy * et.spd * 0.4 * slowMul, dt, et.r);
+          clampRoom();
           const toHero = Math.atan2(dy, dx);
           const inCone = d < TILE * 5.5 && Math.abs(angDiff(toHero, en.fa)) < 0.95;
           const heard = d < TILE * 1.3;
@@ -1383,10 +1487,8 @@
       } else {
         moveWith(en, (dx / nd) * et.spd * slowMul, (dy / nd) * et.spd * slowMul, dt, et.r);
       }
+      clampRoom();
       if (en.isBoss) {
-        const r = en.room;
-        en.x = Math.max(r.x * TILE + et.r, Math.min((r.x + r.w) * TILE - et.r, en.x));
-        en.y = Math.max(r.y * TILE + et.r, Math.min((r.y + r.h) * TILE - et.r, en.y));
         if (en.type === 'brood') {
           en.broodT -= dt;
           if (en.broodT <= 0) {
@@ -1395,7 +1497,7 @@
             for (let s = 0; s < 2 && lings + s < 6; s++) {
               const a = Math.random() * Math.PI * 2;
               const sp = {
-                type: 'spiderling',
+                type: 'spiderling', homeRoom: en.homeRoom,
                 x: en.x + Math.cos(a) * 30, y: en.y + Math.sin(a) * 30,
                 hp: ETYPES.spiderling.hp(D.floor), maxHp: ETYPES.spiderling.hp(D.floor),
                 cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1, fa: a, hurt: 0, aggro: true,
@@ -1415,10 +1517,38 @@
         hurtHeroFrom(en, en.isBoss ? en.dmgv : et.dmg(D.floor));
       }
     }
-    D.spawnT -= dt;
-    if (D.spawnT <= 0) {
-      D.spawnT = 16;
-      if (D.enemies.length < 8 + D.floor * 2) spawnEnemy(false);
+    // allies (necromancer thralls): hunt nearby foes, crumble in time
+    for (let i = D.allies.length - 1; i >= 0; i--) {
+      const al = D.allies[i];
+      al.ttl -= dt;
+      al.cd = Math.max(0, al.cd - dt);
+      if (al.ttl <= 0) {
+        floatText(al.x, al.y - 16, '*crumble*', '#9fd8a8');
+        D.allies.splice(i, 1);
+        continue;
+      }
+      let best = null, bd = TILE * 8;
+      for (const en of D.enemies) {
+        const dd = Math.hypot(en.x - al.x, en.y - al.y);
+        if (dd < bd) { bd = dd; best = en; }
+      }
+      if (best) {
+        const dx2 = best.x - al.x, dy2 = best.y - al.y;
+        const nd2 = Math.hypot(dx2, dy2) || 1;
+        moveWith(al, (dx2 / nd2) * 120, (dy2 / nd2) * 120, dt, 8);
+        al.face = dx2 > 0 ? 1 : -1;
+        if (nd2 < ETYPES[best.type].r + 10 && al.cd <= 0) {
+          al.cd = 0.7;
+          damageEnemy(best, Math.max(1, Math.round((5 + D.floor) * D.st.spellMult) - (ETYPES[best.type].dr || 0)), false);
+        }
+      } else {
+        const dx2 = D.hero.x - al.x, dy2 = D.hero.y - al.y;
+        const nd2 = Math.hypot(dx2, dy2) || 1;
+        if (nd2 > TILE * 1.6) {
+          moveWith(al, (dx2 / nd2) * 130, (dy2 / nd2) * 130, dt, 8);
+          al.face = dx2 > 0 ? 1 : -1;
+        }
+      }
     }
   }
 
@@ -1669,6 +1799,37 @@
         ctx.fillRect(sx + 2, sy + TILE / 2 - 2, TILE - 4, 3);
       }
     }
+    // the fallen: splatted where they died, laid sideways over a dark stain
+    for (const c of D.corpses) {
+      const tx2 = Math.floor(c.x / TILE), ty2 = Math.floor(c.y / TILE);
+      if (!D.seen[idx(tx2, ty2)]) continue;
+      const et = ETYPES[c.type];
+      const sx = ox + c.x, sy = oy + c.y;
+      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = '#3a1814';
+      ctx.beginPath();
+      ctx.ellipse(sx, sy + et.h * 0.2, et.r + 6, et.r * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.8;
+      ctx.save();
+      ctx.translate(sx, sy + et.h * 0.18);
+      ctx.rotate((Math.PI / 2) * c.rot);
+      ctx.scale(c.face, 0.62); // squashed flat on its side
+      ctx.drawImage(et.spr, -et.w / 2, -et.h / 2, et.w, et.h);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+    // raised thralls
+    for (const al of D.allies) {
+      const sx = ox + al.x, sy = oy + al.y;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.scale(al.face, 1);
+      ctx.globalAlpha = 0.9;
+      ctx.drawImage(MINION, -11, -12, 22, 24);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
     // pedestals
     for (const p of D.pedestals) {
       if (!D.seen[idx(p.x, p.y)]) continue;
@@ -1819,11 +1980,12 @@
       }
     }
     if (!(D.hurtT > 0 && Math.floor(D.t * 14) % 2)) {
+      const HS = HERO_SETS[D.cls || 'knight'];
       const step = D.hero.moving && Math.floor(D.t * 8) % 2;
       let frame;
-      if (Math.abs(Math.cos(D.aim)) > 0.42) frame = step ? HERO_S2 : HERO_S1;
-      else if (Math.sin(D.aim) < 0) frame = step ? HERO_B2 : HERO_B1;
-      else frame = step ? HERO_F2 : HERO_F1;
+      if (Math.abs(Math.cos(D.aim)) > 0.42) frame = step ? HS.S2 : HS.S1;
+      else if (Math.sin(D.aim) < 0) frame = step ? HS.B2 : HS.B1;
+      else frame = step ? HS.F2 : HS.F1;
       const hx = ox + D.hero.x, hy = oy + D.hero.y;
       ctx.save();
       ctx.translate(hx, hy + 2);
@@ -1938,8 +2100,9 @@
     ctx.fillText('GOLD ' + D.hero.gold, 26, 116);
     const sp = activeSpell();
     if (sp) {
-      ctx.fillStyle = sp === 'bolt' ? '#e8763d' : '#5aa2e8';
-      ctx.fillText('[F] ' + (sp === 'bolt' ? 'FIREBOLT 12mp' : 'FROST NOVA 22mp'), 26, 136);
+      const spInfo = { bolt: ['#e8763d', 'FIREBOLT 12mp'], nova: ['#5aa2e8', 'FROST NOVA 22mp'], raise: ['#9fd8a8', 'RAISE DEAD 20mp'] }[sp];
+      ctx.fillStyle = spInfo[0];
+      ctx.fillText('[F] ' + spInfo[1], 26, 136);
     }
     const hbX = W / 2 - (4 * (SLOT + GAP) - GAP) / 2;
     for (let i = 0; i < 4; i++) {
@@ -1959,10 +2122,40 @@
     }
     ctx.globalAlpha = 1;
     if (!D.running && !D.over) {
-      ctx.globalAlpha = 0.6;
-      ctx.font = '600 13px ' + MONO;
+      const cw2 = 190, chh2 = 210, gap2 = 24;
+      const x0 = W / 2 - (3 * cw2 + 2 * gap2) / 2;
+      const y0 = H / 2 - chh2 / 2;
+      ctx.font = '800 30px ' + MONO;
       ctx.fillStyle = '#c8cdd7';
-      ctx.fillText('CLICK OR ENTER TO DELVE · WASD MOVES · MOUSE AIMS · LMB SWINGS · RMB BLOCKS · F CASTS · TAB BAG', W / 2, H - 90);
+      ctx.fillText('CHOOSE YOUR CLASS', W / 2, y0 - 40);
+      D.clsBtns = [];
+      CLASS_KEYS.forEach((ck, i) => {
+        const cx2 = x0 + i * (cw2 + gap2);
+        const cd = CLASSES[ck];
+        const hov = D.invMx >= cx2 && D.invMx <= cx2 + cw2 && D.invMy >= y0 && D.invMy <= y0 + chh2;
+        ctx.fillStyle = hov ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.05)';
+        ctx.fillRect(cx2, y0, cw2, chh2);
+        ctx.strokeStyle = cd.color;
+        ctx.lineWidth = hov ? 2.5 : 1.5;
+        ctx.strokeRect(cx2 + 0.75, y0 + 0.75, cw2 - 1.5, chh2 - 1.5);
+        const hs = HERO_SETS[ck].F1;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(hs, cx2 + cw2 / 2 - 24, y0 + 30, 48, 52);
+        ctx.fillStyle = cd.color;
+        ctx.font = '800 15px ' + MONO;
+        ctx.fillText(cd.name, cx2 + cw2 / 2, y0 + 118);
+        ctx.fillStyle = '#8a8f80';
+        ctx.font = '600 10px ' + MONO;
+        ctx.fillText(cd.blurb, cx2 + cw2 / 2, y0 + 142);
+        ctx.fillText('[' + (i + 1) + ']', cx2 + cw2 / 2, y0 + chh2 - 14);
+        D.clsBtns.push({ x: cx2, y: y0, w: cw2, h: chh2, cls: ck });
+      });
+      ctx.font = '600 12px ' + MONO;
+      ctx.fillStyle = '#8a8f80';
+      ctx.fillText('WASD MOVES · MOUSE AIMS · LMB SWINGS · RMB BLOCKS · F CASTS · TAB BAG', W / 2, y0 + chh2 + 44);
+      ctx.textAlign = 'left';
+      drawPointer(D.invMx, D.invMy);
+      ctx.textAlign = 'center';
     }
     if (D.over) {
       ctx.globalAlpha = 0.8;
