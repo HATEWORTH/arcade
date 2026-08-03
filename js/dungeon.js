@@ -402,6 +402,7 @@
     running: false, paused: false, over: false,
     tiles: null, seen: null, rooms: [], torches: [], chests: [], enemies: [],
     drops: [], pedestals: [], bolts: [], corpses: [], allies: [],
+    spikes: [], spikeSet: new Set(), braziers: [],
     cls: null, clsBtns: [], sealedRoom: null,
     stairs: { x: 0, y: 0 },
     hero: { x: 0, y: 0, face: 1, moving: false, hp: 100, maxHp: 100, gold: 0 },
@@ -584,6 +585,109 @@
   function roomRect(gx, gy) {
     return { x: gx * CW + 1, y: gy * CH + 1, w: CW - 1, h: CH - 1 };
   }
+  // Isaac-style room furniture: 9x7 stamps. R rock (solid), S spikes
+  // (floor hazard), B brazier (solid, burns, smashable). Edges stay clear
+  // so door mouths are never blocked.
+  const ROOM_PATTERNS = [
+    [
+      '.........',
+      '..R...R..',
+      '.........',
+      '....B....',
+      '.........',
+      '..R...R..',
+      '.........',
+    ],
+    [
+      '.........',
+      '.........',
+      '...RRR...',
+      '...R.R...',
+      '...RRR...',
+      '.........',
+      '.........',
+    ],
+    [
+      '.........',
+      '.S.....S.',
+      '.........',
+      '.R..S..R.',
+      '.........',
+      '.S.....S.',
+      '.........',
+    ],
+    [
+      '.........',
+      '..B...B..',
+      '.........',
+      '.........',
+      '.........',
+      '..B...B..',
+      '.........',
+    ],
+    [
+      '.........',
+      '.RR...RR.',
+      '.R.....R.',
+      '.........',
+      '.R.....R.',
+      '.RR...RR.',
+      '.........',
+    ],
+    [
+      '.........',
+      '.........',
+      '..S.S.S..',
+      '.........',
+      '..S.S.S..',
+      '.........',
+      '.........',
+    ],
+    [
+      '.........',
+      '....R....',
+      '....R....',
+      '.RR.B.RR.',
+      '....R....',
+      '....R....',
+      '.........',
+    ],
+    [
+      '.........',
+      '..R......',
+      '...R.....',
+      '....R....',
+      '.....R...',
+      '......R..',
+      '.........',
+    ],
+    [
+      '.........',
+      '.R..S..R.',
+      '.........',
+      '.B.....B.',
+      '.........',
+      '.R..S..R.',
+      '.........',
+    ],
+  ];
+  function decorateRooms() {
+    for (const r of D.rooms) {
+      if (r.type !== 'normal') continue;
+      if (Math.random() < 0.3) continue; // some rooms stay bare
+      const pat = ROOM_PATTERNS[Math.floor(Math.random() * ROOM_PATTERNS.length)];
+      for (let py = 0; py < 7 && py < r.h; py++) {
+        for (let px = 0; px < 9 && px < r.w; px++) {
+          const ch = pat[py][px];
+          if (ch === '.') continue;
+          const tx = r.x + px, ty = r.y + py;
+          if (ch === 'R') D.tiles[idx(tx, ty)] = 3;
+          else if (ch === 'B') { D.tiles[idx(tx, ty)] = 4; D.braziers.push({ x: tx, y: ty }); }
+          else if (ch === 'S') { D.spikes.push({ x: tx, y: ty }); D.spikeSet.add(idx(tx, ty)); }
+        }
+      }
+    }
+  }
   function generate() {
     let L = null;
     for (let i = 0; i < 40 && !L; i++) L = tryLayout();
@@ -592,6 +696,7 @@
     D.seen = new Uint8Array(MW * MH);
     D.rooms = []; D.torches = []; D.chests = []; D.enemies = [];
     D.drops = []; D.pedestals = []; D.bolts = []; D.corpses = []; D.allies = [];
+    D.spikes = []; D.spikeSet = new Set(); D.braziers = [];
     D.bossDoors = []; D.stairsLocked = true; D.sealedRoom = null;
     D.floats.length = 0;
     // carve room interiors
@@ -620,6 +725,7 @@
         for (let x = mx; x < mx + 3; x++) D.tiles[idx(x, wallY)] = 1;
       }
     }
+    decorateRooms();
     // torches on south-facing wall faces
     for (let y = 0; y < MH - 1; y++) {
       for (let x = 0; x < MW; x++) {
@@ -674,6 +780,7 @@
       const r = shuffled[i];
       const cx2 = r.x + 1 + Math.floor(Math.random() * (r.w - 2));
       const cy2 = r.y + 1 + Math.floor(Math.random() * (r.h - 2));
+      if (D.tiles[idx(cx2, cy2)] !== 1 || D.spikeSet.has(idx(cx2, cy2))) continue;
       const ri = rollRarity(D.floor);
       const items = new Array(4).fill(null);
       const nItems = 2 + Math.floor(Math.random() * 3);
@@ -989,6 +1096,20 @@
       const nd = d || 1;
       nudge(en, (dx / nd) * 16 * D.st.knock, (dy / nd) * 16 * D.st.knock, ETYPES[en.type].r);
     }
+    // braziers shatter under a swing
+    for (let i = D.braziers.length - 1; i >= 0; i--) {
+      const bz = D.braziers[i];
+      const bx3 = (bz.x + 0.5) * TILE, by3 = (bz.y + 0.5) * TILE;
+      const dx = bx3 - D.hero.x, dy = by3 - D.hero.y;
+      const d = Math.hypot(dx, dy);
+      if (d > D.st.range + 18) continue;
+      if (Math.abs(angDiff(Math.atan2(dy, dx), dir)) > D.st.arc) continue;
+      D.tiles[idx(bz.x, bz.y)] = 1;
+      D.braziers.splice(i, 1);
+      floatText(bx3, by3 - 12, 'smash', '#e8a33d');
+      if (Math.random() < 0.15) D.drops.push({ x: bx3, y: by3, it: makeItem('potion', D.floor) });
+      A.bleep(150, 0.1, 'square', 0.05);
+    }
   }
   function damageEnemy(en, dmg, crit) {
     en.hp -= dmg;
@@ -1105,6 +1226,17 @@
     }
     if (D.st.thorns) damageEnemy(en, D.st.thorns, false);
     D.hero.hp -= dmg;
+    if (D.hero.hp <= 0) { D.hero.hp = 0; die(); }
+  }
+  // environmental damage: spikes and flames ignore blocking
+  function hurtHeroEnv(raw) {
+    if (D.hurtT > 0) return;
+    const dmg = Math.max(1, raw - Math.floor(D.st.def / 2));
+    D.hero.hp -= dmg;
+    D.hurtT = 0.6;
+    D.shake = Math.max(D.shake, 6);
+    floatText(D.hero.x, D.hero.y - 24, '-' + dmg, '#a4372e');
+    A.bleep(180, 0.12, 'square', 0.05);
     if (D.hero.hp <= 0) { D.hero.hp = 0; die(); }
   }
   function useHotbar(i) {
@@ -1306,6 +1438,16 @@
     moveWith(D.hero, (ax / m) * spd, (ay / m) * spd, dt, HERO_R);
     if (D.hero.moving) reveal();
     D.cam.x = D.hero.x; D.cam.y = D.hero.y;
+
+    // hazards underfoot
+    const htx = Math.floor(D.hero.x / TILE), hty = Math.floor(D.hero.y / TILE);
+    if (D.spikeSet.has(idx(htx, hty))) hurtHeroEnv(8 + D.floor * 2);
+    for (const bz of D.braziers) {
+      if (Math.hypot((bz.x + 0.5) * TILE - D.hero.x, (bz.y + 0.5) * TILE - D.hero.y) < TILE * 0.7 + 8) {
+        hurtHeroEnv(6 + D.floor);
+        break;
+      }
+    }
 
     // stepping fully into an uncleared room slams its doors shut
     if (!D.sealedRoom) {
@@ -1759,6 +1901,29 @@
             ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
             ctx.fillRect(sx, sy, TILE, 7);
           }
+        } else if (D.tiles[idx(x, y)] === 3 || D.tiles[idx(x, y)] === 4) {
+          // rock or brazier base sits on visible floor
+          ctx.fillStyle = hv % 3 === 0 ? '#343a2e' : '#3a4033';
+          ctx.fillRect(sx, sy, TILE, TILE);
+          if (D.tiles[idx(x, y)] === 3) {
+            ctx.fillStyle = '#20241a';
+            ctx.beginPath();
+            ctx.ellipse(sx + TILE / 2, sy + TILE / 2 + 5, 13, 9, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#6a705c';
+            ctx.beginPath();
+            ctx.ellipse(sx + TILE / 2, sy + TILE / 2 - 1, 12, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#828a70';
+            ctx.beginPath();
+            ctx.ellipse(sx + TILE / 2 - 3, sy + TILE / 2 - 5, 5, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.fillStyle = '#4a5040';
+            ctx.fillRect(sx + 9, sy + 12, 14, 14);
+            ctx.fillStyle = '#2e3428';
+            ctx.fillRect(sx + 11, sy + 22, 10, 6);
+          }
         } else if (D.tiles[idx(x, y)] === 2) {
           ctx.fillStyle = '#5a4632';
           ctx.fillRect(sx, sy, TILE, TILE);
@@ -1798,6 +1963,40 @@
         for (let i = 0; i < 4; i++) ctx.fillRect(sx + 4 + i * 8, sy + 2, 3, TILE - 4);
         ctx.fillRect(sx + 2, sy + TILE / 2 - 2, TILE - 4, 3);
       }
+    }
+    // spikes: rows of points on the floor tile
+    for (const sp2 of D.spikes) {
+      if (!D.seen[idx(sp2.x, sp2.y)]) continue;
+      const sx = ox + sp2.x * TILE, sy = oy + sp2.y * TILE;
+      ctx.fillStyle = '#8a8f80';
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+          const px2 = sx + 6 + i * 10, py2 = sy + 8 + j * 9;
+          ctx.beginPath();
+          ctx.moveTo(px2, py2 + 6);
+          ctx.lineTo(px2 + 3, py2);
+          ctx.lineTo(px2 + 6, py2 + 6);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+    // brazier flames
+    for (const bz of D.braziers) {
+      if (!D.seen[idx(bz.x, bz.y)]) continue;
+      const sx = ox + bz.x * TILE + TILE / 2, sy = oy + bz.y * TILE + 10;
+      const fl = reducedMotion ? 1 : 0.8 + 0.2 * Math.sin(D.t * 8 + bz.x * 2);
+      ctx.globalAlpha = 0.75 * fl;
+      ctx.fillStyle = '#e8763d';
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, 5, 8 * fl, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.9 * fl;
+      ctx.fillStyle = '#e8a33d';
+      ctx.beginPath();
+      ctx.ellipse(sx, sy + 2, 3, 4.5 * fl, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
     // the fallen: splatted where they died, laid sideways over a dark stain
     for (const c of D.corpses) {
@@ -2063,6 +2262,13 @@
       if (sx < -160 || sx > VW + 160 || sy < -160 || sy > VH + 160) continue;
       const fl = reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(D.t * 9 + tc.ph);
       punch(sx, sy, 120 * fl, 0.85);
+    }
+    for (const bz of D.braziers) {
+      if (!D.seen[idx(bz.x, bz.y)]) continue;
+      const sx = ox + bz.x * TILE + TILE / 2, sy = oy + bz.y * TILE + 12;
+      if (sx < -140 || sx > VW + 140 || sy < -140 || sy > VH + 140) continue;
+      const fl = reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(D.t * 8 + bz.x * 2);
+      punch(sx, sy, 105 * fl, 0.8);
     }
     ctx.drawImage(lightCv, 0, 0);
     ctx.restore(); // back to native pixels for the HUD
