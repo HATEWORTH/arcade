@@ -16,3 +16,17 @@ icons/
   https://shikashipx.itch.io/shikashis-fantasy-icons-pack
   Based in part on designs from game-icons.net
   License: CC-BY 4.0 — credit Matt Firth (shikashipx) and game-icons.net
+
+bc_*.png
+  "Bitcrawl - Roguelike Free Pixelart Assets" by aamatniekss
+  https://aamatniekss.itch.io/bitcrawl-free-pixelart-assets
+  License: free for use and modification in games; do not redistribute as assets
+
+cata_tiles.png
+  "Rogue Fantasy Catacombs" by Szadi art.
+  https://szadiart.itch.io/rogue-fantasy-catacombs
+  License: public domain; credit appreciated
+
+(downloaded, not yet used) "Crawling Depths" by pingupollas
+  https://pingupollas.itch.io/crawling-depths
+  License: free / pay-what-you-want

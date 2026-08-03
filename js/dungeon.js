@@ -61,6 +61,63 @@
     },
   };
   const FLOORS = [[16, 64], [32, 64], [48, 64], [16, 80], [32, 80], [48, 80], [16, 96], [32, 96]];
+  // ---- grim asset packs: RF Catacombs tiles + Bitcrawl characters --------
+  const ld = src => { const i = new Image(); i.onload = () => { i.rdy = true; }; i.src = src; return i; };
+  const cataImg = ld('assets/cata_tiles.png');
+  const bcDecor = ld('assets/bc_decor.png');
+  const bcTiles = ld('assets/bc_tiles.png');
+  const BC_SHEETS = {
+    knight: ld('assets/bc_knight.png'), skeleton: ld('assets/bc_skeleton.png'),
+    slime: ld('assets/bc_slime.png'), wraith: ld('assets/bc_wraith.png'),
+    rat: ld('assets/bc_rat.png'), goblin: ld('assets/bc_goblin.png'),
+  };
+  const drawR = (img, r, dx, dy, dw, dh) => ctx.drawImage(img, r[0], r[1], r[2], r[3], dx, dy, dw, dh);
+  // catacombs: 32px floor slabs (brown family) + brick wall face + dark fill
+  const CATA_FLOORS = [
+    [736, 272, 32, 32], [784, 272, 32, 32], [736, 320, 32, 32],
+    [784, 320, 32, 32], [736, 368, 32, 32], [784, 368, 32, 32],
+  ];
+  const CATA_WALL = [96, 128, 16, 16];
+  const CATA_DEEP = [736, 416, 32, 32];
+  // six Bitcrawl bodies cover the whole bestiary via tint shifts
+  const BC_MAP = {
+    slime: { s: 'slime' },
+    skeleton: { s: 'skeleton' },
+    wraith: { s: 'wraith' },
+    bat: { s: 'rat' },
+    spider: { s: 'goblin' },
+    spiderling: { s: 'rat', tint: '#7ec96f' },
+    brute: { s: 'knight', tint: '#a05038' },
+    golem: { s: 'knight', tint: '#9aa0a8' },
+    guardian: { s: 'knight', tint: '#8a2a20' },
+    brood: { s: 'slime', tint: '#8a4ac0' },
+    boneking: { s: 'skeleton' },
+    merchant: { s: 'goblin', tint: '#b0863d' },
+  };
+  const BC_HERO = {
+    knight: { s: 'knight' },
+    wizard: { s: 'goblin', tint: '#7a5ae8' },
+    necro: { s: 'wraith', tint: '#69c26a' },
+  };
+  const bcCache = {};
+  function bcSprite(name, tint) {
+    const img = BC_SHEETS[name];
+    if (!img || !img.rdy) return null;
+    const key = name + '|' + (tint || '');
+    if (bcCache[key]) return bcCache[key];
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 16;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(img, 0, 0);
+    if (tint) {
+      g.globalCompositeOperation = 'source-atop';
+      g.globalAlpha = 0.45;
+      g.fillStyle = tint;
+      g.fillRect(0, 0, 64, 16);
+    }
+    return (bcCache[key] = c);
+  }
   // Shikashi icon sheet covers what 0x72 lacks (shield + armor icons)
   const iconsImg = new Image();
   let iconsReady = false;
@@ -2471,7 +2528,9 @@
             ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
             ctx.fillRect(sx, sy, TILE, 2);
           } else {
-            if (atlasReady) {
+            if (cataImg.rdy) {
+              drawR(cataImg, CATA_FLOORS[hv % 6], sx, sy, TILE, TILE);
+            } else if (atlasReady) {
               const fr = FLOORS[hv % 8];
               drawA([fr[0], fr[1], 16, 16], sx, sy, TILE, TILE);
             } else {
@@ -2488,8 +2547,10 @@
             }
           }
         } else if (D.tiles[idx(x, y)] === 3 || D.tiles[idx(x, y)] === 4) {
-          // crate or brazier base sits on visible floor
-          if (atlasReady) {
+          // barrel or brazier base sits on visible floor
+          if (cataImg.rdy) {
+            drawR(cataImg, CATA_FLOORS[hv % 6], sx, sy, TILE, TILE);
+          } else if (atlasReady) {
             const fr = FLOORS[hv % 8];
             drawA([fr[0], fr[1], 16, 16], sx, sy, TILE, TILE);
           } else {
@@ -2497,7 +2558,9 @@
             ctx.fillRect(sx, sy, TILE, TILE);
           }
           if (D.tiles[idx(x, y)] === 3) {
-            if (atlasReady) {
+            if (bcTiles.rdy) {
+              drawR(bcTiles, [0, 64, 16, 16], sx + 2, sy + 2, 28, 30);
+            } else if (atlasReady) {
               drawA(AT.crate, sx + 2, sy + TILE - 42, 28, 42);
             } else {
               ctx.fillStyle = '#20241a';
@@ -2513,7 +2576,7 @@
               ctx.ellipse(sx + TILE / 2 - 3, sy + TILE / 2 - 5, 5, 4, 0, 0, Math.PI * 2);
               ctx.fill();
             }
-          } else {
+          } else if (!bcDecor.rdy) {
             ctx.fillStyle = '#4a5040';
             ctx.fillRect(sx + 9, sy + 12, 14, 14);
             ctx.fillStyle = '#2e3428';
@@ -2530,7 +2593,9 @@
           ctx.fillRect(sx + 3, sy + TILE - 6, 3, 3);
           ctx.fillRect(sx + TILE - 6, sy + TILE - 6, 3, 3);
         } else if (y + 1 < MH && D.tiles[idx(x, y + 1)] === 1) {
-          if (atlasReady) {
+          if (cataImg.rdy) {
+            drawR(cataImg, CATA_WALL, sx, sy, TILE, TILE);
+          } else if (atlasReady) {
             drawA(AT.wallMid, sx, sy, TILE, TILE);
           } else {
             ctx.fillStyle = '#4c5140';
@@ -2545,8 +2610,12 @@
             ctx.fillRect(sx, sy, TILE, 2);
           }
         } else {
-          if (atlasReady) {
-            // deep wall mass: same solid brick as the face, dimmed for depth
+          if (cataImg.rdy) {
+            // deep wall mass: near-black rubble, solid and continuous
+            drawR(cataImg, CATA_DEEP, sx, sy, TILE, TILE);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillRect(sx, sy, TILE, TILE);
+          } else if (atlasReady) {
             drawA(AT.wallMid, sx, sy, TILE, TILE);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
             ctx.fillRect(sx, sy, TILE, TILE);
@@ -2579,7 +2648,9 @@
     for (const sp2 of D.spikes) {
       if (!inV(sp2.x, sp2.y)) continue;
       const sx = ox + sp2.x * TILE, sy = oy + sp2.y * TILE;
-      if (atlasReady) {
+      if (bcDecor.rdy) {
+        drawR(bcDecor, [(Math.floor(D.t * 5) % 4) * 16, 64, 16, 16], sx, sy, TILE, TILE);
+      } else if (atlasReady) {
         drawA(aframe(AT.spikes, 5), sx, sy, TILE, TILE);
       } else {
         ctx.fillStyle = '#8a8f80';
@@ -2596,9 +2667,14 @@
         }
       }
     }
-    // brazier flames
+    // braziers: standing torches
     for (const bz of D.braziers) {
       if (!inV(bz.x, bz.y)) continue;
+      if (bcDecor.rdy) {
+        const fi = reducedMotion ? 0 : Math.floor(D.t * 8 + bz.x) % 4;
+        drawR(bcDecor, [fi * 16, 0, 16, 16], ox + bz.x * TILE, oy + bz.y * TILE - 6, TILE, TILE);
+        continue;
+      }
       const sx = ox + bz.x * TILE + TILE / 2, sy = oy + bz.y * TILE + 10;
       const fl = reducedMotion ? 1 : 0.8 + 0.2 * Math.sin(D.t * 8 + bz.x * 2);
       ctx.globalAlpha = 0.75 * fl;
@@ -2629,7 +2705,12 @@
       ctx.translate(sx, sy + et.h * 0.18);
       ctx.rotate((Math.PI / 2) * c.rot);
       ctx.scale(c.face, 0.62); // squashed flat on its side
-      if (atlasReady && AT[c.type]) {
+      const bcc = BC_MAP[c.type];
+      const bcv = bcc && bcSprite(bcc.s, bcc.tint);
+      if (bcv) {
+        const sz = Math.max(et.w, et.h);
+        ctx.drawImage(bcv, 0, 0, 16, 16, -sz / 2, -sz / 2, sz, sz);
+      } else if (atlasReady && AT[c.type]) {
         const r2 = AT[c.type].idle[0];
         const dh2 = et.h, dw2 = r2[2] * (et.h / r2[3]);
         drawA(r2, -dw2 / 2, -dh2 / 2, dw2, dh2);
@@ -2642,14 +2723,21 @@
     // raised thralls: the corpse's own body, walking again in rot-green
     for (const al of D.allies) {
       const sx = ox + al.x, sy = oy + al.y;
-      const aspr = al.type ? zombieSpr(al.type) : MINION;
-      const aw = al.type ? ETYPES[al.type].w : 22;
-      const ah = al.type ? ETYPES[al.type].h : 24;
+      const bca = al.type && BC_MAP[al.type];
+      const bcv2 = bca && bcSprite(bca.s, '#69c26a');
       ctx.save();
       ctx.translate(sx, sy);
       ctx.scale(al.face, 1);
       ctx.globalAlpha = 0.92;
-      ctx.drawImage(aspr, -aw / 2, -ah / 2, aw, ah);
+      if (bcv2) {
+        const fi = reducedMotion ? 0 : Math.floor(D.t * 8) % 4;
+        ctx.drawImage(bcv2, fi * 16, 0, 16, 16, -14, -14, 28, 28);
+      } else {
+        const aspr = al.type ? zombieSpr(al.type) : MINION;
+        const aw = al.type ? ETYPES[al.type].w : 22;
+        const ah = al.type ? ETYPES[al.type].h : 24;
+        ctx.drawImage(aspr, -aw / 2, -ah / 2, aw, ah);
+      }
       ctx.restore();
       ctx.globalAlpha = 1;
     }
@@ -2660,7 +2748,10 @@
       ctx.fillRect(rugX, rugY, TILE * 6, TILE * 2);
       const msx = ox + (cr.merchant.x + 0.5) * TILE, msy = oy + (cr.merchant.y + 0.5) * TILE;
       const bob = reducedMotion ? 0 : Math.sin(D.t * 1.6) * 1.5;
-      if (atlasReady) {
+      const mv = bcSprite('goblin', '#b0863d');
+      if (mv) {
+        ctx.drawImage(mv, 0, 0, 16, 16, msx - 14, msy - 18 + bob, 28, 28);
+      } else if (atlasReady) {
         const r2 = aframe(AT.merchant.idle, 6);
         drawA(r2, msx - 12, msy - 22 + bob, 24, 34);
       } else {
@@ -2731,7 +2822,9 @@
         ctx.fill();
         ctx.globalAlpha = 1;
       }
-      if (atlasReady) {
+      if (bcDecor.rdy) {
+        drawR(bcDecor, [c.opened ? 48 : 0, 48, 16, 16], sx - 13, sy - 16, 26, 26);
+      } else if (atlasReady) {
         drawA((c.opened ? AT.chestOpen : AT.chestClosed)[0], sx - 13, sy - 18, 26, 26);
       } else {
         const spr = c.opened ? CHEST_OPEN : CHEST_CLOSED;
@@ -2820,8 +2913,14 @@
       ctx.ellipse(0, et.h / 2, et.r, 4, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = en.hurt > 0 ? 0.55 : 1;
+      const bcm = BC_MAP[en.type];
+      const bcs = bcm && bcSprite(bcm.s, bcm.tint);
       const eanim = atlasReady && AT[en.type];
-      if (eanim) {
+      if (bcs) {
+        const fi = en.aggro && !reducedMotion ? Math.floor(D.t * 8 + en.x * 0.05) % 4 : 0;
+        const sz = Math.max(et.w, et.h);
+        ctx.drawImage(bcs, fi * 16, 0, 16, 16, -sz / 2, et.h / 2 - sz, sz, sz);
+      } else if (eanim) {
         const r = aframe(en.aggro ? eanim.run : eanim.idle);
         const dh2 = et.h, dw2 = r[2] * (et.h / r[3]);
         drawA(r, -dw2 / 2, -dh2 / 2, dw2, dh2);
@@ -2887,8 +2986,13 @@
       ctx.ellipse(0, 12, 10, 4, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
+      const bch = BC_HERO[D.cls || 'knight'];
+      const bcs2 = bch && bcSprite(bch.s, bch.tint);
       const HA = atlasReady && AT[{ knight: 'knight', wizard: 'wizard', necro: 'necro' }[D.cls || 'knight']];
-      if (HA) {
+      if (bcs2) {
+        const fi = D.hero.moving && !reducedMotion ? Math.floor(D.t * 10) % 4 : 0;
+        ctx.drawImage(bcs2, fi * 16, 0, 16, 16, -16, -18, 32, 32);
+      } else if (HA) {
         let r;
         if (D.hurtT > 0 && HA.hit) r = HA.hit[0];
         else r = aframe(D.hero.moving ? HA.run : HA.idle, 10);
