@@ -1609,7 +1609,12 @@
     if (D.inv || D.lvlChoices) return;
 
     D.mana = Math.min(D.st.manaMax, D.mana + D.st.manaRegen * dt);
-    D.aim = Math.atan2(ARCADE_LOCK.cur.y - innerHeight / 2, ARCADE_LOCK.cur.x - innerWidth / 2);
+    // aim from the hero's actual on-screen position — with the fixed room
+    // camera the hero is rarely at screen center
+    const Z2 = zoomFactor();
+    const heroSX = innerWidth / 2 + (D.hero.x - D.cam.x) * Z2;
+    const heroSY = innerHeight / 2 + (D.hero.y - D.cam.y) * Z2;
+    D.aim = Math.atan2(ARCADE_LOCK.cur.y - heroSY, ARCADE_LOCK.cur.x - heroSX);
     D.hero.face = Math.cos(D.aim) >= 0 ? 1 : -1;
     if (!D.equip.shield) D.block = false;
 
@@ -1899,6 +1904,9 @@
   }
 
   // ---- rendering ---------------------------------------------------------
+  function zoomFactor() {
+    return Math.min(innerWidth / ((CW + 1) * TILE), innerHeight / ((CH + 1) * TILE)) * 0.95;
+  }
   let lightCv = null, lightCtx = null;
   function ensureLight(w, h) {
     const cw = Math.ceil(w), chh = Math.ceil(h);
@@ -2076,7 +2084,7 @@
     ARCADE_FX.screen(ctx);
     ctx.imageSmoothingEnabled = false;
     // one room fills the screen: zoom fits the room plus its wall ring
-    const Z = Math.min(W / ((CW + 1) * TILE), H / ((CH + 1) * TILE)) * 0.95;
+    const Z = zoomFactor();
     const VW = W / Z, VH = H / Z;
     ctx.save();
     ctx.scale(Z, Z);
