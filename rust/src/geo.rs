@@ -36,12 +36,26 @@ fn ship_color(i: usize) -> &'static str {
     SHIP_COLORS[i % SHIP_COLORS.len()]
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Every mob is a handful of line segments — no sprites anywhere in this game,
+/// which is why adding one is code rather than art. Each has a silhouette you
+/// can read at a glance and exactly one trick.
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 enum Kind {
+    #[default]
     Chaser,
     Drifter,
     Weaver,
     Bit,
+    /// hexagon — breaks into two shards when shot
+    Splitter,
+    /// small triangle, fast, born from a splitter
+    Shard,
+    /// cross — hangs back and shoots at you
+    Sniper,
+    /// double square — deflects shots that hit its front
+    Bulwark,
+    /// spoked ring — roots itself, charges, then detonates a wave
+    Pulsar,
 }
 
 impl Kind {
@@ -51,6 +65,11 @@ impl Kind {
             Kind::Drifter => CYAN,
             Kind::Weaver => LIME,
             Kind::Bit => "#f2f2f2",
+            Kind::Splitter => "#c37ae6",
+            Kind::Shard => "#d9a2f0",
+            Kind::Sniper => "#f2903c",
+            Kind::Bulwark => "#6a9fd8",
+            Kind::Pulsar => "#e8d44e",
         }
     }
 }
@@ -82,7 +101,7 @@ struct Bullet {
     vy: f64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct Enemy {
     x: f64,
     y: f64,
@@ -94,6 +113,21 @@ struct Enemy {
     wob: f64,
     fade: f64,
     pv: i32,
+    /// shot cooldown for the sniper, charge for the pulsar
+    cool: f64,
+    /// heading it presents, which is the side a bulwark can block from
+    face: f64,
+}
+
+/// A shot from a sniper. The swarm could only ever touch you before; this is
+/// the first thing in the game that can hit you from across the arena.
+#[derive(Clone, Copy)]
+struct EBullet {
+    x: f64,
+    y: f64,
+    vx: f64,
+    vy: f64,
+    life: f64,
 }
 
 struct Particle {
@@ -180,7 +214,8 @@ struct Blob {
 struct Snapshot {
     ships: Vec<(f32, f32, f32, f32, bool)>,
     bullets: Vec<(f32, f32, f32, f32)>,
-    enemies: Vec<(f32, f32, Kind, f32, f32)>,
+    enemies: Vec<(f32, f32, Kind, f32, f32, f32, f32)>,
+    ebullets: Vec<(f32, f32, f32, f32)>,
     holes: Vec<(f32, f32, f32, f32)>,
     shocks: Vec<(f32, f32, f32, f32)>,
     score: u32,
@@ -198,6 +233,7 @@ pub struct Geo {
     paused: bool,
     ships: Vec<Ship>,
     bullets: Vec<Bullet>,
+    ebullets: Vec<EBullet>,
     enemies: Vec<Enemy>,
     parts: Vec<Particle>,
     spray: Vec<Spray>,
@@ -251,6 +287,7 @@ impl Geo {
             paused: false,
             ships: vec![Ship::default()],
             bullets: Vec::new(),
+            ebullets: Vec::new(),
             enemies: Vec::new(),
             parts: Vec::new(),
             spray: Vec::new(),
@@ -421,6 +458,7 @@ impl Geo {
             s.alive = true;
         }
         self.bullets.clear();
+        self.ebullets.clear();
         self.enemies.clear();
         self.parts.clear();
         self.spray.clear();
@@ -766,49 +804,55 @@ impl Geo {
             x = w - x;
             y = h - y;
         }
-        let roll = self.rng.f();
-        if self.time > 25.0 && roll < 0.25 {
-            let wob = self.rng.f() * 6.28;
-            self.enemies.push(Enemy {
-                x,
-                y,
-                vx: 0.0,
-                vy: 0.0,
-                kind: Kind::Weaver,
-                r: 9.0,
-                spd: 200.0 + self.time,
-                wob,
-                fade: 1.0,
-                pv: 3,
-            });
-        } else if roll < 0.62 {
-            self.enemies.push(Enemy {
-                x,
-                y,
-                vx: 0.0,
-                vy: 0.0,
-                kind: Kind::Chaser,
-                r: 12.0,
-                spd: 110.0 + self.time * 1.4,
-                wob: 0.0,
-                fade: 1.0,
-                pv: 2,
-            });
-        } else {
-            let a = self.rng.angle();
-            self.enemies.push(Enemy {
-                x,
-                y,
-                vx: a.cos() * 150.0,
-                vy: a.sin() * 150.0,
-                kind: Kind::Drifter,
-                r: 11.0,
-                spd: 0.0,
-                wob: 0.0,
-                fade: 1.0,
-                pv: 1,
-            });
+        // weights ramp in with time so a new run still opens simple
+        let t = self.time;
+        let pool: [(Kind, f64); 7] = [
+            (Kind::Chaser, 30.0),
+            (Kind::Drifter, 22.0),
+            (Kind::Weaver, if t > 25.0 { 18.0 } else { 0.0 }),
+            (Kind::Splitter, if t > 20.0 { 14.0 } else { 0.0 }),
+            (Kind::Sniper, if t > 15.0 { 12.0 } else { 0.0 }),
+            (Kind::Bulwark, if t > 35.0 { 12.0 } else { 0.0 }),
+            (Kind::Pulsar, if t > 45.0 { 9.0 } else { 0.0 }),
+        ];
+        let total: f64 = pool.iter().map(|(_, w)| w).sum();
+        let mut roll = self.rng.f() * total;
+        let mut kind = Kind::Chaser;
+        for (k, w) in pool {
+            roll -= w;
+            if roll <= 0.0 {
+                kind = k;
+                break;
+            }
         }
+        let a = self.rng.angle();
+        let e = match kind {
+            Kind::Weaver => Enemy {
+                kind, r: 9.0, spd: 200.0 + t, wob: self.rng.f() * 6.28, pv: 3, ..Default::default()
+            },
+            Kind::Drifter => Enemy {
+                kind, r: 11.0, vx: a.cos() * 150.0, vy: a.sin() * 150.0, pv: 1, ..Default::default()
+            },
+            Kind::Splitter => Enemy {
+                kind, r: 14.0, spd: 78.0 + t * 0.7, pv: 3, ..Default::default()
+            },
+            Kind::Sniper => Enemy {
+                // hangs back at range; the cooldown is staggered so a pair
+                // of them never fires in lockstep
+                kind, r: 10.0, spd: 96.0 + t * 0.5, pv: 4,
+                cool: 1.2 + self.rng.f() * 1.4, ..Default::default()
+            },
+            Kind::Bulwark => Enemy {
+                kind, r: 13.0, spd: 74.0 + t * 0.6, pv: 4, ..Default::default()
+            },
+            Kind::Pulsar => Enemy {
+                kind, r: 12.0, spd: 0.0, pv: 5, cool: 2.6, ..Default::default()
+            },
+            _ => Enemy {
+                kind: Kind::Chaser, r: 12.0, spd: 110.0 + t * 1.4, pv: 2, ..Default::default()
+            },
+        };
+        self.enemies.push(Enemy { x, y, fade: 1.0, ..e });
     }
 
     fn spawn_hole(&mut self) {
@@ -860,14 +904,11 @@ impl Geo {
                 self.enemies.push(Enemy {
                     x: h.x + a.cos() * (h.r + 8.0),
                     y: h.y + a.sin() * (h.r + 8.0),
-                    vx: 0.0,
-                    vy: 0.0,
                     kind: Kind::Bit,
                     r: 5.0,
                     spd,
-                    wob: 0.0,
-                    fade: 0.0,
                     pv: 1,
+                    ..Default::default()
                 });
             }
         }
@@ -1022,6 +1063,7 @@ impl Geo {
 
         self.update_bullets(dt, w, h);
         self.update_enemies(dt, w, h);
+        self.update_ebullets(dt, w, h);
         self.separate_enemies(dt);
         self.update_holes(dt);
         self.update_shocks(dt);
@@ -1069,36 +1111,137 @@ impl Geo {
 
     fn update_enemies(&mut self, dt: f64, w: f64, h: f64) {
         let (tx, ty) = (self.ships[0].x, self.ships[0].y);
+        let mut shots: Vec<(f64, f64, f64)> = Vec::new();
+        let mut blasts: Vec<(f64, f64)> = Vec::new();
         for en in &mut self.enemies {
             if en.fade > 0.0 {
                 en.fade -= dt;
                 continue;
             }
-            if en.kind == Kind::Drifter {
-                en.x += en.vx * dt;
-                en.y += en.vy * dt;
-                if en.x < en.r || en.x > w - en.r {
-                    en.vx *= -1.0;
-                    en.x = en.x.clamp(en.r, w - en.r);
+            let (dx, dy) = (tx - en.x, ty - en.y);
+            let d = dx.hypot(dy).max(1.0);
+            match en.kind {
+                Kind::Drifter => {
+                    en.x += en.vx * dt;
+                    en.y += en.vy * dt;
+                    if en.x < en.r || en.x > w - en.r {
+                        en.vx *= -1.0;
+                        en.x = en.x.clamp(en.r, w - en.r);
+                    }
+                    if en.y < en.r || en.y > h - en.r {
+                        en.vy *= -1.0;
+                        en.y = en.y.clamp(en.r, h - en.r);
+                    }
+                    en.face = en.vy.atan2(en.vx);
                 }
-                if en.y < en.r || en.y > h - en.r {
-                    en.vy *= -1.0;
-                    en.y = en.y.clamp(en.r, h - en.r);
+                Kind::Sniper => {
+                    // holds a firing line: closes if you run, backs off if you
+                    // charge it, and shoots whenever the cooldown lapses
+                    let want = 300.0;
+                    let dir = if d > want + 40.0 {
+                        1.0
+                    } else if d < want - 40.0 {
+                        -1.0
+                    } else {
+                        0.0
+                    };
+                    en.x += (dx / d) * en.spd * dir * dt;
+                    en.y += (dy / d) * en.spd * dir * dt;
+                    // and sidesteps so it is never a stationary target
+                    en.x += (-dy / d) * en.spd * 0.45 * dt;
+                    en.y += (dx / d) * en.spd * 0.45 * dt;
+                    en.face = dy.atan2(dx);
+                    en.cool -= dt;
+                    if en.cool <= 0.0 {
+                        en.cool = 2.4;
+                        shots.push((en.x, en.y, en.face));
+                    }
                 }
-            } else {
-                let (dx, dy) = (tx - en.x, ty - en.y);
-                let d = dx.hypot(dy).max(1.0);
-                let mut vx = (dx / d) * en.spd;
-                let mut vy = (dy / d) * en.spd;
-                if en.kind == Kind::Weaver {
-                    en.wob += dt * 7.0;
-                    let wv = en.wob.sin() * en.spd * 0.7;
-                    vx += (-dy / d) * wv;
-                    vy += (dx / d) * wv;
+                Kind::Pulsar => {
+                    // rooted. winds up, then lets go of a wave.
+                    en.cool -= dt;
+                    if en.cool <= 0.0 {
+                        en.cool = 3.4;
+                        blasts.push((en.x, en.y));
+                    }
                 }
-                en.x += vx * dt;
-                en.y += vy * dt;
+                Kind::Bulwark => {
+                    // advances shield-first, so the front is the wrong side
+                    en.x += (dx / d) * en.spd * dt;
+                    en.y += (dy / d) * en.spd * dt;
+                    en.face = dy.atan2(dx);
+                }
+                _ => {
+                    let mut vx = (dx / d) * en.spd;
+                    let mut vy = (dy / d) * en.spd;
+                    if en.kind == Kind::Weaver {
+                        en.wob += dt * 7.0;
+                        let wv = en.wob.sin() * en.spd * 0.7;
+                        vx += (-dy / d) * wv;
+                        vy += (dx / d) * wv;
+                    }
+                    en.x += vx * dt;
+                    en.y += vy * dt;
+                    en.face = vy.atan2(vx);
+                }
             }
+        }
+        for (x, y, a) in shots {
+            let sp = 240.0;
+            self.ebullets.push(EBullet {
+                x: x + a.cos() * 12.0,
+                y: y + a.sin() * 12.0,
+                vx: a.cos() * sp,
+                vy: a.sin() * sp,
+                life: 4.0,
+            });
+            bridge::bleep(190.0, 0.06, "square", 0.03);
+        }
+        for (x, y) in blasts {
+            self.shocks.push(Shock {
+                x,
+                y,
+                rad: 10.0,
+                speed: 420.0,
+                max_rad: 240.0,
+            });
+            self.grid_explosive(70.0, x, y, 240.0);
+            self.burst(x, y, Kind::Pulsar.color(), 14, 0.9);
+            bridge::sweep(360.0, 90.0, 0.35, "sine", 0.05);
+            // the wave itself is what hurts, and only near the ring
+            let s = self.ships[0];
+            let d = (s.x - x).hypot(s.y - y);
+            if self.inv <= 0.0 && d < 120.0 {
+                self.ship_hit();
+                return;
+            }
+        }
+    }
+
+    /// Sniper fire in flight.
+    fn update_ebullets(&mut self, dt: f64, w: f64, h: f64) {
+        let (sx, sy) = (self.ships[0].x, self.ships[0].y);
+        let mut hit = false;
+        let mut i = self.ebullets.len();
+        while i > 0 {
+            i -= 1;
+            let b = &mut self.ebullets[i];
+            b.x += b.vx * dt;
+            b.y += b.vy * dt;
+            b.life -= dt;
+            let (bx, by, dead) = (b.x, b.y, b.life <= 0.0);
+            if dead || bx < 0.0 || bx > w || by < 0.0 || by > h {
+                self.ebullets.remove(i);
+                continue;
+            }
+            if self.inv <= 0.0 && (bx - sx).hypot(by - sy) < 12.0 {
+                self.ebullets.remove(i);
+                hit = true;
+                break;
+            }
+        }
+        if hit {
+            self.ship_hit();
         }
     }
 
@@ -1290,30 +1433,62 @@ impl Geo {
             if i >= self.enemies.len() {
                 continue;
             }
-            let (ex, ey, er, pv) = {
+            let (ex, ey, er, pv, kind, face) = {
                 let e = &self.enemies[i];
-                (e.x, e.y, e.r, e.pv)
+                (e.x, e.y, e.r, e.pv, e.kind, e.face)
             };
             let mut j = self.bullets.len();
             while j > 0 {
                 j -= 1;
                 let b = self.bullets[j];
-                if (b.x - ex).hypot(b.y - ey) < er + 4.0 {
-                    self.bullets.remove(j);
-                    self.enemies.remove(i);
-                    self.kills += 1;
-                    self.add_points((pv.max(1) as u32) * 10);
-                    self.bump_mult();
-                    self.enemy_burst(ex, ey);
-                    self.grid_explosive(15.0, ex, ey, 110.0);
-                    self.shake = self.shake.max(5.0);
-                    let f = 280.0 + self.rng.f() * 220.0;
-                    bridge::bleep(f, 0.05, "sawtooth", 0.032);
-                    if self.kills % 4 == 0 {
-                        bridge::hat(0.04, 0.05);
-                    }
-                    break;
+                if (b.x - ex).hypot(b.y - ey) >= er + 4.0 {
+                    continue;
                 }
+                // a bulwark eats anything that comes at its shielded side, so
+                // you have to get around it instead of holding the trigger
+                if kind == Kind::Bulwark {
+                    let incoming = (ey - b.y).atan2(ex - b.x);
+                    let mut off = (incoming - face).abs() % TAU;
+                    if off > PI {
+                        off = TAU - off;
+                    }
+                    if off > PI - 1.1 {
+                        self.bullets.remove(j);
+                        self.burst(b.x, b.y, Kind::Bulwark.color(), 4, 0.5);
+                        bridge::bleep(320.0, 0.04, "square", 0.03);
+                        continue;
+                    }
+                }
+                self.bullets.remove(j);
+                self.enemies.remove(i);
+                self.kills += 1;
+                self.add_points((pv.max(1) as u32) * 10);
+                self.bump_mult();
+                self.enemy_burst(ex, ey);
+                self.grid_explosive(15.0, ex, ey, 110.0);
+                self.shake = self.shake.max(5.0);
+                let f = 280.0 + self.rng.f() * 220.0;
+                bridge::bleep(f, 0.05, "sawtooth", 0.032);
+                if self.kills % 4 == 0 {
+                    bridge::hat(0.04, 0.05);
+                }
+                // killing a splitter does not clear the space, it doubles it
+                if kind == Kind::Splitter {
+                    for k in 0..2 {
+                        let a = self.rng.angle() + k as f64 * PI;
+                        self.enemies.push(Enemy {
+                            x: ex + a.cos() * 14.0,
+                            y: ey + a.sin() * 14.0,
+                            kind: Kind::Shard,
+                            r: 7.0,
+                            spd: 190.0 + self.time * 0.8,
+                            pv: 1,
+                            fade: 0.35,
+                            ..Default::default()
+                        });
+                    }
+                }
+                break;
             }
         }
 
@@ -1517,7 +1692,17 @@ impl Geo {
             enemies: self
                 .enemies
                 .iter()
-                .map(|e| (e.x as f32, e.y as f32, e.kind, e.r as f32, e.fade as f32))
+                .map(|e| {
+                    (
+                        e.x as f32, e.y as f32, e.kind, e.r as f32,
+                        e.fade as f32, e.cool as f32, e.face as f32,
+                    )
+                })
+                .collect(),
+            ebullets: self
+                .ebullets
+                .iter()
+                .map(|b| (b.x as f32, b.y as f32, b.vx as f32, b.vy as f32))
                 .collect(),
             holes: self
                 .holes
@@ -1585,17 +1770,27 @@ impl Geo {
         self.enemies = s
             .enemies
             .iter()
-            .map(|(x, y, kind, r, fade)| Enemy {
+            .map(|(x, y, kind, r, fade, cool, face)| Enemy {
                 x: *x as f64,
                 y: *y as f64,
-                vx: 0.0,
-                vy: 0.0,
                 kind: *kind,
                 r: *r as f64,
-                spd: 0.0,
-                wob: 0.0,
                 fade: *fade as f64,
+                cool: *cool as f64,
+                face: *face as f64,
                 pv: 1,
+                ..Default::default()
+            })
+            .collect();
+        self.ebullets = s
+            .ebullets
+            .iter()
+            .map(|(x, y, vx, vy)| EBullet {
+                x: *x as f64,
+                y: *y as f64,
+                vx: *vx as f64,
+                vy: *vy as f64,
+                life: 1.0,
             })
             .collect();
         self.holes = s
@@ -1671,6 +1866,7 @@ impl Geo {
         self.draw_spray();
         self.draw_shocks();
         self.draw_bullets();
+        self.draw_ebullets();
         for i in 0..self.enemies.len() {
             self.draw_enemy(i);
         }
@@ -1793,6 +1989,26 @@ impl Geo {
         g.no_shadow();
     }
 
+    /// Sniper fire: hot, small, and unmistakably not yours.
+    fn draw_ebullets(&self) {
+        if self.ebullets.is_empty() {
+            return;
+        }
+        let g = &self.g;
+        let c = Kind::Sniper.color();
+        g.stroke_color(c);
+        g.shadow(c, 10.0);
+        g.line_width(2.4);
+        g.alpha(0.95);
+        g.begin();
+        for b in &self.ebullets {
+            g.move_to(b.x, b.y);
+            g.line_to(b.x - b.vx * 0.03, b.y - b.vy * 0.03);
+        }
+        g.stroke();
+        g.no_shadow();
+    }
+
     fn draw_enemy_shape(&self, i: usize, r: f64, alpha: f64) {
         let en = &self.enemies[i];
         let g = &self.g;
@@ -1818,14 +2034,65 @@ impl Geo {
                 g.line_to(en.x + r, en.y + r);
                 g.line_to(en.x - r, en.y + r);
             }
-            Kind::Weaver => {
+            Kind::Weaver | Kind::Shard => {
                 g.move_to(en.x, en.y - r);
                 g.line_to(en.x + r, en.y + r);
                 g.line_to(en.x - r, en.y + r);
             }
+            Kind::Splitter => {
+                // hexagon: reads as "this is made of smaller pieces"
+                for k in 0..6 {
+                    let a = (k as f64 / 6.0) * TAU - PI / 2.0;
+                    let (px, py) = (en.x + a.cos() * r, en.y + a.sin() * r);
+                    if k == 0 {
+                        g.move_to(px, py);
+                    } else {
+                        g.line_to(px, py);
+                    }
+                }
+            }
+            Kind::Sniper => {
+                // a cross, drawn as one open path — no fill to close
+                g.move_to(en.x - r, en.y);
+                g.line_to(en.x + r, en.y);
+                g.move_to(en.x, en.y - r);
+                g.line_to(en.x, en.y + r);
+            }
+            Kind::Bulwark => {
+                g.move_to(en.x - r, en.y - r);
+                g.line_to(en.x + r, en.y - r);
+                g.line_to(en.x + r, en.y + r);
+                g.line_to(en.x - r, en.y + r);
+            }
+            Kind::Pulsar => {
+                g.arc(en.x, en.y, r * 0.55, 0.0, TAU);
+                for k in 0..6 {
+                    let a = (k as f64 / 6.0) * TAU;
+                    g.move_to(en.x + a.cos() * r * 0.6, en.y + a.sin() * r * 0.6);
+                    g.line_to(en.x + a.cos() * r, en.y + a.sin() * r);
+                }
+            }
         }
         g.close();
         g.stroke();
+
+        // the tells: which side of a bulwark is armored, and how close a
+        // pulsar is to going off
+        if en.kind == Kind::Bulwark && en.fade <= 0.0 {
+            g.alpha(alpha * 0.9);
+            g.line_width(3.0);
+            g.begin();
+            g.arc(en.x, en.y, r + 4.0, en.face - 1.1, en.face + 1.1);
+            g.stroke();
+        }
+        if en.kind == Kind::Pulsar && en.fade <= 0.0 {
+            let charge = 1.0 - (en.cool / 3.4).clamp(0.0, 1.0);
+            g.alpha(alpha * (0.25 + charge * 0.7));
+            g.line_width(1.0 + charge * 2.0);
+            g.begin();
+            g.arc(en.x, en.y, r + 6.0 + charge * 60.0, 0.0, TAU);
+            g.stroke();
+        }
         g.no_shadow();
     }
 
