@@ -114,6 +114,21 @@
   const SKELETON = sprite(SKEL_ROWS);
   const WRAITH = sprite(SKEL_ROWS, { W: '#9db8e8' });
   const MINION = sprite(SKEL_ROWS, { W: '#9fd8a8' });
+  // necromancy keeps the victim's shape: same sprite, rotted zombie-green
+  const zombieCache = {};
+  function zombieSpr(type) {
+    if (zombieCache[type]) return zombieCache[type];
+    const src = ETYPES[type].spr;
+    const c = document.createElement('canvas');
+    c.width = src.width; c.height = src.height;
+    const g = c.getContext('2d');
+    g.drawImage(src, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(112, 196, 122, 0.5)';
+    g.fillRect(0, 0, c.width, c.height);
+    zombieCache[type] = c;
+    return c;
+  }
   const SLIME = sprite([
     '...kkkkkk...',
     '..keeeeeek..',
@@ -1159,7 +1174,7 @@
       if (best < 0) { say('No corpse near enough to raise', '#9fd8a8'); return; }
       D.mana -= 20;
       const c = D.corpses.splice(best, 1)[0];
-      D.allies.push({ x: c.x, y: c.y, ttl: 30, cd: 0, face: 1 });
+      D.allies.push({ x: c.x, y: c.y, ttl: 30, cd: 0, face: c.face || 1, type: c.type });
       floatText(c.x, c.y - 18, 'RISE', '#9fd8a8');
       A.sweep(100, 400, 0.5, 'sine', 0.06);
     }
@@ -2018,14 +2033,17 @@
       ctx.restore();
       ctx.globalAlpha = 1;
     }
-    // raised thralls
+    // raised thralls: the corpse's own body, walking again in rot-green
     for (const al of D.allies) {
       const sx = ox + al.x, sy = oy + al.y;
+      const aspr = al.type ? zombieSpr(al.type) : MINION;
+      const aw = al.type ? ETYPES[al.type].w : 22;
+      const ah = al.type ? ETYPES[al.type].h : 24;
       ctx.save();
       ctx.translate(sx, sy);
       ctx.scale(al.face, 1);
-      ctx.globalAlpha = 0.9;
-      ctx.drawImage(MINION, -11, -12, 22, 24);
+      ctx.globalAlpha = 0.92;
+      ctx.drawImage(aspr, -aw / 2, -ah / 2, aw, ah);
       ctx.restore();
       ctx.globalAlpha = 1;
     }
