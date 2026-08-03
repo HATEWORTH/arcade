@@ -1285,6 +1285,38 @@
     prime();
   });
   addEventListener('contextmenu', e => { if (window.MODE === 'dungeon') e.preventDefault(); });
+  // chests and stairs wait for a Space press instead of firing on touch
+  function nearStairs() {
+    return Math.hypot(D.hero.x - (D.stairs.x + 0.5) * TILE, D.hero.y - (D.stairs.y + 0.5) * TILE) < 26;
+  }
+  function chestUsable(c) {
+    return c.cool <= 0 && !(c.opened && !c.items.some(Boolean));
+  }
+  function nearChest(c) {
+    return Math.hypot(D.hero.x - (c.x + 0.5) * TILE, D.hero.y - (c.y + 0.5) * TILE) < 30;
+  }
+  function nearInteractable() {
+    if (nearStairs() && !D.stairsLocked) return true;
+    if (!D.lootChest) {
+      for (const c of D.chests) if (chestUsable(c) && nearChest(c)) return true;
+    }
+    return false;
+  }
+  // floating key hint above whatever Space would trigger
+  function drawKeyPrompt(sx, sy) {
+    const bob = reducedMotion ? 0 : Math.sin(D.t * 5) * 1.5;
+    ctx.font = 'bold 8px monospace';
+    const w2 = ctx.measureText('SPACE').width + 10;
+    ctx.fillStyle = 'rgba(6, 7, 4, 0.85)';
+    ctx.fillRect(sx - w2 / 2, sy - 10 + bob, w2, 13);
+    ctx.strokeStyle = '#d8dcc8';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx - w2 / 2 + 0.5, sy - 9.5 + bob, w2 - 1, 12);
+    ctx.fillStyle = '#d8dcc8';
+    ctx.textAlign = 'center';
+    ctx.fillText('SPACE', sx, sy + bob);
+    ctx.textAlign = 'left';
+  }
   addEventListener('keydown', e => {
     if (window.MODE !== 'dungeon') return;
     if (D.lvlChoices) {
@@ -1321,7 +1353,8 @@
       return;
     }
     if (e.key === ' ' && D.running && !D.paused && !D.inv) {
-      attack();
+      if (nearInteractable()) D.interact = true;
+      else attack();
       e.preventDefault();
       return;
     }
@@ -1824,14 +1857,15 @@
     }
 
     D.stairMsgT = Math.max(0, D.stairMsgT - dt);
-    if (Math.hypot(D.hero.x - (D.stairs.x + 0.5) * TILE, D.hero.y - (D.stairs.y + 0.5) * TILE) < 20) {
+    if (nearStairs()) {
       if (D.stairsLocked) {
         if (D.stairMsgT <= 0) {
           D.stairMsgT = 2.5;
           say('The way down is latched — slay the guardian', '#a4372e');
           A.bleep(160, 0.08, 'square', 0.035);
         }
-      } else {
+      } else if (D.interact) {
+        D.interact = false;
         descend();
         return;
       }
@@ -1892,8 +1926,9 @@
     for (const c of D.chests) {
       c.cool = Math.max(0, c.cool - dt);
       if (c.cool > 0 || D.lootChest) continue;
-      if (!c.items.some(Boolean) && c.opened) continue;
-      if (Math.hypot(D.hero.x - (c.x + 0.5) * TILE, D.hero.y - (c.y + 0.5) * TILE) < 30) {
+      if (!chestUsable(c)) continue;
+      if (nearChest(c) && D.interact) {
+        D.interact = false;
         if (!c.opened) {
           c.opened = true;
           gainGold(c.gold, D.hero.x, D.hero.y - 24);
@@ -1907,6 +1942,7 @@
         A.bleep(760, 0.08, 'triangle', 0.04);
       }
     }
+    D.interact = false; // a press only counts on the frame it lands
     for (let i = D.drops.length - 1; i >= 0; i--) {
       const dr = D.drops[i];
       dr.cool = Math.max(0, (dr.cool || 0) - dt);
@@ -2385,6 +2421,7 @@
         for (let i = 0; i < 4; i++) ctx.fillRect(sx + 4 + i * 8, sy + 2, 3, TILE - 4);
         ctx.fillRect(sx + 2, sy + TILE / 2 - 2, TILE - 4, 3);
       }
+      if (D.running && !D.stairsLocked && nearStairs()) drawKeyPrompt(sx + TILE / 2, sy - 8);
     }
     // spikes: animated blades rising from the floor
     for (const sp2 of D.spikes) {
@@ -2548,6 +2585,7 @@
         const spr = c.opened ? CHEST_OPEN : CHEST_CLOSED;
         ctx.drawImage(spr, sx - 12, sy - spr.height, 24, spr.height * 2);
       }
+      if (D.running && !D.lootChest && chestUsable(c) && nearChest(c)) drawKeyPrompt(sx, sy - 26);
     }
     for (const dr of D.drops) {
       const tx2 = Math.floor(dr.x / TILE), ty2 = Math.floor(dr.y / TILE);
