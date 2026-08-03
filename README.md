@@ -44,15 +44,15 @@ signalling server, the shell uses [trystero](https://github.com/dmotz/trystero)
 with the room code, and after that everything is peer-to-peer. There is no
 server to deploy — it works straight off GitHub Pages, for free.
 
+The host clicks **HOST A 2P GAME** on the menu, picks a game, and clicks the
+status pill to copy an invite link (it carries the room code and the game).
+Player 2 just opens the link. Query parameters also work:
+
 | parameter | meaning |
 | --- | --- |
-| `?host=1` | open this tab as the host; a room code is minted and shown |
+| `?host=1` | pre-arm the host toggle |
 | `?join=1&room=CODE` | join a host's room |
-| `?game=pong` / `?game=geo` | jump straight into that game's lobby |
-
-The host opens `…/?host=1`, picks a game, and clicks the status pill to copy
-an invite link (it carries the room code and the game). Player 2 just opens
-the link. With no parameters both games run single-player exactly as before —
+| `?game=pong` / `?game=geo` | jump straight into that game's lobby | With no parameters both games run single-player exactly as before —
 Pong against the CPU, Geo Wars solo.
 
 The usual WebRTC caveat applies: peers behind symmetric NAT (some mobile

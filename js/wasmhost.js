@@ -59,12 +59,20 @@
   // ?host=1 opens a room, ?join=1&room=CODE joins one.
   let net = null; // { room, chan, peer, game }
   let mintedRoom = null;
+  let armedHost = false; // the menu's HOST 2P toggle; ?host=1 pre-arms it
+
+  const hostToggle = document.getElementById('hostToggle');
+  function setArmedHost(on) {
+    armedHost = on;
+    hostToggle.classList.toggle('armed', on);
+    hostToggle.textContent = on ? 'hosting — pick pong 3d or geo wars' : 'host a 2p game';
+  }
+  hostToggle.addEventListener('click', () => setArmedHost(!armedHost));
 
   function lobbyRequest() {
     const q = new URLSearchParams(location.search);
-    if (q.get('host') === '1') return 'host';
     if (q.get('join') === '1') return 'guest';
-    return null;
+    return armedHost ? 'host' : null;
   }
 
   function roomCode() {
@@ -384,17 +392,16 @@
   requestAnimationFrame(frame);
 
   boot().then(() => {
+    if (!ready) return;
+    const q = new URLSearchParams(location.search);
+    if (q.get('host') === '1') setArmedHost(true);
     const role = lobbyRequest();
-    if (!ready || !role) return;
-    // an invite link names the game: walk the guest straight into its lobby.
-    // otherwise say what the lobby flag is waiting for — a bare ?host=1 on
-    // the menu looks like nothing happened
-    const game = new URLSearchParams(location.search).get('game');
+    if (!role) return;
+    // an invite link names the game: walk the guest straight into its lobby
+    const game = q.get('game');
     if (WASM_GAMES.includes(game)) {
       document.getElementById(game === 'pong' ? 'pickPong' : 'pickGeo').click();
-    } else if (role === 'host') {
-      netPill('hosting — pick Pong 3D or Geo Wars to open your room', '#45e0a5');
-    } else {
+    } else if (role === 'guest') {
       netPill('joining room ' + roomCode() + ' — pick the same game as your host', '#e0a545');
     }
   });

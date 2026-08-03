@@ -134,6 +134,39 @@
   }
   .gamecard.lime b { text-shadow: 0 0 12px var(--lime), 0 0 30px rgba(230, 207, 94,.6); }
 
+  /* the HOST 2P toggle under the launch menu: an outlined LCD block that
+     goes solid when armed, tracking the splash's normal/invert palettes */
+  .hostbtn {
+    cursor: pointer;
+    margin-top: 1.6rem;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: .72rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    padding: .5em 1.5em;
+    background: none;
+    border: 1px solid #2a2e22;
+    color: #2a2e22;
+  }
+  .hostbtn:hover, .hostbtn:focus-visible { outline: none; }
+  .overlay.nes .hostbtn:hover,
+  .overlay.nes .hostbtn:focus-visible,
+  .overlay.nes .hostbtn.armed {
+    background: #2a2e22;
+    color: #c3c8b2;
+  }
+  .overlay.nes.invert .hostbtn {
+    border-color: #c3c8b2;
+    color: #c3c8b2;
+    background: none;
+  }
+  .overlay.nes.invert .hostbtn:hover,
+  .overlay.nes.invert .hostbtn:focus-visible,
+  .overlay.nes.invert .hostbtn.armed {
+    background: #c3c8b2;
+    color: #2a2e22;
+  }
+
   .overlay {
     position: fixed;
     inset: 0;
