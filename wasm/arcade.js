@@ -1,5 +1,18 @@
 /* @ts-self-types="./arcade.d.ts" */
 
+/**
+ * Mouse movement since the last report, in screen pixels. Geo Wars aims
+ * relative to the ship, so it wants the motion rather than a cursor position.
+ * @param {string} game
+ * @param {number} dx
+ * @param {number} dy
+ */
+export function aim_delta(game, dx, dy) {
+    const ptr0 = passStringToWasm0(game, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    wasm.aim_delta(ptr0, len0, dx, dy);
+}
+
 export function boot() {
     wasm.boot();
 }

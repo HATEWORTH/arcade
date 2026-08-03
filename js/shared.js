@@ -28,6 +28,8 @@ window.ARCADE_VIEW = (() => {
 window.ARCADE_LOCK = (() => {
   const canvas = document.getElementById('c');
   const cur = { x: innerWidth / 2, y: innerHeight / 2 };
+  // movement banked since a game last read it, for relative aiming
+  const acc = { x: 0, y: 0 };
   let wantLock = false;
   const locked = () => document.pointerLockElement === canvas;
   function lock() {
@@ -61,9 +63,15 @@ window.ARCADE_LOCK = (() => {
       } else {
         dx = e.movementX; dy = e.movementY;
       }
+      // the raw movement is kept as well as the clamped cursor: a relative
+      // aim (Geo Wars) must not lose motion when the cursor pins to an edge
+      acc.x += dx * SENS;
+      acc.y += dy * SENS;
       cur.x = Math.max(0, Math.min(innerWidth, cur.x + dx * SENS));
       cur.y = Math.max(0, Math.min(innerHeight, cur.y + dy * SENS));
     } else {
+      acc.x += e.clientX - cur.x;
+      acc.y += e.clientY - cur.y;
       cur.x = e.clientX; cur.y = e.clientY;
     }
   });
@@ -75,7 +83,13 @@ window.ARCADE_LOCK = (() => {
       dispatchEvent(new CustomEvent('arcadecursorunlock'));
     }
   });
-  return { cur, lock, unlock, locked };
+  // drain the banked movement; the caller gets everything since its last read
+  function takeDelta() {
+    const d = { x: acc.x, y: acc.y };
+    acc.x = 0; acc.y = 0;
+    return d;
+  }
+  return { cur, lock, unlock, locked, takeDelta };
 })();
 
 // ---- pause menu buttons: dispatch to whichever game is active -----------

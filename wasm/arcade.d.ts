@@ -1,6 +1,12 @@
 /* tslint:disable */
 /* eslint-disable */
 
+/**
+ * Mouse movement since the last report, in screen pixels. Geo Wars aims
+ * relative to the ship, so it wants the motion rather than a cursor position.
+ */
+export function aim_delta(game: string, dx: number, dy: number): void;
+
 export function boot(): void;
 
 /**
@@ -70,6 +76,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly aim_delta: (a: number, b: number, c: number, d: number) => void;
     readonly boot: () => void;
     readonly button: (a: number, b: number, c: number, d: number) => void;
     readonly hud: (a: number, b: number) => [number, number];

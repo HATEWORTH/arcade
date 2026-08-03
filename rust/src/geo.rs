@@ -16,9 +16,12 @@ const GRID_SPACING: f64 = 44.0;
 /// Inside this many pixels of the reticle the ship keeps its last heading
 /// instead of chasing an unstable angle.
 const AIM_DEADZONE: f64 = 26.0;
-/// Distance over which the drift toward the reticle eases off, so the ship
-/// settles on the cursor instead of oscillating around it.
-const AIM_EASE: f64 = 110.0;
+/// The reticle is carried relative to the ship rather than parked at an
+/// absolute screen point: mouse movement pushes it out, and movement older
+/// than about a second stops counting, so it eases back in when you hold
+/// still. Where the ship flies is WASD's business alone.
+const AIM_REACH: f64 = 300.0;
+const AIM_FADE: f64 = 0.45;
 
 /// One identity color per player, hull included — not just the glow. Both
 /// ships used to be stroked white with only a faint colored halo to tell them
@@ -229,6 +232,8 @@ pub struct Geo {
     /// Where this player is pointing, in screen pixels. Kept apart from the
     /// ship slots because on the guest the snapshot owns those every frame.
     local_aim: (f64, f64),
+    /// The reticle's offset from our own ship, in screen pixels.
+    aim_off: (f64, f64),
     pub net: Net,
 }
 
@@ -278,6 +283,7 @@ impl Geo {
             t: 0.0,
             reduced: bridge::reduced_motion(),
             local_aim: (0.0, 0.0),
+            aim_off: (0.0, -140.0),
             net: Net::new(),
         };
         geo.init_atmos();
@@ -335,14 +341,35 @@ impl Geo {
         }
     }
 
-    pub fn pointer(&mut self, x: f64, y: f64) {
-        self.local_aim = (x, y);
-        // the guest flies ship 1; ship 0 belongs to the host and is overwritten
-        // by every snapshot, so pointing it here would just fight the wire
+    /// Absolute cursor position, which this game deliberately ignores — the
+    /// reticle is relative to the ship. Kept so the shared shell can call it
+    /// for every game without special-casing.
+    pub fn pointer(&mut self, _x: f64, _y: f64) {}
+
+    /// Mouse movement since the last report, in screen pixels.
+    pub fn aim_delta(&mut self, dx: f64, dy: f64) {
+        self.aim_off.0 += dx;
+        self.aim_off.1 += dy;
+        let d = self.aim_off.0.hypot(self.aim_off.1);
+        if d > AIM_REACH {
+            let k = AIM_REACH / d;
+            self.aim_off.0 *= k;
+            self.aim_off.1 *= k;
+        }
+    }
+
+    /// Carry the reticle along with the ship and let old movement decay out.
+    /// Runs every frame on whichever hull is ours.
+    fn sync_reticle(&mut self, dt: f64) {
+        let keep = (-dt / AIM_FADE).exp();
+        self.aim_off.0 *= keep;
+        self.aim_off.1 *= keep;
         let idx = if self.net.is_guest() { 1 } else { 0 };
+        let off = self.aim_off;
         if let Some(s) = self.ships.get_mut(idx) {
-            s.aim_x = x;
-            s.aim_y = y;
+            s.aim_x = s.x + off.0;
+            s.aim_y = s.y + off.1;
+            self.local_aim = (s.aim_x, s.aim_y);
         }
     }
 
@@ -848,6 +875,7 @@ impl Geo {
 
     // ---- simulation -----------------------------------------------------
     fn update(&mut self, dt: f64) {
+        self.sync_reticle(dt);
         self.time += dt;
         let (w, h) = (self.g.w, self.g.h);
 
@@ -900,13 +928,6 @@ impl Geo {
                 s.mov_y += ((say / m) - s.mov_y) * k;
                 s.vx += s.mov_x * 3100.0 * dt;
                 s.vy += s.mov_y * 3100.0 * dt;
-                // drift toward the reticle, easing to nothing as it arrives —
-                // at full strength the ship overshoots and jitters on the spot
-                let (adx, ady) = (s.aim_x - s.x, s.aim_y - s.y);
-                let ad = adx.hypot(ady).max(1.0);
-                let pull = 260.0 * (ad / AIM_EASE).min(1.0);
-                s.vx += (adx / ad) * pull * dt;
-                s.vy += (ady / ad) * pull * dt;
                 let drag = (1.0 - dt * 1.8).max(0.0);
                 s.vx *= drag;
                 s.vy *= drag;
@@ -1429,6 +1450,7 @@ impl Geo {
         self.g.resize();
 
         if self.net.is_guest() {
+            self.sync_reticle(dt);
             let s = *self.ships.get(1).unwrap_or(&self.ships[0]);
             let mut ax = 0.0;
             let mut ay = 0.0;
@@ -1537,6 +1559,7 @@ impl Geo {
                 // waiting a round trip, or turning feels like it is on a rope
                 sh.aim_x = local.0;
                 sh.aim_y = local.1;
+                let _ = &local;
             } else {
                 sh.aim_x = *ax as f64;
                 sh.aim_y = *ay as f64;
@@ -1651,6 +1674,7 @@ impl Geo {
         for i in 0..self.enemies.len() {
             self.draw_enemy(i);
         }
+        self.draw_reticle();
         self.draw_ships();
         self.draw_parts();
         self.draw_hud();
@@ -1813,6 +1837,37 @@ impl Geo {
         } else {
             self.draw_enemy_shape(i, r, 0.9);
         }
+    }
+
+    /// The reticle, drawn because there is nothing else to show it: the OS
+    /// cursor is hidden under pointer lock and the aim no longer lives at a
+    /// screen position you could guess at.
+    fn draw_reticle(&self) {
+        let idx = if self.net.is_guest() { 1 } else { 0 };
+        let s = match self.ships.get(idx) {
+            Some(s) => s,
+            None => return,
+        };
+        let reach = self.aim_off.0.hypot(self.aim_off.1);
+        if reach < AIM_DEADZONE {
+            return; // collapsed onto the hull — the ship's nose says it all
+        }
+        let g = &self.g;
+        let col = ship_color(idx);
+        // fades in with how far out you have pushed it
+        g.alpha((reach / 90.0).min(1.0) * 0.55);
+        g.stroke_color(col);
+        g.shadow(col, 8.0);
+        g.line_width(1.4);
+        let (x, y) = (s.aim_x, s.aim_y);
+        for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
+            g.begin();
+            g.move_to(x + dx * 4.0, y + dy * 4.0);
+            g.line_to(x + dx * 10.0, y + dy * 10.0);
+            g.stroke();
+        }
+        g.no_shadow();
+        g.alpha(1.0);
     }
 
     fn draw_ships(&self) {

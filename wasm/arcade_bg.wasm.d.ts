@@ -1,6 +1,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const aim_delta: (a: number, b: number, c: number, d: number) => void;
 export const boot: () => void;
 export const button: (a: number, b: number, c: number, d: number) => void;
 export const hud: (a: number, b: number) => [number, number];

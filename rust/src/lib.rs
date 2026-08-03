@@ -101,6 +101,19 @@ pub fn pointer(game: &str, x: f64, y: f64) {
     }
 }
 
+/// Mouse movement since the last report, in screen pixels. Geo Wars aims
+/// relative to the ship, so it wants the motion rather than a cursor position.
+#[wasm_bindgen]
+pub fn aim_delta(game: &str, dx: f64, dy: f64) {
+    if game == "geo" {
+        GEO.with(|c| {
+            if let Some(g) = c.borrow_mut().as_mut() {
+                g.aim_delta(dx, dy);
+            }
+        });
+    }
+}
+
 /// Mouse button edges. `button` follows the DOM: 0 left, 2 right.
 #[wasm_bindgen]
 pub fn button(game: &str, button: i32, down: bool) {

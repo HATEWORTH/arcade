@@ -323,7 +323,14 @@
   // ---- input ------------------------------------------------------------
   addEventListener('pointermove', () => {
     if (!isWasm() || !ready) return;
-    wasm.pointer(window.MODE, ARCADE_LOCK.cur.x, ARCADE_LOCK.cur.y);
+    // Geo aims relative to the ship, so it takes the movement rather than a
+    // cursor position — which also survives the cursor pinning to a screen edge
+    if (window.MODE === 'geo') {
+      const d = ARCADE_LOCK.takeDelta();
+      wasm.aim_delta('geo', d.x, d.y);
+    } else {
+      wasm.pointer(window.MODE, ARCADE_LOCK.cur.x, ARCADE_LOCK.cur.y);
+    }
   });
   addEventListener('touchmove', e => {
     if (!isWasm() || !ready) return;
