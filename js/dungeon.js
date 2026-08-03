@@ -120,21 +120,38 @@
   const BOSS_GUARDIAN = sprite(BRUTE_ROWS, { B: '#9a4030' });
   const BOSS_BROOD = sprite(SPIDER_ROWS, { b: '#5a3a7a', E: '#e8a33d' });
   const BOSS_BONEKING = sprite(SKEL_ROWS, { W: '#e8d48a' });
-  // side profile for when the hero faces left or right
+  // side profile (drawn facing right): trailing cape behind, dark visor
+  // slit and sword arm forward — unmistakably directional
   const HERO_SIDE_TOP = [
     '....kkkk....',
     '...kssssk...',
-    '...ksdddk...',
+    '...kssbbk...',
     '...kssssk...',
     '....kddk....',
-    '...kcsddk...',
-    '..kccsdddk..',
-    '..kccsdddk..',
-    '...kgdddk...',
+    '.kkcssdik...',
+    'kcccssddik..',
+    'kcccssddik..',
+    '.kkcgdddk...',
     '...kdssdk...',
   ];
-  const HERO_S1 = sprite(HERO_SIDE_TOP.concat(['....kdkdk...', '....kbkbk...', '...kbbkbbk..']));
-  const HERO_S2 = sprite(HERO_SIDE_TOP.concat(['...kdk.kdk..', '...kb...bk..', '..kbb..kbb..']));
+  const SIDE_PAL = { i: '#c8cdd7' };
+  const HERO_S1 = sprite(HERO_SIDE_TOP.concat(['....kdkdk...', '....kbkbk...', '...kbbkbbk..']), SIDE_PAL);
+  const HERO_S2 = sprite(HERO_SIDE_TOP.concat(['...kdk.kdk..', '...kb...bk..', '..kbb..kbb..']), SIDE_PAL);
+  // back view for aiming away (up): all cape, no face
+  const HERO_BACK_TOP = [
+    '....kkkk....',
+    '...kssssk...',
+    '...kssssk...',
+    '...kssssk...',
+    '....kddk....',
+    '..kccccck...',
+    '.kccccccck..',
+    '.kccccccck..',
+    '.kccccccck..',
+    '..kcccccck..',
+  ];
+  const HERO_B1 = sprite(HERO_BACK_TOP.concat(['..kdk..kdk..', '..kbk..kbk..', '.kbbk..kbbk.']));
+  const HERO_B2 = sprite(HERO_BACK_TOP.concat(['...kdkkdk...', '...kbkkbk...', '..kbbkkbbk..']));
   const CHEST_CLOSED = sprite([
     '.kkkkkkkkkk.',
     'kwwwwwwwwwwk',
@@ -295,6 +312,7 @@
     hotbar: new Array(4).fill(null),
     inv: false, invMx: 0, invMy: 0,
     lootChest: null, drag: null,
+    bossDoors: [], stairsLocked: true, stairMsgT: 0,
     atkT: 0, atkAnim: 0, atkDir: 0,
     hurtT: 0, spawnT: 18,
     floats: [], msgs: [],
@@ -303,7 +321,8 @@
   };
   const keys = {};
   const idx = (x, y) => y * MW + x;
-  const solid = (x, y) => x < 0 || y < 0 || x >= MW || y >= MH || D.tiles[idx(x, y)] === 0;
+  // tile values: 0 wall, 1 floor, 2 closed boss door (solid)
+  const solid = (x, y) => x < 0 || y < 0 || x >= MW || y >= MH || D.tiles[idx(x, y)] !== 1;
   const hash = (x, y) => {
     let h = x * 374761393 + y * 668265263;
     h = (h ^ (h >> 13)) * 1274126177;
@@ -348,6 +367,7 @@
     D.tiles = new Uint8Array(MW * MH);
     D.seen = new Uint8Array(MW * MH);
     D.rooms = []; D.torches = []; D.chests = []; D.enemies = []; D.drops = [];
+    D.bossDoors = []; D.stairsLocked = true;
     D.floats.length = 0;
     for (let tries = 0; tries < 90 && D.rooms.length < 9; tries++) {
       const w = 5 + Math.floor(Math.random() * 6);
@@ -439,6 +459,43 @@
     }
   }
 
+  // slam every corridor mouth of the boss room shut
+  function sealBossRoom(room) {
+    D.bossDoors = [];
+    const tryDoor = (x, y) => {
+      if (x < 0 || y < 0 || x >= MW || y >= MH) return;
+      if (D.tiles[idx(x, y)] === 1) {
+        D.tiles[idx(x, y)] = 2;
+        D.bossDoors.push({ x, y });
+      }
+    };
+    for (let x = room.x - 1; x <= room.x + room.w; x++) {
+      tryDoor(x, room.y - 1);
+      tryDoor(x, room.y + room.h);
+    }
+    for (let y = room.y - 1; y <= room.y + room.h; y++) {
+      tryDoor(room.x - 1, y);
+      tryDoor(room.x + room.w, y);
+    }
+    // if a door slammed on the hero, shove them into the arena proper
+    if (collide(D.hero.x, D.hero.y, HERO_R)) {
+      const cx3 = (room.x + room.w / 2) * TILE, cy3 = (room.y + room.h / 2) * TILE;
+      const a = Math.atan2(cy3 - D.hero.y, cx3 - D.hero.x);
+      for (let step = 4; step < 220; step += 4) {
+        const nx = D.hero.x + Math.cos(a) * step, ny = D.hero.y + Math.sin(a) * step;
+        if (!collide(nx, ny, HERO_R)) { D.hero.x = nx; D.hero.y = ny; break; }
+      }
+    }
+    A.sweep(200, 50, 0.5, 'sawtooth', 0.07);
+    say('The doors slam shut!', '#a4372e');
+  }
+  function openBossRoom() {
+    for (const dr of D.bossDoors) D.tiles[idx(dr.x, dr.y)] = 1;
+    D.bossDoors = [];
+    D.stairsLocked = false;
+    say('The doors grind open — the way down is unsealed', '#7ec96f');
+    A.sweep(80, 300, 0.7, 'sine', 0.06);
+  }
   function reveal() {
     const hx = D.hero.x / TILE, hy = D.hero.y / TILE;
     const R = 5;
@@ -651,6 +708,7 @@
       say('BOSS SLAIN', '#e8a33d');
       A.sweep(600, 40, 0.7, 'sawtooth', 0.09);
       bossLoot(en);
+      openBossRoom();
     } else if (Math.random() < 0.1) {
       D.drops.push({ x: en.x, y: en.y, it: makeItem('potion', D.floor) });
     }
@@ -883,9 +941,18 @@
     if (D.hero.moving) reveal();
     D.cam.x = D.hero.x; D.cam.y = D.hero.y;
 
+    D.stairMsgT = Math.max(0, D.stairMsgT - dt);
     if (Math.hypot(D.hero.x - (D.stairs.x + 0.5) * TILE, D.hero.y - (D.stairs.y + 0.5) * TILE) < 20) {
-      descend();
-      return;
+      if (D.stairsLocked) {
+        if (D.stairMsgT <= 0) {
+          D.stairMsgT = 2.5;
+          say('The way down is latched — slay the guardian', '#a4372e');
+          A.bleep(160, 0.08, 'square', 0.035);
+        }
+      } else {
+        descend();
+        return;
+      }
     }
     for (const c of D.chests) {
       c.cool = Math.max(0, c.cool - dt);
@@ -939,6 +1006,7 @@
             floatText(en.x, en.y - 34, '!', '#a4372e');
             say('The floor guardian stirs…', '#a4372e');
             A.sweep(120, 45, 0.6, 'sawtooth', 0.08);
+            sealBossRoom(r);
           }
         } else {
           // roam until the hero enters the vision cone (with line of sight),
@@ -1188,6 +1256,17 @@
             ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
             ctx.fillRect(sx, sy, TILE, 7);
           }
+        } else if (D.tiles[idx(x, y)] === 2) {
+          // sealed boss door: iron-banded timber
+          ctx.fillStyle = '#5a4632';
+          ctx.fillRect(sx, sy, TILE, TILE);
+          ctx.fillStyle = 'rgba(20, 22, 15, 0.5)';
+          for (let by = 6; by < TILE; by += 10) ctx.fillRect(sx, sy + by, TILE, 2);
+          ctx.fillStyle = '#8a8f80';
+          ctx.fillRect(sx + 3, sy + 3, 3, 3);
+          ctx.fillRect(sx + TILE - 6, sy + 3, 3, 3);
+          ctx.fillRect(sx + 3, sy + TILE - 6, 3, 3);
+          ctx.fillRect(sx + TILE - 6, sy + TILE - 6, 3, 3);
         } else if (y + 1 < MH && D.tiles[idx(x, y + 1)] === 1) {
           ctx.fillStyle = '#4c5140';
           ctx.fillRect(sx, sy, TILE, TILE);
@@ -1211,6 +1290,12 @@
       for (let i = 0; i < 4; i++) {
         ctx.fillStyle = 'rgba(0, 0, 0, ' + (0.35 + i * 0.13) + ')';
         ctx.fillRect(sx + i * 4, sy + i * 4, TILE - i * 8, TILE - i * 8);
+      }
+      if (D.stairsLocked) {
+        // latched: an iron grate across the stairwell
+        ctx.fillStyle = '#8a8f80';
+        for (let i = 0; i < 4; i++) ctx.fillRect(sx + 4 + i * 8, sy + 2, 3, TILE - 4);
+        ctx.fillRect(sx + 2, sy + TILE / 2 - 2, TILE - 4, 3);
       }
     }
     for (const c of D.chests) {
@@ -1307,10 +1392,13 @@
     }
     // hero + held gear pointing at the mouse
     if (!(D.hurtT > 0 && Math.floor(D.t * 14) % 2)) {
-      // profile sprite when aiming sideways, front view otherwise
-      const side = Math.abs(Math.cos(D.aim)) > 0.45;
+      // facing: profile when aiming sideways, back when aiming up,
+      // front when aiming down
       const step = D.hero.moving && Math.floor(D.t * 8) % 2;
-      const frame = side ? (step ? HERO_S2 : HERO_S1) : (step ? HERO_F2 : HERO_F1);
+      let frame;
+      if (Math.abs(Math.cos(D.aim)) > 0.42) frame = step ? HERO_S2 : HERO_S1;
+      else if (Math.sin(D.aim) < 0) frame = step ? HERO_B2 : HERO_B1;
+      else frame = step ? HERO_F2 : HERO_F1;
       const hx = ox + D.hero.x, hy = oy + D.hero.y;
       ctx.save();
       ctx.translate(hx, hy + 2);
