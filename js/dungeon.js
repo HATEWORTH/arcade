@@ -760,12 +760,24 @@
     D.hero.x = (startRoom.cx + 0.5) * TILE;
     D.hero.y = (startRoom.cy + 0.5) * TILE;
     D.stairs = { x: bossRoom.cx, y: bossRoom.cy };
-    // boss guards the stairs room: a long fight that hits like a truck
+    // boss guards the stairs room: a long fight that hits like a truck.
+    // It waits at the interior spot farthest from every doorway.
     const bossHp = Math.round(240 + (D.floor - 1) * 110 + heroDmgSafe() * 8);
+    let bposX = bossRoom.cx, bposY = bossRoom.cy, bScore = -1;
+    const bdoors = doorTilesOf(bossRoom);
+    for (let ty = bossRoom.y + 1; ty < bossRoom.y + bossRoom.h - 1; ty++) {
+      for (let tx = bossRoom.x + 1; tx < bossRoom.x + bossRoom.w - 1; tx++) {
+        if (D.tiles[idx(tx, ty)] !== 1) continue;
+        if (tx === bossRoom.cx && ty === bossRoom.cy) continue; // stairs live here
+        let sMin = Infinity;
+        for (const dv of bdoors) sMin = Math.min(sMin, Math.hypot(dv.x - tx, dv.y - ty));
+        if (sMin > bScore) { bScore = sMin; bposX = tx; bposY = ty; }
+      }
+    }
     D.enemies.push({
       type: BOSS_KINDS[Math.floor(Math.random() * BOSS_KINDS.length)],
       isBoss: true, room: bossRoom, homeRoom: bossRoom,
-      x: (bossRoom.cx + 0.5) * TILE, y: (bossRoom.y + 1.2) * TILE,
+      x: (bposX + 0.5) * TILE, y: (bposY + 0.5) * TILE,
       hp: bossHp, maxHp: bossHp,
       dmgv: 25 + D.floor * 4,
       cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1, fa: Math.PI / 2, hurt: 0, aggro: false,
@@ -832,6 +844,8 @@
       const x = r.x + Math.floor(Math.random() * r.w);
       const y = r.y + Math.floor(Math.random() * r.h);
       if (D.tiles[idx(x, y)] !== 1) continue;
+      // never posted near a doorway — the player gets breathing room
+      if (doorTilesOf(r).some(dv => Math.hypot(dv.x - x, dv.y - y) < 3)) continue;
       const px = (x + 0.5) * TILE, py = (y + 0.5) * TILE;
       if (Math.hypot(px - D.hero.x, py - D.hero.y) < TILE * 6) continue;
       if (!anywhere && D.seen[idx(x, y)]) continue;
@@ -899,6 +913,18 @@
   }
 
   // one room at a time: entering reveals the whole room, Isaac-style
+  // every doorway tile on a room's wall ring
+  function doorTilesOf(r) {
+    if (r.doors) return r.doors;
+    const out = [];
+    const check = (x, y) => {
+      if (x >= 0 && y >= 0 && x < MW && y < MH && D.tiles[idx(x, y)] !== 0) out.push({ x, y });
+    };
+    for (let x = r.x - 1; x <= r.x + r.w; x++) { check(x, r.y - 1); check(x, r.y + r.h); }
+    for (let y = r.y - 1; y <= r.y + r.h; y++) { check(r.x - 1, y); check(r.x + r.w, y); }
+    r.doors = out;
+    return out;
+  }
   function roomAt(tx, ty) {
     for (const r of D.rooms) {
       if (tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h) return r;
