@@ -45,7 +45,47 @@
     chestOpen: [[336, 416, 16, 16]],
     spikes: seq(16, 192, 16, 16, 4),
     stairs: [[80, 192, 16, 16]],
+    crate: [288, 408, 16, 24],
+    flaskRed: [288, 352, 16, 16],
+    wallMid: [32, 16, 16, 16],
+    wallTop: [32, 0, 16, 16],
+    wpn: {
+      dagger: [293, 10, 6, 13],
+      sword: [323, 10, 10, 21],
+      axe: [324, 168, 12, 23],
+      spear: [309, 161, 6, 30],
+      hammer: [291, 26, 10, 37],
+    },
   };
+  const FLOORS = [[16, 64], [32, 64], [48, 64], [16, 80], [32, 80], [48, 80], [16, 96], [32, 96]];
+  // Shikashi icon sheet covers what 0x72 lacks (shield + armor icons)
+  const iconsImg = new Image();
+  let iconsReady = false;
+  iconsImg.onload = () => { iconsReady = true; };
+  iconsImg.src = 'assets/icons_sheet.png';
+  const SHIK = { shield: [64, 192], armor: [224, 224] };
+  // one icon renderer for slots, drops, pedestals, wares, and drags
+  function drawItemIcon(it, cx2, cy2, size) {
+    ctx.imageSmoothingEnabled = false;
+    if (it.kind === 'sword' && atlasReady) {
+      const r = AT.wpn[it.wtype] || AT.wpn.sword;
+      const s = size / Math.max(r[2], r[3]);
+      const dw = r[2] * s, dh = r[3] * s;
+      drawA(r, cx2 - dw / 2, cy2 - dh / 2, dw, dh);
+      return;
+    }
+    if (it.kind === 'potion' && atlasReady) {
+      drawA(AT.flaskRed, cx2 - size / 2, cy2 - size / 2, size, size);
+      return;
+    }
+    if ((it.kind === 'shield' || it.kind === 'armor') && iconsReady) {
+      const r = SHIK[it.kind];
+      ctx.drawImage(iconsImg, r[0], r[1], 32, 32, cx2 - size / 2, cy2 - size / 2, size, size);
+      return;
+    }
+    const ic = iconFor(it);
+    ctx.drawImage(ic, cx2 - ic.width * 2, cy2 - ic.height * 2, ic.width * 4, ic.height * 4);
+  }
   function aframe(list, rate) {
     return list[Math.floor(performance.now() / 1000 * (rate || 8)) % list.length];
   }
@@ -2058,11 +2098,7 @@
     ctx.strokeStyle = it ? RARITIES[it.ri].color : 'rgba(255, 255, 255, 0.2)';
     ctx.lineWidth = it ? 2 : 1;
     ctx.strokeRect(s.x + 0.5, s.y + 0.5, SLOT - 1, SLOT - 1);
-    if (it) {
-      const ic = iconFor(it);
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(ic, s.x + SLOT / 2 - ic.width * 2, s.y + SLOT / 2 - ic.height * 2, ic.width * 4, ic.height * 4);
-    }
+    if (it) drawItemIcon(it, s.x + SLOT / 2, s.y + SLOT / 2, 38);
   }
   function drawRelicGlyph(x, y, r, size) {
     ctx.fillStyle = r.color;
@@ -2206,10 +2242,8 @@
     if (dragging) {
       const it = getSlot(D.drag.from);
       if (it) {
-        const ic = iconFor(it);
         ctx.globalAlpha = 0.9;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(ic, MP.x - ic.width * 2, MP.y - ic.height * 2, ic.width * 4, ic.height * 4);
+        drawItemIcon(it, MP.x, MP.y, 38);
         ctx.globalAlpha = 1;
       }
     }
@@ -2248,11 +2282,16 @@
             ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
             ctx.fillRect(sx, sy, TILE, 2);
           } else {
-            ctx.fillStyle = hv % 3 === 0 ? '#343a2e' : '#3a4033';
-            ctx.fillRect(sx, sy, TILE, TILE);
-            if (hv % 11 === 0) {
-              ctx.fillStyle = '#2e3428';
-              ctx.fillRect(sx + (hv % 5) * 5 + 4, sy + (hv % 7) * 3 + 4, 6, 2);
+            if (atlasReady) {
+              const fr = FLOORS[hv % 8];
+              drawA([fr[0], fr[1], 16, 16], sx, sy, TILE, TILE);
+            } else {
+              ctx.fillStyle = hv % 3 === 0 ? '#343a2e' : '#3a4033';
+              ctx.fillRect(sx, sy, TILE, TILE);
+              if (hv % 11 === 0) {
+                ctx.fillStyle = '#2e3428';
+                ctx.fillRect(sx + (hv % 5) * 5 + 4, sy + (hv % 7) * 3 + 4, 6, 2);
+              }
             }
             if (solid(x, y - 1)) {
               ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
@@ -2260,22 +2299,31 @@
             }
           }
         } else if (D.tiles[idx(x, y)] === 3 || D.tiles[idx(x, y)] === 4) {
-          // rock or brazier base sits on visible floor
-          ctx.fillStyle = hv % 3 === 0 ? '#343a2e' : '#3a4033';
-          ctx.fillRect(sx, sy, TILE, TILE);
+          // crate or brazier base sits on visible floor
+          if (atlasReady) {
+            const fr = FLOORS[hv % 8];
+            drawA([fr[0], fr[1], 16, 16], sx, sy, TILE, TILE);
+          } else {
+            ctx.fillStyle = hv % 3 === 0 ? '#343a2e' : '#3a4033';
+            ctx.fillRect(sx, sy, TILE, TILE);
+          }
           if (D.tiles[idx(x, y)] === 3) {
-            ctx.fillStyle = '#20241a';
-            ctx.beginPath();
-            ctx.ellipse(sx + TILE / 2, sy + TILE / 2 + 5, 13, 9, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#6a705c';
-            ctx.beginPath();
-            ctx.ellipse(sx + TILE / 2, sy + TILE / 2 - 1, 12, 10, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#828a70';
-            ctx.beginPath();
-            ctx.ellipse(sx + TILE / 2 - 3, sy + TILE / 2 - 5, 5, 4, 0, 0, Math.PI * 2);
-            ctx.fill();
+            if (atlasReady) {
+              drawA(AT.crate, sx + 2, sy + TILE - 42, 28, 42);
+            } else {
+              ctx.fillStyle = '#20241a';
+              ctx.beginPath();
+              ctx.ellipse(sx + TILE / 2, sy + TILE / 2 + 5, 13, 9, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = '#6a705c';
+              ctx.beginPath();
+              ctx.ellipse(sx + TILE / 2, sy + TILE / 2 - 1, 12, 10, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = '#828a70';
+              ctx.beginPath();
+              ctx.ellipse(sx + TILE / 2 - 3, sy + TILE / 2 - 5, 5, 4, 0, 0, Math.PI * 2);
+              ctx.fill();
+            }
           } else {
             ctx.fillStyle = '#4a5040';
             ctx.fillRect(sx + 9, sy + 12, 14, 14);
@@ -2293,19 +2341,29 @@
           ctx.fillRect(sx + 3, sy + TILE - 6, 3, 3);
           ctx.fillRect(sx + TILE - 6, sy + TILE - 6, 3, 3);
         } else if (y + 1 < MH && D.tiles[idx(x, y + 1)] === 1) {
-          ctx.fillStyle = '#4c5140';
-          ctx.fillRect(sx, sy, TILE, TILE);
-          ctx.fillStyle = 'rgba(20, 22, 15, 0.55)';
-          for (let by = 0; by < TILE; by += 8) {
-            ctx.fillRect(sx, sy + by, TILE, 1);
-            const off = ((by / 8) % 2) * 8;
-            for (let bx2 = off; bx2 < TILE; bx2 += 16) ctx.fillRect(sx + bx2, sy + by, 1, 8);
+          if (atlasReady) {
+            drawA(AT.wallMid, sx, sy, TILE, TILE);
+          } else {
+            ctx.fillStyle = '#4c5140';
+            ctx.fillRect(sx, sy, TILE, TILE);
+            ctx.fillStyle = 'rgba(20, 22, 15, 0.55)';
+            for (let by = 0; by < TILE; by += 8) {
+              ctx.fillRect(sx, sy + by, TILE, 1);
+              const off = ((by / 8) % 2) * 8;
+              for (let bx2 = off; bx2 < TILE; bx2 += 16) ctx.fillRect(sx + bx2, sy + by, 1, 8);
+            }
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.fillRect(sx, sy, TILE, 2);
           }
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-          ctx.fillRect(sx, sy, TILE, 2);
         } else {
-          ctx.fillStyle = '#20241a';
-          ctx.fillRect(sx, sy, TILE, TILE);
+          if (atlasReady) {
+            ctx.globalAlpha = 0.55;
+            drawA(AT.wallTop, sx, sy, TILE, TILE);
+            ctx.globalAlpha = 1;
+          } else {
+            ctx.fillStyle = '#20241a';
+            ctx.fillRect(sx, sy, TILE, TILE);
+          }
         }
       }
     }
@@ -2438,8 +2496,7 @@
       if (w.relic) {
         drawRelicGlyph(sx, sy - 12, w.relic, 7);
       } else {
-        const ic = iconFor(w.it);
-        ctx.drawImage(ic, sx - ic.width, sy - 12 - ic.height, ic.width * 2, ic.height * 2);
+        drawItemIcon(w.it, sx, sy - 16, 24);
       }
       const effP = Math.max(1, Math.round(w.price * D.st.shopMult));
       ctx.fillStyle = D.hero.gold >= effP ? '#d9a94e' : '#a4372e';
@@ -2468,8 +2525,7 @@
         if (p.relic) {
           drawRelicGlyph(sx, sy - 14 + bob, p.relic, 8);
         } else {
-          const ic = iconFor(p.it);
-          ctx.drawImage(ic, sx - ic.width, sy - 14 + bob - ic.height, ic.width * 2, ic.height * 2);
+          drawItemIcon(p.it, sx, sy - 16 + bob, 24);
         }
       }
     }
@@ -2505,8 +2561,7 @@
       if (dr.relic) {
         drawRelicGlyph(sx, sy, dr.relic, 7);
       } else {
-        const ic = iconFor(dr.it);
-        ctx.drawImage(ic, sx - ic.width * 1.5, sy - ic.height * 1.5, ic.width * 3, ic.height * 3);
+        drawItemIcon(dr.it, sx, sy, 24);
       }
     }
     for (const tc of D.torches) {
@@ -2640,8 +2695,14 @@
       ctx.translate(hx, hy);
       ctx.rotate(D.aim + Math.PI / 2);
       const swing = D.atkAnim > 0 ? (1 - D.atkAnim / 0.16) * 10 : 0;
-      const held = D.equip.sword ? iconFor(D.equip.sword) : ICON_SWORD;
-      ctx.drawImage(held, -5, -30 - swing, 10, 14);
+      if (atlasReady) {
+        const wr = D.equip.sword ? (AT.wpn[D.equip.sword.wtype] || AT.wpn.sword) : AT.wpn.dagger;
+        const dh2 = 26, dw2 = wr[2] * (dh2 / wr[3]);
+        drawA(wr, -dw2 / 2, -32 - swing, dw2, dh2);
+      } else {
+        const held = D.equip.sword ? iconFor(D.equip.sword) : ICON_SWORD;
+        ctx.drawImage(held, -5, -30 - swing, 10, 14);
+      }
       ctx.restore();
       if (D.block && D.equip.shield) {
         ctx.save();
