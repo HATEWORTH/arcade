@@ -102,16 +102,30 @@
   // six Bitcrawl bodies cover the whole bestiary via tint shifts
   const BC_MAP = {
     slime: { s: 'slime' },
+    blob: { s: 'slime', tint: '#7ec96f' },
     skeleton: { s: 'skeleton' },
+    bonesword: { s: 'skeleton', tint: '#c07840' },
+    shieldbones: { s: 'skeleton', tint: '#6a8ab0' },
+    sentry: { s: 'skeleton', tint: '#4a6a90' },
     wraith: { s: 'wraith' },
-    bat: { s: 'rat' },
-    spider: { s: 'goblin' },
+    shade: { s: 'wraith', tint: '#8a4ac0' },
+    cultist: { s: 'goblin', tint: '#7a5ae8' },
+    necromancer: { s: 'wraith', tint: '#4a8a50' },
+    rat: { s: 'rat' },
+    bat: { s: 'rat', tint: '#5a4a70' },
+    imp: { s: 'rat', tint: '#e8763d' },
+    goblin: { s: 'goblin' },
+    spider: { s: 'goblin', tint: '#403050' },
     spiderling: { s: 'rat', tint: '#7ec96f' },
+    sporeling: { s: 'slime', tint: '#b06ae0' },
     brute: { s: 'knight', tint: '#a05038' },
     golem: { s: 'knight', tint: '#9aa0a8' },
     guardian: { s: 'knight', tint: '#8a2a20' },
+    warlord: { s: 'knight', tint: '#402030' },
     brood: { s: 'slime', tint: '#8a4ac0' },
+    monarch: { s: 'slime', tint: '#4a9a50' },
     boneking: { s: 'skeleton' },
+    lich: { s: 'wraith', tint: '#b06ae0' },
     merchant: { s: 'goblin', tint: '#b0863d' },
   };
   const BC_HERO = {
@@ -908,41 +922,146 @@
   const CLASS_KEYS = ['knight', 'wizard', 'necro'];
 
   // ---- enemy catalogue ---------------------------------------------------
+  // move: how the thing closes on you. chase/erratic/lunge/hop/charge/orbit/
+  // blink/flee/bomber/guard/turret/summon — each reads differently in a room.
   const ETYPES = {
-    slime:      { spr: SLIME,    w: 26, h: 18, r: 11, spd: 52,  move: 'chase',   hp: f => 9 + f * 2,  dmg: f => 10 + f * 2,  gold: f => 3 + f },
-    skeleton:   { spr: SKELETON, w: 24, h: 26, r: 10, spd: 88,  move: 'chase',   hp: f => 18 + f * 4, dmg: f => 14 + f * 3,  gold: f => 6 + f * 2,
+    slime:      { n: 'Slime', spr: SLIME, w: 26, h: 18, r: 11, spd: 58, move: 'hop',
+                  hp: f => 10 + f * 2, dmg: f => 10 + f * 2, gold: f => 3 + f,
+                  split: { type: 'blob', n: 2 } },
+    blob:       { n: 'Blob', spr: SLIME, w: 17, h: 12, r: 7, spd: 74, move: 'hop',
+                  hp: f => 4 + f, dmg: f => 6 + f, gold: f => 1 + f },
+    rat:        { n: 'Dire Rat', spr: BAT, w: 20, h: 14, r: 8, spd: 128, move: 'swarm',
+                  hp: f => 7 + f * 2, dmg: f => 7 + f * 2, gold: f => 3 + f },
+    bat:        { n: 'Cave Bat', spr: BAT, w: 20, h: 16, r: 8, spd: 155, move: 'erratic',
+                  hp: f => 6 + f, dmg: f => 8 + f * 2, gold: f => 4 + f },
+    skeleton:   { n: 'Bone Archer', spr: SKELETON, w: 24, h: 26, r: 10, spd: 82, move: 'chase',
+                  hp: f => 17 + f * 4, dmg: f => 13 + f * 3, gold: f => 6 + f * 2,
                   shot: { cd: 2.4, spd: 150, dmg: f => 9 + f * 2, col: '#e8d48a' } },
-    wraith:     { spr: WRAITH,   w: 24, h: 26, r: 9,  spd: 132, move: 'chase',   hp: f => 12 + f * 3, dmg: f => 12 + f * 3,  gold: f => 8 + f * 2,
-                  shot: { cd: 2.0, spd: 190, dmg: f => 10 + f * 2, col: '#8fb8e8' } },
-    brute:      { spr: BRUTE,    w: 34, h: 30, r: 15, spd: 50,  move: 'chase',   hp: f => 45 + f * 9, dmg: f => 22 + f * 4,  gold: f => 16 + f * 4 },
-    bat:        { spr: BAT,      w: 20, h: 16, r: 8,  spd: 150, move: 'erratic', hp: f => 6 + f,      dmg: f => 8 + f * 2,   gold: f => 4 + f },
-    spider:     { spr: SPIDER,   w: 28, h: 18, r: 10, spd: 68,  move: 'lunge',   dash: 265, hp: f => 14 + f * 3, dmg: f => 14 + f * 3, gold: f => 9 + f * 2 },
-    golem:      { spr: GOLEM,    w: 34, h: 30, r: 15, spd: 42,  move: 'chase',   dr: 3, hp: f => 55 + f * 10, dmg: f => 18 + f * 3, gold: f => 20 + f * 4 },
-    spiderling: { spr: SPIDER,   w: 16, h: 11, r: 6,  spd: 125, move: 'chase',   hp: f => 5 + f,      dmg: f => 8 + f * 2,   gold: f => 2 + f },
-    guardian:   { spr: BOSS_GUARDIAN, w: 56, h: 50, r: 24, spd: 72,  move: 'chase', gold: f => 60 + f * 20 },
-    brood:      { spr: BOSS_BROOD,    w: 60, h: 40, r: 24, spd: 58,  move: 'chase', gold: f => 60 + f * 20 },
-    boneking:   { spr: BOSS_BONEKING, w: 44, h: 50, r: 20, spd: 96,  move: 'lunge', dash: 300, gold: f => 60 + f * 20 },
+    bonesword:  { n: 'Bone Blade', spr: SKELETON, w: 24, h: 26, r: 10, spd: 112, move: 'chase',
+                  hp: f => 20 + f * 4, dmg: f => 15 + f * 3, gold: f => 7 + f * 2 },
+    shieldbones: { n: 'Bone Sentinel', spr: SKELETON, w: 26, h: 28, r: 12, spd: 52, move: 'guard',
+                  guard: 0.3, dr: 2, hp: f => 34 + f * 6, dmg: f => 16 + f * 3, gold: f => 12 + f * 3 },
+    wraith:     { n: 'Wraith', spr: WRAITH, w: 24, h: 26, r: 9, spd: 118, move: 'blink',
+                  hp: f => 13 + f * 3, dmg: f => 13 + f * 3, gold: f => 9 + f * 2 },
+    shade:      { n: 'Shade', spr: WRAITH, w: 24, h: 26, r: 9, spd: 96, move: 'blink',
+                  hp: f => 15 + f * 3, dmg: f => 12 + f * 3, gold: f => 12 + f * 3,
+                  shot: { cd: 2.0, spd: 190, dmg: f => 10 + f * 2, col: '#b06ae0' } },
+    cultist:    { n: 'Cultist', spr: WRAITH, w: 24, h: 26, r: 10, spd: 92, move: 'orbit',
+                  orbit: 128, hp: f => 18 + f * 4, dmg: f => 11 + f * 2, gold: f => 11 + f * 3,
+                  shot: { cd: 1.7, spd: 175, dmg: f => 10 + f * 3, col: '#7a5ae8' } },
+    necromancer: { n: 'Necromancer', spr: WRAITH, w: 26, h: 28, r: 11, spd: 62, move: 'summon',
+                  summon: { type: 'bonesword', cd: 7, cap: 4, n: 2 },
+                  hp: f => 28 + f * 5, dmg: f => 12 + f * 2, gold: f => 22 + f * 5 },
+    goblin:     { n: 'Cutpurse', spr: SPIDER, w: 22, h: 22, r: 9, spd: 138, move: 'flee',
+                  steal: true, hp: f => 12 + f * 3, dmg: f => 8 + f * 2, gold: f => 14 + f * 4 },
+    spider:     { n: 'Lurker', spr: SPIDER, w: 28, h: 18, r: 10, spd: 68, move: 'lunge', dash: 275,
+                  hp: f => 15 + f * 3, dmg: f => 14 + f * 3, gold: f => 9 + f * 2 },
+    spiderling: { n: 'Spiderling', spr: SPIDER, w: 16, h: 11, r: 6, spd: 125, move: 'swarm',
+                  hp: f => 5 + f, dmg: f => 8 + f * 2, gold: f => 2 + f },
+    brute:      { n: 'Brute', spr: BRUTE, w: 34, h: 30, r: 15, spd: 54, move: 'charge', dash: 330,
+                  hp: f => 46 + f * 9, dmg: f => 22 + f * 4, gold: f => 16 + f * 4 },
+    golem:      { n: 'Stone Golem', spr: GOLEM, w: 34, h: 30, r: 15, spd: 40, move: 'chase', dr: 4,
+                  hp: f => 58 + f * 10, dmg: f => 18 + f * 3, gold: f => 20 + f * 4 },
+    sporeling:  { n: 'Sporeling', spr: SLIME, w: 22, h: 18, r: 9, spd: 104, move: 'bomber',
+                  explode: { r: 78, dmg: f => 20 + f * 4, col: '#9fd8a8' },
+                  hp: f => 9 + f * 2, dmg: f => 6 + f, gold: f => 6 + f * 2 },
+    imp:        { n: 'Ember Imp', spr: BAT, w: 20, h: 18, r: 8, spd: 142, move: 'erratic',
+                  hp: f => 10 + f * 2, dmg: f => 9 + f * 2, gold: f => 8 + f * 2,
+                  shot: { cd: 2.6, spd: 165, dmg: f => 9 + f * 2, col: '#e8763d' } },
+    sentry:     { n: 'Bone Sentry', spr: SKELETON, w: 24, h: 28, r: 11, spd: 0, move: 'turret',
+                  dr: 2, hp: f => 26 + f * 5, dmg: f => 10 + f * 2, gold: f => 10 + f * 3,
+                  shot: { cd: 1.5, spd: 200, dmg: f => 11 + f * 3, col: '#8fb8e8' } },
+    guardian:   { n: 'Guardian', spr: BOSS_GUARDIAN, w: 56, h: 50, r: 24, spd: 72, move: 'chase', gold: f => 60 + f * 20 },
+    brood:      { n: 'Broodmother', spr: BOSS_BROOD, w: 60, h: 40, r: 24, spd: 58, move: 'chase', gold: f => 60 + f * 20 },
+    boneking:   { n: 'Bone King', spr: BOSS_BONEKING, w: 44, h: 50, r: 20, spd: 96, move: 'lunge', dash: 300, gold: f => 60 + f * 20 },
+    warlord:    { n: 'Warlord', spr: BOSS_GUARDIAN, w: 52, h: 48, r: 23, spd: 66, move: 'charge', dash: 400, gold: f => 70 + f * 22 },
+    lich:       { n: 'Lich', spr: BOSS_BONEKING, w: 42, h: 48, r: 20, spd: 78, move: 'blink', gold: f => 70 + f * 22 },
+    monarch:    { n: 'Ooze Monarch', spr: BOSS_BROOD, w: 58, h: 42, r: 25, spd: 62, move: 'hop', gold: f => 70 + f * 22 },
   };
-  const BOSS_KINDS = ['guardian', 'brood', 'boneking'];
-  const BOSS_NAMES = { guardian: 'GUARDIAN', brood: 'BROODMOTHER', boneking: 'BONE KING' };
+  const BOSS_KINDS = ['guardian', 'brood', 'boneking', 'warlord', 'lich', 'monarch'];
+  const BOSS_NAMES = {};
+  for (const k in ETYPES) BOSS_NAMES[k] = (ETYPES[k].n || k).toUpperCase();
+
+  // ---- elites: a normal mob with one nasty twist and a colored halo ------
+  const ELITES = [
+    { n: 'Swift',    col: '#7ec96f', spdMul: 1.5 },
+    { n: 'Armored',  col: '#8fa2b8', drAdd: 5, spdMul: 0.85 },
+    { n: 'Venomous', col: '#b06ae0', venom: true },
+    { n: 'Volatile', col: '#e8763d', burst: true },
+    { n: 'Leeching', col: '#a4372e', drain: true },
+    { n: 'Warded',   col: '#5aa2e8', ward: true },
+  ];
+
+  // ---- biomes: each stretch of the dungeon has its own look and roster ----
+  const BIOMES = [
+    {
+      name: 'THE CATACOMBS', accent: '#c8a86a',
+      fog: 'rgba(5, 6, 3, 0.88)', tint: null, wallTint: null,
+      torch: '#e8763d', lightMul: 1, floorSet: [0, 1, 2, 3, 4, 5],
+      hazard: { spike: 1, brazier: 1 },
+      bosses: ['guardian', 'boneking'],
+      pool: { slime: 32, rat: 22, skeleton: 24, bat: 12, spider: 10, bonesword: 14, goblin: 8 },
+    },
+    {
+      name: 'THE FUNGAL WARRENS', accent: '#7ec96f',
+      fog: 'rgba(6, 14, 8, 0.84)', tint: 'rgba(94, 150, 84, 0.16)', wallTint: 'rgba(60, 110, 60, 0.2)',
+      torch: '#9fd8a8', lightMul: 1.1, floorSet: [2, 3, 4, 5],
+      hazard: { spike: 1.6, brazier: 0.5 },
+      bosses: ['brood', 'monarch'],
+      pool: { slime: 30, blob: 16, sporeling: 24, spider: 18, spiderling: 12, rat: 14, goblin: 8 },
+    },
+    {
+      name: 'THE FROZEN VAULTS', accent: '#8fb8e8',
+      fog: 'rgba(6, 10, 20, 0.9)', tint: 'rgba(110, 150, 200, 0.17)', wallTint: 'rgba(90, 130, 190, 0.22)',
+      torch: '#8fb8e8', lightMul: 0.86, floorSet: [0, 1, 4, 5],
+      hazard: { spike: 1.2, brazier: 0.8 },
+      bosses: ['boneking', 'lich'],
+      pool: { skeleton: 24, shieldbones: 18, wraith: 22, shade: 14, sentry: 12, bat: 10, golem: 8 },
+    },
+    {
+      name: 'THE EMBER DEEPS', accent: '#e8763d',
+      fog: 'rgba(18, 6, 3, 0.86)', tint: 'rgba(190, 100, 50, 0.16)', wallTint: 'rgba(150, 70, 40, 0.24)',
+      torch: '#e8a33d', lightMul: 1.05, floorSet: [0, 2, 4],
+      hazard: { spike: 0.7, brazier: 2 },
+      bosses: ['guardian', 'warlord'],
+      pool: { imp: 24, brute: 18, bonesword: 16, golem: 14, cultist: 14, sporeling: 10, bat: 10 },
+    },
+    {
+      name: 'THE BONE HALLS', accent: '#e8e0c8',
+      fog: 'rgba(10, 10, 8, 0.89)', tint: 'rgba(200, 190, 160, 0.1)', wallTint: 'rgba(180, 175, 150, 0.14)',
+      torch: '#e8d48a', lightMul: 0.95, floorSet: [1, 3, 5],
+      hazard: { spike: 1.3, brazier: 1 },
+      bosses: ['boneking', 'lich', 'warlord'],
+      pool: { skeleton: 26, bonesword: 22, shieldbones: 18, sentry: 14, necromancer: 10, wraith: 12 },
+    },
+    {
+      name: 'THE VOID BELOW', accent: '#b06ae0',
+      fog: 'rgba(8, 4, 14, 0.93)', tint: 'rgba(120, 80, 170, 0.18)', wallTint: 'rgba(100, 60, 150, 0.26)',
+      torch: '#b06ae0', lightMul: 0.78, floorSet: [4, 5],
+      hazard: { spike: 1.4, brazier: 1.2 },
+      bosses: ['lich', 'warlord', 'monarch'],
+      pool: { shade: 24, wraith: 18, cultist: 20, necromancer: 14, golem: 12, sporeling: 10, sentry: 10 },
+    },
+  ];
+  const biomeFor = f => BIOMES[(f - 1) % BIOMES.length];
   function pickEnemyType(floor) {
-    const pool = [
-      ['slime', Math.max(8, 40 - floor * 6)],
-      ['skeleton', 24 + floor * 4],
-      ['bat', 12 + floor * 2],
-      ['spider', 10 + floor * 3],
-      ['wraith', floor >= 2 ? 10 + floor * 4 : 0],
-      ['brute', floor >= 2 ? 6 + floor * 3 : 0],
-      ['golem', floor >= 3 ? 5 + floor * 2 : 0],
-    ];
+    const b = biomeFor(floor);
+    // late floors lean on whatever the biome considers its heavyweights
+    const list = [];
     let total = 0;
-    for (const [, w] of pool) total += w;
+    for (const k in b.pool) {
+      const et = ETYPES[k];
+      const heavy = (et.hp(1) > 20 || et.summon || et.guard) ? 1 : -1;
+      const w = Math.max(2, b.pool[k] + heavy * floor * 2.5);
+      list.push([k, w]);
+      total += w;
+    }
     let roll = Math.random() * total;
-    for (const [name, w] of pool) {
+    for (const [name, w] of list) {
       roll -= w;
       if (roll <= 0) return name;
     }
-    return 'slime';
+    return list[0][0];
   }
 
   // ---- state -------------------------------------------------------------
@@ -1330,14 +1449,22 @@
           const ch = pat[py][px];
           if (ch === '.') continue;
           const tx = r.x + px, ty = r.y + py;
+          // biomes weight their own hazards: the Deeps burn, the Warrens bite
+          const hz = (D.biome && D.biome.hazard) || { spike: 1, brazier: 1 };
           if (ch === 'R') D.tiles[idx(tx, ty)] = 3;
-          else if (ch === 'B') { D.tiles[idx(tx, ty)] = 4; D.braziers.push({ x: tx, y: ty }); }
-          else if (ch === 'S') { D.spikes.push({ x: tx, y: ty }); D.spikeSet.add(idx(tx, ty)); }
+          else if (ch === 'B') {
+            if (Math.random() < hz.brazier) { D.tiles[idx(tx, ty)] = 4; D.braziers.push({ x: tx, y: ty }); }
+            else if (Math.random() < hz.spike * 0.5) { D.spikes.push({ x: tx, y: ty }); D.spikeSet.add(idx(tx, ty)); }
+          } else if (ch === 'S') {
+            if (Math.random() < hz.spike) { D.spikes.push({ x: tx, y: ty }); D.spikeSet.add(idx(tx, ty)); }
+            else if (Math.random() < hz.brazier * 0.4) { D.tiles[idx(tx, ty)] = 4; D.braziers.push({ x: tx, y: ty }); }
+          }
         }
       }
     }
   }
   function generate() {
+    D.biome = biomeFor(D.floor);
     let L = null;
     for (let i = 0; i < 40 && !L; i++) L = tryLayout();
     if (!L) L = tryLayout() || { placed: new Set(['2,1']), cells: [{ gx: 2, gy: 1 }], startG: { gx: 2, gy: 1 }, bossCell: { gx: 2, gy: 1 }, treasureCell: { gx: 2, gy: 1 }, key: (a, b) => a + ',' + b };
@@ -1406,13 +1533,13 @@
       }
     }
     D.enemies.push({
-      type: BOSS_KINDS[Math.floor(Math.random() * BOSS_KINDS.length)],
+      // the biome decides which horror is holding the stairs
+      type: pick(D.biome.bosses.length ? D.biome.bosses : BOSS_KINDS),
       isBoss: true, room: bossRoom, homeRoom: bossRoom,
       x: (bposX + 0.5) * TILE, y: (bposY + 0.5) * TILE,
       hp: bossHp, maxHp: bossHp,
       dmgv: 25 + D.floor * 4,
       cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1, fa: Math.PI / 2, hurt: 0, aggro: false,
-      broodT: 5,
     });
     // treasure room holds a relic, or now and then a standout piece of gear
     if (Math.random() < 0.3) {
@@ -1498,9 +1625,12 @@
       if (!anywhere && D.seen[idx(x, y)]) continue;
       const type = pickEnemyType(D.floor);
       const et = ETYPES[type];
+      // champions: rare, obvious, and worth the trouble
+      const elite = Math.random() < Math.min(0.22, 0.04 + D.floor * 0.025) ? pick(ELITES) : null;
+      const hp = Math.round(et.hp(D.floor) * (elite ? 2.4 : 1));
       D.enemies.push({
-        type, x: px, y: py, homeRoom: r,
-        hp: et.hp(D.floor), maxHp: et.hp(D.floor),
+        type, x: px, y: py, homeRoom: r, elite,
+        hp, maxHp: hp,
         cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1,
         fa: Math.random() * Math.PI * 2, hurt: 0, aggro: false,
       });
@@ -1625,6 +1755,7 @@
     D.hotbar[0] = makeConsumable(1, 0, 'potion');
     D.hotbar[1] = makeConsumable(1, 0, 'food');
     D.inv = false; D.over = false; D.block = false;
+    D.poisonT = 0; D.poisonDmg = 0;
     D.lootChest = null; D.drag = null;
     D.msgs.length = 0;
     recalc();
@@ -1682,11 +1813,19 @@
     if (D.inv) ARCADE_LOCK.unlock(); else ARCADE_LOCK.lock();
   }
   function descend() {
+    const wasBiome = D.biome;
     D.floor++;
     D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + 15);
-    say('FLOOR ' + D.floor, '#d9a94e');
-    A.sweep(400, 60, 0.5, 'sine', 0.06);
     generate();
+    say('FLOOR ' + D.floor, '#d9a94e');
+    // crossing into new country deserves its own announcement
+    if (D.biome !== wasBiome) {
+      D.bannerT = 3.5;
+      say(D.biome.name, D.biome.accent);
+      A.sweep(140, 520, 0.9, 'sine', 0.07);
+    } else {
+      A.sweep(400, 60, 0.5, 'sine', 0.06);
+    }
   }
 
   document.getElementById('pickDungeon').addEventListener('click', () => {
@@ -1899,11 +2038,19 @@
       let base = heroDmg() + Math.floor(Math.random() * 3);
       if (en.hp >= en.maxHp) base += D.st.first;          // ambush bonus
       if (en.hp / en.maxHp < 0.35) base += D.st.execute;  // finisher bonus
-      const dmg = Math.max(1, Math.round(base * (crit ? 2 : 1)) - (ETYPES[en.type].dr || 0));
+      let dmg = Math.max(1, Math.round(base * (crit ? 2 : 1)) - enemyDR(en));
+      // shield-bearers eat frontal hits; you have to go around them
+      const et2 = ETYPES[en.type];
+      if (et2.guard && Math.abs(angDiff(Math.atan2(-dy, -dx), en.fa)) < 1.05) {
+        dmg = Math.max(1, Math.round(dmg * et2.guard));
+        floatText(en.x, en.y - 30, 'blocked', '#8fa2b8');
+        A.bleep(300, 0.05, 'square', 0.03);
+      }
       if (crit && D.st.critHeal) D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + D.st.critHeal);
       damageEnemy(en, dmg, crit);
       const nd = d || 1;
-      nudge(en, (dx / nd) * 16 * D.st.knock, (dy / nd) * 16 * D.st.knock, ETYPES[en.type].r);
+      const kn = ETYPES[en.type].move === 'turret' ? 0 : 1;
+      nudge(en, (dx / nd) * 16 * D.st.knock * kn, (dy / nd) * 16 * D.st.knock * kn, ETYPES[en.type].r);
     }
     // braziers shatter under a swing
     for (let i = D.braziers.length - 1; i >= 0; i--) {
@@ -1922,14 +2069,152 @@
       A.bleep(150, 0.1, 'square', 0.05);
     }
   }
+  const enemyDR = en => (ETYPES[en.type].dr || 0) + (en.elite ? (en.elite.drAdd || 0) : 0);
   function damageEnemy(en, dmg, crit) {
+    // warded elites shrug off the first few hits of any burst
+    if (en.elite && en.elite.ward && (en.wardT || 0) <= 0) {
+      en.wardT = 2.4;
+      floatText(en.x, en.y - 20, 'warded', '#5aa2e8');
+      A.bleep(880, 0.05, 'sine', 0.03);
+      en.aggro = true;
+      return;
+    }
     en.hp -= dmg;
     en.hurt = 0.18;
     en.aggro = true;
+    if (en.type === 'goblin') en.fleeT = 2.5; // spooked, and it runs
     if (D.st.chill && Math.random() < D.st.chill) en.slow = Math.max(en.slow || 0, 1.2);
     floatText(en.x, en.y - 20, '' + dmg + (crit ? '!' : ''), crit ? '#e8a33d' : '#e8e0c8');
     A.bleep(220 + Math.random() * 120, 0.06, 'sawtooth', 0.035);
     if (en.hp <= 0) killEnemy(en);
+  }
+  // one place to stand up a fresh mob next to another one
+  function spawnMinion(type, near, offx, offy) {
+    const et = ETYPES[type];
+    if (!et) return null;
+    const hp = et.hp(D.floor);
+    const mn = {
+      type, homeRoom: near.homeRoom,
+      x: near.x + offx, y: near.y + offy,
+      hp, maxHp: hp,
+      cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1,
+      fa: Math.random() * Math.PI * 2, hurt: 0, aggro: true, minion: true,
+    };
+    unstick(mn, et.r);
+    D.enemies.push(mn);
+    return mn;
+  }
+  // bombers, volatile elites and a few boss beats all end the same way
+  function detonate(en, rMul) {
+    const et = ETYPES[en.type];
+    const ex = et.explode || { r: 70, dmg: f => 14 + f * 3, col: '#e8763d' };
+    const r = ex.r * (rMul || 1);
+    D.novaT = 0.3; D.novaR = r; D.novaCol = ex.col;
+    D.shake = Math.max(D.shake, 8);
+    if (Math.hypot(D.hero.x - en.x, D.hero.y - en.y) < r + HERO_R) {
+      hurtHeroEnv(typeof ex.dmg === 'function' ? ex.dmg(D.floor) : ex.dmg);
+    }
+    for (const o of D.enemies.slice()) {
+      if (o === en) continue;
+      if (Math.hypot(o.x - en.x, o.y - en.y) < r + ETYPES[o.type].r) {
+        damageEnemy(o, Math.round((typeof ex.dmg === 'function' ? ex.dmg(D.floor) : ex.dmg) * 0.5), false);
+      }
+    }
+    floatText(en.x, en.y - 20, 'BOOM', ex.col);
+    A.sweep(500, 60, 0.35, 'sawtooth', 0.07);
+    const i = D.enemies.indexOf(en);
+    if (i >= 0) { D.enemies.splice(i, 1); gainXp(Math.round(en.maxHp / 4)); }
+  }
+  // ---- bosses: each one fights its own way, and harder once bloodied -----
+  function bossBrain(en, dt, dx, dy, d) {
+    const bDmg = 16 + D.floor * 3;
+    const aim2 = Math.atan2(dy, dx);
+    const rage = en.hp / en.maxHp < 0.5;
+    if (rage && !en.raged) {
+      en.raged = true;
+      say(BOSS_NAMES[en.type] + ' ENRAGES', '#a4372e');
+      floatText(en.x, en.y - 40, 'ENRAGE', '#a4372e');
+      A.sweep(200, 700, 0.6, 'sawtooth', 0.08);
+      D.shake = Math.max(D.shake, 10);
+    }
+    const hasten = rage ? 0.65 : 1;
+    en.shotT = (en.shotT === undefined ? 1.5 : en.shotT) - dt;
+    if (en.type === 'brood' || en.type === 'monarch') {
+      // the mothers keep the room full of small things
+      en.broodT = (en.broodT === undefined ? 5 : en.broodT) - dt;
+      if (en.broodT <= 0) {
+        en.broodT = (en.type === 'brood' ? 6 : 5) * hasten;
+        const kind = en.type === 'brood' ? 'spiderling' : 'blob';
+        const lings = D.enemies.filter(x => x.type === kind).length;
+        const cap = rage ? 9 : 6;
+        for (let s = 0; s < (rage ? 3 : 2) && lings + s < cap; s++) {
+          const a = Math.random() * Math.PI * 2;
+          spawnMinion(kind, en, Math.cos(a) * 30, Math.sin(a) * 30);
+        }
+        floatText(en.x, en.y - 30, en.type === 'brood' ? 'brood!' : 'split!', '#b06ae0');
+        A.bleep(300, 0.1, 'square', 0.04);
+      }
+    }
+    if (en.type === 'lich') {
+      // raises a bodyguard, then punishes you for ignoring it
+      en.sumT = (en.sumT === undefined ? 3 : en.sumT) - dt;
+      if (en.sumT <= 0) {
+        en.sumT = 8 * hasten;
+        const alive = D.enemies.filter(x => x.summoner === en).length;
+        for (let s = 0; s < 2 && alive + s < (rage ? 6 : 4); s++) {
+          const a = Math.random() * Math.PI * 2;
+          const mn = spawnMinion(rage ? 'shieldbones' : 'bonesword', en, Math.cos(a) * 36, Math.sin(a) * 36);
+          if (mn) mn.summoner = en;
+        }
+        floatText(en.x, en.y - 34, 'ARISE', '#9fd8a8');
+        A.sweep(120, 480, 0.45, 'sine', 0.05);
+      }
+    }
+    if (en.type === 'warlord' && en.chPhase === 'run') {
+      // its charge drags a shockwave along behind it
+      en.waveT = (en.waveT || 0) - dt;
+      if (en.waveT <= 0) {
+        en.waveT = 0.22;
+        for (const off of [-0.5, 0.5]) fireShot(en, aim2 + off, 190, Math.round(bDmg * 0.7), '#e8a33d');
+      }
+    }
+    if (en.shotT > 0) return;
+    if (en.type === 'guardian') {
+      en.volley = ((en.volley || 0) + 1) % 2;
+      if (en.volley) {
+        const n = rage ? 16 : 12;
+        for (let k = 0; k < n; k++) fireShot(en, (k / n) * Math.PI * 2, 125, bDmg, '#e86a4a');
+      } else {
+        for (const off of (rage ? [-0.5, -0.25, 0, 0.25, 0.5] : [-0.28, 0, 0.28])) {
+          fireShot(en, aim2 + off, 205, bDmg, '#e86a4a');
+        }
+      }
+      en.shotT = 2.3 * hasten;
+    } else if (en.type === 'brood') {
+      for (const off of [-0.32, 0, 0.32]) fireShot(en, aim2 + off, 170, bDmg, '#b06ae0');
+      en.shotT = 2.5 * hasten;
+    } else if (en.type === 'monarch') {
+      // a ground pound that throws globs in a ring
+      const n = rage ? 14 : 10;
+      for (let k = 0; k < n; k++) fireShot(en, (k / n) * Math.PI * 2 + Math.random() * 0.3, 140, bDmg, '#7ec96f');
+      D.shake = Math.max(D.shake, 6);
+      en.shotT = 3.2 * hasten;
+    } else if (en.type === 'lich') {
+      // slow, seeking bolts that make you keep moving
+      for (const off of [-0.18, 0.18]) {
+        fireShot(en, aim2 + off, 120, bDmg, '#b06ae0', true);
+      }
+      if (rage) fireShot(en, aim2, 120, bDmg, '#b06ae0', true);
+      en.shotT = 2.6 * hasten;
+    } else if (en.type === 'warlord') {
+      for (const off of [-0.16, 0, 0.16]) fireShot(en, aim2 + off, 215, bDmg, '#e8a33d');
+      en.shotT = 2.8 * hasten;
+    } else {
+      const n = rage ? 12 : 8;
+      for (let k = 0; k < n; k++) fireShot(en, (k / n) * Math.PI * 2 + D.t, 150, bDmg, '#e8d48a');
+      en.shotT = 3 * hasten;
+    }
+    A.bleep(240, 0.08, 'sawtooth', 0.04);
   }
   function castSpell() {
     const sp = activeSpell();
@@ -1998,9 +2283,22 @@
   }
   function killEnemy(en) {
     const et = ETYPES[en.type];
-    gainGold(et.gold(D.floor) + Math.floor(Math.random() * 4), en.x, en.y - 26);
-    gainXp(Math.round(en.maxHp / 3) + D.floor);
+    const boon = en.elite ? 2.5 : 1;
+    // a cutpurse coughs up everything it lifted off you
+    gainGold(Math.round(et.gold(D.floor) * boon) + (en.loot || 0) + Math.floor(Math.random() * 4),
+      en.x, en.y - 26);
+    gainXp(Math.round((en.maxHp / 3) * (en.elite ? 1.6 : 1)) + D.floor);
     D.enemies.splice(D.enemies.indexOf(en), 1);
+    // some things don't die so much as become two smaller problems
+    if (et.split && !en.minion) {
+      for (let s = 0; s < et.split.n; s++) {
+        const a = (s / et.split.n) * Math.PI * 2 + Math.random();
+        const mn = spawnMinion(et.split.type, en, Math.cos(a) * 16, Math.sin(a) * 16);
+        if (mn) mn.minion = true;
+      }
+      floatText(en.x, en.y - 18, 'splits!', '#7ec96f');
+    }
+    if (en.elite && en.elite.burst) detonate(Object.assign({}, en, { type: 'sporeling' }), 1.25);
     // the fallen stay where they fell, all floor long
     D.corpses.push({ x: en.x, y: en.y, type: en.type, face: en.face, rot: Math.random() < 0.5 ? 1 : -1 });
     D.shake = Math.max(D.shake, en.isBoss ? 14 : 4);
@@ -2017,7 +2315,7 @@
       bossLoot(en);
       openSeal(true);
     } else {
-      const roll = Math.random();
+      const roll = Math.random() * (en.elite ? 0.25 : 1);
       if (roll < 0.07) {
         // scraps: whatever the thing was carrying
         D.drops.push({
@@ -2077,11 +2375,11 @@
     if (D.hero.hp <= 0) { D.hero.hp = 0; die(); }
   }
   // environmental damage: spikes and flames ignore blocking
-  function fireShot(en, ang, spd, dmg, col) {
+  function fireShot(en, ang, spd, dmg, col, homing) {
     D.eshots.push({
       x: en.x, y: en.y - 6,
       vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
-      dmg, col, ttl: 3.2,
+      dmg, col, ttl: 3.2, homing: homing ? spd : 0,
     });
   }
   function hurtHeroShot(s) {
@@ -2146,7 +2444,7 @@
         const d = Math.hypot(en.x - D.hero.x, en.y - D.hero.y);
         if (d > a.r + ETYPES[en.type].r) continue;
         if (a.chill) en.slow = Math.max(en.slow || 0, a.chill);
-        damageEnemy(en, Math.max(1, a.dmg - (ETYPES[en.type].dr || 0)), false);
+        damageEnemy(en, Math.max(1, a.dmg - enemyDR(en)), false);
       }
       D.novaT = 0.3; D.novaR = a.r; D.novaCol = a.col;
       D.shake = Math.max(D.shake, 5);
@@ -2316,6 +2614,7 @@
     D.castT = Math.max(0, (D.castT || 0) - dt);
     D.hurtT = Math.max(0, D.hurtT - dt);
     D.novaT = Math.max(0, (D.novaT || 0) - dt);
+    D.bannerT = Math.max(0, (D.bannerT || 0) - dt);
     for (let i = D.floats.length - 1; i >= 0; i--) {
       const f = D.floats[i];
       f.y -= 26 * dt; f.t -= dt;
@@ -2346,6 +2645,13 @@
     D.hero.moving = !!(ax || ay);
     D.hasteT = Math.max(0, (D.hasteT || 0) - dt);
     tickBuffs(dt);
+    if (D.poisonT > 0) {
+      // venom ignores armor; it just runs its course
+      D.poisonT -= dt;
+      D.hero.hp -= D.poisonDmg * dt;
+      if (Math.random() < dt * 3) floatText(D.hero.x, D.hero.y - 18, '·', '#b06ae0');
+      if (D.hero.hp <= 0) { D.hero.hp = 0; die(); return; }
+    }
     if (D.st.regen) D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + D.st.regen * dt);
     D.rollT = Math.max(0, D.rollT - dt);
     D.rollCd = Math.max(0, D.rollCd - dt);
@@ -2496,7 +2802,7 @@
       }
       for (const en of D.enemies) {
         if (Math.hypot(en.x - b.x, en.y - b.y) < ETYPES[en.type].r + 5) {
-          damageEnemy(en, Math.max(1, b.dmg - (ETYPES[en.type].dr || 0)), false);
+          damageEnemy(en, Math.max(1, b.dmg - enemyDR(en)), false);
           D.bolts.splice(i, 1);
           break;
         }
@@ -2506,6 +2812,13 @@
     // ---- enemy shots: slow, visible, and meant to be dodged --------------
     for (let i = D.eshots.length - 1; i >= 0; i--) {
       const s = D.eshots[i];
+      if (s.homing) {
+        // seeking bolts bend toward you, slowly enough to outrun
+        const a = Math.atan2(D.hero.y - s.y, D.hero.x - s.x);
+        const cur = Math.atan2(s.vy, s.vx);
+        const na = cur + Math.max(-1.6 * dt, Math.min(1.6 * dt, angDiff(a, cur)));
+        s.vx = Math.cos(na) * s.homing; s.vy = Math.sin(na) * s.homing;
+      }
       s.x += s.vx * dt; s.y += s.vy * dt;
       s.ttl -= dt;
       if (s.ttl <= 0 || solid(Math.floor(s.x / TILE), Math.floor(s.y / TILE))) {
@@ -2564,11 +2877,126 @@
       }
 
       const nd = d || 1;
-      if (et.move === 'erratic') {
-        const wob = Math.sin(D.t * 6 + en.x * 0.013) * 0.85;
+      const spd = et.spd * slowMul * (en.elite ? (en.elite.spdMul || 1) : 1);
+      if (et.move === 'erratic' || et.move === 'swarm') {
+        // swarmers also shoulder off each other, so a pack spreads instead of stacking
+        const wob = Math.sin(D.t * 6 + en.x * 0.013) * (et.move === 'swarm' ? 0.45 : 0.85);
         let vx = dx / nd - (dy / nd) * wob, vy = dy / nd + (dx / nd) * wob;
+        if (et.move === 'swarm') {
+          for (const o of D.enemies) {
+            if (o === en || o.homeRoom !== en.homeRoom) continue;
+            const sx2 = en.x - o.x, sy2 = en.y - o.y;
+            const sd = Math.hypot(sx2, sy2);
+            if (sd > 0 && sd < et.r * 3) { vx += (sx2 / sd) * 0.7; vy += (sy2 / sd) * 0.7; }
+          }
+        }
         const vn = Math.hypot(vx, vy) || 1;
-        moveWith(en, (vx / vn) * et.spd * slowMul, (vy / vn) * et.spd * slowMul, dt, et.r);
+        moveWith(en, (vx / vn) * spd, (vy / vn) * spd, dt, et.r);
+      } else if (et.move === 'hop') {
+        // blobs gather themselves, then commit to one springy leap
+        en.hopT = (en.hopT || 0) - dt;
+        if (en.hopT <= 0) {
+          en.hopping = !en.hopping;
+          en.hopT = en.hopping ? 0.34 : 0.42 + Math.random() * 0.3;
+          if (en.hopping) { en.hdx = dx / nd; en.hdy = dy / nd; A.bleep(180, 0.05, 'sine', 0.02); }
+        }
+        if (en.hopping) moveWith(en, en.hdx * spd * 2.4, en.hdy * spd * 2.4, dt, et.r);
+      } else if (et.move === 'charge') {
+        // brutes paw the ground, then run flat out until something stops them
+        en.chT = (en.chT || 0) - dt;
+        if (en.chPhase === 'wind') {
+          if (en.chT <= 0) {
+            en.chPhase = 'run'; en.chT = 1.5;
+            en.cdx = dx / nd; en.cdy = dy / nd;
+            A.bleep(140, 0.12, 'sawtooth', 0.05);
+          }
+        } else if (en.chPhase === 'run') {
+          const bx = en.x, by = en.y;
+          moveWith(en, en.cdx * (et.dash || 320) * slowMul, en.cdy * (et.dash || 320) * slowMul, dt, et.r);
+          const moved = Math.hypot(en.x - bx, en.y - by);
+          if (en.chT <= 0 || moved < 0.6) {
+            // slamming a wall leaves it winded and wide open
+            en.chPhase = 'rest';
+            en.chT = moved < 0.6 ? 1.6 : 0.9;
+            if (moved < 0.6) {
+              D.shake = Math.max(D.shake, 7);
+              floatText(en.x, en.y - 24, 'STUNNED', '#e8a33d');
+              A.bleep(90, 0.16, 'sawtooth', 0.06);
+            }
+          }
+        } else if (en.chPhase === 'rest') {
+          if (en.chT <= 0) en.chPhase = null;
+        } else {
+          moveWith(en, (dx / nd) * spd, (dy / nd) * spd, dt, et.r);
+          if (d < TILE * 6 && d > TILE * 1.6 && los(en.x, en.y, D.hero.x, D.hero.y)) {
+            en.chPhase = 'wind'; en.chT = 0.55;
+            A.bleep(420, 0.08, 'square', 0.03);
+          }
+        }
+      } else if (et.move === 'orbit') {
+        // holds a ring around you and sidesteps along it while casting
+        if (!en.orbitDir) en.orbitDir = Math.random() < 0.5 ? 1 : -1;
+        const want = et.orbit || 128;
+        const radial = (d - want) / want;
+        let vx = (dx / nd) * radial * 1.6 - (dy / nd) * en.orbitDir;
+        let vy = (dy / nd) * radial * 1.6 + (dx / nd) * en.orbitDir;
+        const vn = Math.hypot(vx, vy) || 1;
+        moveWith(en, (vx / vn) * spd, (vy / vn) * spd, dt, et.r);
+        if (Math.random() < dt * 0.4) en.orbitDir *= -1;
+      } else if (et.move === 'blink') {
+        // fades out and reappears somewhere you weren't looking
+        en.blinkT = (en.blinkT === undefined ? 1.6 + Math.random() : en.blinkT) - dt;
+        en.fade = Math.max(0, (en.fade || 0) - dt);
+        if (en.blinkT <= 0) {
+          en.blinkT = 2.4 + Math.random() * 1.6;
+          const a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 2.4 + Math.PI;
+          const dist = 46 + Math.random() * 40;
+          const nx2 = D.hero.x + Math.cos(a) * dist, ny2 = D.hero.y + Math.sin(a) * dist;
+          if (!collide(nx2, ny2, et.r)) {
+            D.floats.push({ x: en.x, y: en.y - 12, text: '~', color: '#8fb8e8', t: 0.5 });
+            en.x = nx2; en.y = ny2;
+            en.fade = 0.3;
+            A.bleep(760, 0.06, 'sine', 0.03);
+          }
+        }
+        if (d > TILE * 1.4) moveWith(en, (dx / nd) * spd * 0.7, (dy / nd) * spd * 0.7, dt, et.r);
+      } else if (et.move === 'flee') {
+        // cutpurses want your gold, not a fight — they close, tag you, and bolt
+        const scared = en.fleeT > 0;
+        en.fleeT = Math.max(0, (en.fleeT || 0) - dt);
+        const s2 = scared ? -1 : 1;
+        moveWith(en, (dx / nd) * spd * s2, (dy / nd) * spd * s2, dt, et.r);
+      } else if (et.move === 'bomber') {
+        // runs itself into you and pops; killing it early is the whole trick
+        moveWith(en, (dx / nd) * spd * 1.15, (dy / nd) * spd * 1.15, dt, et.r);
+        if (d < et.r + HERO_R + 16 && !en.fuse) { en.fuse = 0.55; A.bleep(880, 0.06, 'square', 0.04); }
+        if (en.fuse) {
+          en.fuse -= dt;
+          if (en.fuse <= 0) { detonate(en); continue; }
+        }
+      } else if (et.move === 'guard') {
+        // advances behind its shield; flanking it is the only fast way through
+        const step = en.cd > 0.35 ? 0.35 : 1;
+        moveWith(en, (dx / nd) * spd * step, (dy / nd) * spd * step, dt, et.r);
+      } else if (et.move === 'turret') {
+        // rooted. it only turns.
+      } else if (et.move === 'summon') {
+        // hangs back behind whatever it has raised
+        const want = TILE * 5;
+        const dir = d < want ? -1 : 0.6;
+        moveWith(en, (dx / nd) * spd * dir, (dy / nd) * spd * dir, dt, et.r);
+        en.sumT = (en.sumT === undefined ? 2 : en.sumT) - dt;
+        if (en.sumT <= 0) {
+          en.sumT = et.summon.cd;
+          const alive = D.enemies.filter(x => x.summoner === en).length;
+          for (let s = 0; s < et.summon.n && alive + s < et.summon.cap; s++) {
+            const a = Math.random() * Math.PI * 2;
+            const mn = spawnMinion(et.summon.type, en, Math.cos(a) * 34, Math.sin(a) * 34);
+            if (mn) mn.summoner = en;
+          }
+          floatText(en.x, en.y - 28, 'RISE', '#9fd8a8');
+          A.sweep(120, 420, 0.4, 'sine', 0.045);
+        }
       } else if (et.move === 'lunge') {
         en.lt = (en.lt || 0) - dt;
         en.lcool = Math.max(0, (en.lcool || 0) - dt);
@@ -2583,7 +3011,7 @@
           moveWith(en, en.ldx * et.dash * slowMul, en.ldy * et.dash * slowMul, dt, et.r);
           if (en.lt <= 0) { en.lphase = 'stalk'; en.lcool = 1.3; }
         } else {
-          moveWith(en, (dx / nd) * et.spd * slowMul, (dy / nd) * et.spd * slowMul, dt, et.r);
+          moveWith(en, (dx / nd) * spd, (dy / nd) * spd, dt, et.r);
           if (d < TILE * 3.4 && en.lcool <= 0) {
             en.lphase = 'wind';
             en.lt = 0.35;
@@ -2600,7 +3028,7 @@
             mx = -(dy / nd) * en.strafeDir; my = (dx / nd) * en.strafeDir;
           }
         }
-        moveWith(en, mx * et.spd * slowMul, my * et.spd * slowMul, dt, et.r);
+        moveWith(en, mx * spd, my * spd, dt, et.r);
       }
       if (et.shot) {
         en.shotT = (en.shotT === undefined ? 0.8 + Math.random() : en.shotT) - dt;
@@ -2611,56 +3039,30 @@
         }
       }
       clampRoom();
-      if (en.isBoss) {
-        if (en.type === 'brood') {
-          en.broodT -= dt;
-          if (en.broodT <= 0) {
-            en.broodT = 6;
-            const lings = D.enemies.filter(x => x.type === 'spiderling').length;
-            for (let s = 0; s < 2 && lings + s < 6; s++) {
-              const a = Math.random() * Math.PI * 2;
-              const sp = {
-                type: 'spiderling', homeRoom: en.homeRoom,
-                x: en.x + Math.cos(a) * 30, y: en.y + Math.sin(a) * 30,
-                hp: ETYPES.spiderling.hp(D.floor), maxHp: ETYPES.spiderling.hp(D.floor),
-                cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1, fa: a, hurt: 0, aggro: true,
-              };
-              unstick(sp, ETYPES.spiderling.r);
-              D.enemies.push(sp);
-            }
-            floatText(en.x, en.y - 30, 'brood!', '#b06ae0');
-            A.bleep(300, 0.1, 'square', 0.04);
-          }
-        }
-        // every boss runs a bullet pattern on top of its movement
-        const bDmg = 16 + D.floor * 3;
-        en.shotT = (en.shotT === undefined ? 1.5 : en.shotT) - dt;
-        if (en.shotT <= 0) {
-          const aim2 = Math.atan2(dy, dx);
-          if (en.type === 'guardian') {
-            en.volley = ((en.volley || 0) + 1) % 2;
-            if (en.volley) {
-              for (let k = 0; k < 12; k++) fireShot(en, (k / 12) * Math.PI * 2, 125, bDmg, '#e86a4a');
-            } else {
-              for (const off of [-0.28, 0, 0.28]) fireShot(en, aim2 + off, 205, bDmg, '#e86a4a');
-            }
-            en.shotT = 2.3;
-          } else if (en.type === 'brood') {
-            for (const off of [-0.32, 0, 0.32]) fireShot(en, aim2 + off, 170, bDmg, '#b06ae0');
-            en.shotT = 2.5;
-          } else {
-            for (let k = 0; k < 8; k++) fireShot(en, (k / 8) * Math.PI * 2 + D.t, 150, bDmg, '#e8d48a');
-            en.shotT = 3;
-          }
-          A.bleep(240, 0.08, 'sawtooth', 0.04);
-        }
-      }
+      if (en.isBoss) bossBrain(en, dt, dx, dy, d);
       if (dx) en.face = dx > 0 ? 1 : -1;
-      en.fa = Math.atan2(dy, dx);
+      if (et.move !== 'guard' || d > et.r + HERO_R + 4) en.fa = Math.atan2(dy, dx);
       if (d < et.r + HERO_R + 5 && en.cd <= 0) {
+        const hpBefore = D.hero.hp;
         en.cd = en.isBoss ? 0.95 : 0.7;
-        hurtHeroFrom(en, en.isBoss ? en.dmgv : et.dmg(D.floor));
+        const raw = en.isBoss ? en.dmgv : et.dmg(D.floor);
+        hurtHeroFrom(en, Math.round(raw * (en.elite ? 1.35 : 1)));
+        const landed = hpBefore - D.hero.hp;
+        if (landed > 0 && en.elite) {
+          // venom lingers, leeches feed
+          if (en.elite.venom) { D.poisonT = 4; D.poisonDmg = 2 + D.floor * 0.6; }
+          if (en.elite.drain) en.hp = Math.min(en.maxHp, en.hp + Math.round(landed * 0.5));
+        }
+        if (landed > 0 && et.steal && D.hero.gold > 0) {
+          const stolen = Math.min(D.hero.gold, 8 + D.floor * 4);
+          D.hero.gold -= stolen;
+          en.loot = (en.loot || 0) + stolen;
+          en.fleeT = 4;
+          floatText(en.x, en.y - 26, '-' + stolen + 'g', '#d9a94e');
+          say('Your purse is lighter!', '#d9a94e');
+        }
       }
+      if (en.wardT) en.wardT = Math.max(0, en.wardT - dt);
     }
     // allies (necromancer thralls): hunt nearby foes, crumble in time
     for (let i = D.allies.length - 1; i >= 0; i--) {
@@ -2684,7 +3086,7 @@
         al.face = dx2 > 0 ? 1 : -1;
         if (nd2 < ETYPES[best.type].r + 10 && al.cd <= 0) {
           al.cd = 0.7;
-          damageEnemy(best, Math.max(1, Math.round((5 + D.floor) * D.st.spellMult) - (ETYPES[best.type].dr || 0)), false);
+          damageEnemy(best, Math.max(1, Math.round((5 + D.floor) * D.st.spellMult) - enemyDR(best)), false);
         }
       } else {
         const dx2 = D.hero.x - al.x, dy2 = D.hero.y - al.y;
@@ -2899,6 +3301,8 @@
     const tx0 = Math.max(0, cr.x - 1), tx1 = Math.min(MW - 1, cr.x + cr.w);
     const ty0 = Math.max(0, cr.y - 1), ty1 = Math.min(MH - 1, cr.y + cr.h);
     const inV = (tx, ty) => tx >= tx0 && tx <= tx1 && ty >= ty0 && ty <= ty1;
+    const bio = D.biome || BIOMES[0];
+    const bset = bio.floorSet || [0, 1, 2, 3, 4, 5];
 
     for (let y = ty0; y <= ty1; y++) {
       for (let x = tx0; x <= tx1; x++) {
@@ -2915,7 +3319,7 @@
             ctx.fillRect(sx, sy, TILE, 2);
           } else {
             if (cataImg.rdy) {
-              drawR(cataImg, CATA_FLOORS[hv % 6], sx, sy, TILE, TILE);
+              drawR(cataImg, CATA_FLOORS[bset[hv % bset.length]], sx, sy, TILE, TILE);
             } else if (atlasReady) {
               const fr = FLOORS[hv % 8];
               drawA([fr[0], fr[1], 16, 16], sx, sy, TILE, TILE);
@@ -2927,6 +3331,11 @@
                 ctx.fillRect(sx + (hv % 5) * 5 + 4, sy + (hv % 7) * 3 + 4, 6, 2);
               }
             }
+            // biome wash: same stones, very different country
+            if (bio.tint) {
+              ctx.fillStyle = bio.tint;
+              ctx.fillRect(sx, sy, TILE, TILE);
+            }
             if (solid(x, y - 1)) {
               ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
               ctx.fillRect(sx, sy, TILE, 7);
@@ -2935,12 +3344,16 @@
         } else if (D.tiles[idx(x, y)] === 3 || D.tiles[idx(x, y)] === 4) {
           // barrel or brazier base sits on visible floor
           if (cataImg.rdy) {
-            drawR(cataImg, CATA_FLOORS[hv % 6], sx, sy, TILE, TILE);
+            drawR(cataImg, CATA_FLOORS[bset[hv % bset.length]], sx, sy, TILE, TILE);
           } else if (atlasReady) {
             const fr = FLOORS[hv % 8];
             drawA([fr[0], fr[1], 16, 16], sx, sy, TILE, TILE);
           } else {
             ctx.fillStyle = hv % 3 === 0 ? '#343a2e' : '#3a4033';
+            ctx.fillRect(sx, sy, TILE, TILE);
+          }
+          if (bio.tint) {
+            ctx.fillStyle = bio.tint;
             ctx.fillRect(sx, sy, TILE, TILE);
           }
           if (D.tiles[idx(x, y)] === 3) {
@@ -2981,8 +3394,10 @@
         } else if (y + 1 < MH && D.tiles[idx(x, y + 1)] === 1) {
           if (cataImg.rdy) {
             drawR(cataImg, CATA_WALL, sx, sy, TILE, TILE);
+            if (bio.wallTint) { ctx.fillStyle = bio.wallTint; ctx.fillRect(sx, sy, TILE, TILE); }
           } else if (atlasReady) {
             drawA(AT.wallMid, sx, sy, TILE, TILE);
+            if (bio.wallTint) { ctx.fillStyle = bio.wallTint; ctx.fillRect(sx, sy, TILE, TILE); }
           } else {
             ctx.fillStyle = '#4c5140';
             ctx.fillRect(sx, sy, TILE, TILE);
@@ -3241,7 +3656,7 @@
       ctx.drawImage(TORCH, sx + TILE / 2 - 6, sy + TILE - 14, 12, 12);
       const fl = reducedMotion ? 1 : 0.8 + 0.2 * Math.sin(D.t * 9 + tc.ph);
       ctx.globalAlpha = 0.5 * fl;
-      ctx.fillStyle = '#e8a33d';
+      ctx.fillStyle = bio.torch;
       ctx.beginPath();
       ctx.arc(sx + TILE / 2, sy + TILE - 11, 4 + fl * 2, 0, Math.PI * 2);
       ctx.fill();
@@ -3290,6 +3705,17 @@
         ctx.fill();
         ctx.globalAlpha = 1;
       }
+      // champions wear their modifier as a slow halo
+      if (en.elite) {
+        const pl = 0.35 + 0.15 * Math.sin(D.t * 3 + en.x * 0.02);
+        ctx.globalAlpha = pl;
+        ctx.strokeStyle = en.elite.col;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, et.r + 7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       ctx.save();
       ctx.translate(sx, sy);
       ctx.scale(en.face, 1);
@@ -3298,7 +3724,7 @@
       ctx.beginPath();
       ctx.ellipse(0, et.h / 2, et.r, 4, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = en.hurt > 0 ? 0.55 : 1;
+      ctx.globalAlpha = en.hurt > 0 ? 0.55 : (en.fade > 0 ? 0.35 : 1);
       const bcm = BC_MAP[en.type];
       const bcs = bcm && bcSprite(bcm.s, bcm.tint);
       const eanim = atlasReady && AT[en.type];
@@ -3339,13 +3765,51 @@
         ctx.fillRect(sx - bw / 2, sy - et.h / 2 - 9, bw, 4);
         ctx.fillStyle = en.isBoss ? '#e8a33d' : '#a4372e';
         ctx.fillRect(sx - bw / 2, sy - et.h / 2 - 9, bw * Math.max(0, en.hp / en.maxHp), 4);
-        if (en.isBoss) {
-          ctx.fillStyle = '#e8a33d';
+        if (en.isBoss || en.elite) {
+          ctx.fillStyle = en.isBoss ? '#e8a33d' : en.elite.col;
           ctx.font = '600 10px ' + MONO;
           ctx.textAlign = 'center';
-          ctx.fillText(BOSS_NAMES[en.type] || 'BOSS', sx, sy - et.h / 2 - 14);
+          const label = en.isBoss ? (BOSS_NAMES[en.type] || 'BOSS')
+            : (en.elite.n + ' ' + (et.n || en.type)).toUpperCase();
+          ctx.fillText(label, sx, sy - et.h / 2 - 14);
           ctx.textAlign = 'left';
         }
+      }
+      // charge telegraph: the line it is about to run down
+      if (en.chPhase === 'wind') {
+        ctx.globalAlpha = 0.35;
+        ctx.strokeStyle = '#a4372e';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + Math.cos(en.fa) * TILE * 6, sy + Math.sin(en.fa) * TILE * 6);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else if (en.chPhase === 'rest') {
+        ctx.fillStyle = '#e8a33d';
+        ctx.font = '600 10px ' + MONO;
+        ctx.textAlign = 'center';
+        ctx.fillText('*', sx, sy - et.h / 2 - 18);
+        ctx.textAlign = 'left';
+      }
+      // a bomber about to go off flashes so you can back off or kill it
+      if (en.fuse > 0 && Math.floor(D.t * 12) % 2) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#e8763d';
+        ctx.beginPath();
+        ctx.arc(sx, sy, (ETYPES[en.type].explode || { r: 70 }).r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      // shield-bearers show which side is the bad side to attack
+      if (et.guard) {
+        ctx.globalAlpha = 0.55;
+        ctx.strokeStyle = '#8fa2b8';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(sx, sy, et.r + 5, en.fa - 1.05, en.fa + 1.05);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
       }
     }
     for (const s of D.eshots) {
@@ -3499,7 +3963,7 @@
 
     ensureLight(VW, VH);
     lightCtx.globalCompositeOperation = 'source-over';
-    lightCtx.fillStyle = 'rgba(5, 6, 3, 0.88)';
+    lightCtx.fillStyle = bio.fog;
     lightCtx.fillRect(0, 0, lightCv.width, lightCv.height);
     lightCtx.globalCompositeOperation = 'destination-out';
     const punch = (px, py, r, a) => {
@@ -3510,7 +3974,7 @@
       lightCtx.fillRect(px - r, py - r, r * 2, r * 2);
     };
     const breathe = reducedMotion ? 1 : 1 + 0.03 * Math.sin(D.t * 3);
-    punch(ox + D.hero.x, oy + D.hero.y, D.st.light * breathe, 1);
+    punch(ox + D.hero.x, oy + D.hero.y, D.st.light * breathe * (bio.lightMul || 1), 1);
     for (const tc of D.torches) {
       if (!inV(tc.x, tc.y)) continue;
       const sx = ox + tc.x * TILE + TILE / 2, sy = oy + tc.y * TILE + TILE - 11;
@@ -3533,6 +3997,11 @@
     ctx.fillStyle = '#c8cdd7';
     ctx.globalAlpha = 0.9;
     ctx.fillText('FLOOR ' + D.floor + '  ·  LV ' + D.level, 26, 34);
+    ctx.font = '600 10px ' + MONO;
+    ctx.fillStyle = bio.accent;
+    ctx.fillText(bio.name, 26 + ctx.measureText('').width, 20);
+    ctx.font = '600 15px ' + MONO;
+    ctx.fillStyle = '#c8cdd7';
     const hbW = 190;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
     ctx.fillRect(26, 46, hbW, 16);
@@ -3625,6 +4094,20 @@
       ctx.fillStyle = '#8a8f80';
       ctx.font = '600 10px ' + MONO;
       ctx.fillText('' + (i + 1), s.x + 4, s.y + 13);
+    }
+    // arriving somewhere new gets a beat of its own
+    if (D.bannerT > 0) {
+      const p = Math.min(1, D.bannerT / 0.6);
+      ctx.globalAlpha = p * 0.9;
+      ctx.textAlign = 'center';
+      ctx.font = '800 34px ' + MONO;
+      ctx.fillStyle = bio.accent;
+      ctx.fillText(bio.name, W / 2, H * 0.3);
+      ctx.font = '600 13px ' + MONO;
+      ctx.fillStyle = '#8a8f80';
+      ctx.fillText('FLOOR ' + D.floor, W / 2, H * 0.3 + 22);
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
     }
     ctx.textAlign = 'center';
     ctx.font = '600 14px ' + MONO;
