@@ -1,7 +1,7 @@
 'use strict';
 // ---- DUNGEON: procedurally generated crawler ----------------------------
-// Stage 2: combat, enemies of varying difficulty, chests with rarity loot,
-// inventory (Tab) with equipment and an editable hotbar, HP/armor HUD.
+// Stage 3: mouse-aimed combat, shield blocking, vision-cone enemy AI,
+// room-locked bosses with rarity loot drops.
 (() => {
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
@@ -78,7 +78,7 @@
     '.kEEEEEEEEk.',
     '..kkkkkkkk..',
   ]);
-  const BRUTE = sprite([
+  const BRUTE_ROWS = [
     '..kk......kk..',
     '..kBk....kBk..',
     '...kBBBBBBk...',
@@ -91,7 +91,9 @@
     '..kBBBBBBBBk..',
     '..kBBk..kBBk..',
     '...kkk..kkk...',
-  ]);
+  ];
+  const BRUTE = sprite(BRUTE_ROWS);
+  const BOSS = sprite(BRUTE_ROWS, { B: '#9a4030' });
   const CHEST_CLOSED = sprite([
     '.kkkkkkkkkk.',
     'kwwwwwwwwwwk',
@@ -118,14 +120,22 @@
     '....bb....',
     '....bb....',
   ]);
-  const ICON_ARMOR = sprite([
+  const ICON_SHIELD = sprite([
     '.kkkkkkkk.',
     '.ksssssdk.',
-    '.ksssssdk.',
+    '.ksgssgdk.',
     '.ksssssdk.',
     '..ksssdk..',
     '...ksdk...',
     '....kk....',
+  ]);
+  const ICON_ARMOR = sprite([
+    '.kk....kk.',
+    '.kskkkksk.',
+    '..kssssk..',
+    '..ksddsk..',
+    '..kssssk..',
+    '..kkkkkk..',
   ]);
   const ICON_POTION = sprite([
     '....kk....',
@@ -135,15 +145,15 @@
     '..kcccck..',
     '...kkkk...',
   ]);
-  const ICONS = { sword: ICON_SWORD, armor: ICON_ARMOR, potion: ICON_POTION };
+  const ICONS = { sword: ICON_SWORD, shield: ICON_SHIELD, armor: ICON_ARMOR, potion: ICON_POTION };
 
   // ---- items and rarity --------------------------------------------------
   const RARITIES = [
-    { name: 'Common',    color: '#c8cdd7', mult: 1,    w: 100 },
-    { name: 'Uncommon',  color: '#7ec96f', mult: 1.3,  w: 55 },
-    { name: 'Rare',      color: '#5aa2e8', mult: 1.7,  w: 24 },
-    { name: 'Epic',      color: '#b06ae0', mult: 2.2,  w: 9 },
-    { name: 'Legendary', color: '#e8a33d', mult: 3,    w: 3 },
+    { name: 'Common',     color: '#c8cdd7', mult: 1,    w: 100 },
+    { name: 'Uncommon',   color: '#7ec96f', mult: 1.3,  w: 55 },
+    { name: 'Rare',       color: '#5aa2e8', mult: 1.7,  w: 22 },
+    { name: 'Epic',       color: '#b06ae0', mult: 2.2,  w: 8 },
+    { name: 'Ultra Rare', color: '#e8a33d', mult: 3,    w: 2.5 },
   ];
   const MATS = ['Rusty', 'Iron', 'Steel', 'Obsidian', 'Mithril', 'Starforged'];
   function rollRarity(floor) {
@@ -160,22 +170,37 @@
     }
     return 0;
   }
-  function makeItem(kind, floor) {
-    const ri = rollRarity(floor);
-    const rar = RARITIES[ri];
+  // boss tables: mostly common/uncommon, rare seldom, ultra rare a prize
+  function rollBossRarity() {
+    const ws = [46, 30, 14, 7, 3];
+    let roll = Math.random() * 100;
+    for (let i = 0; i < ws.length; i++) {
+      roll -= ws[i];
+      if (roll <= 0) return i;
+    }
+    return 0;
+  }
+  function statFor(kind, ri, floor) {
+    const m = RARITIES[ri].mult;
+    if (kind === 'sword') return Math.round((4 + floor * 1.3) * m);
+    if (kind === 'armor') return Math.round((2 + floor * 0.8) * m);
+    if (kind === 'shield') return Math.round((3 + floor * 0.9) * m);
+    return Math.round(25 * m);
+  }
+  function makeItem(kind, floor, forceRi) {
+    const ri = forceRi !== undefined ? forceRi : rollRarity(floor);
     const mat = MATS[Math.min(MATS.length - 1, Math.floor((floor - 1) / 2) + (ri >= 3 ? 1 : 0))];
-    if (kind === 'sword') {
-      return { kind, ri, dmg: Math.round((4 + floor * 1.3) * rar.mult), name: mat + ' Sword' };
-    }
-    if (kind === 'armor') {
-      return { kind, ri, def: Math.round((2 + floor * 0.8) * rar.mult), name: mat + ' Armor' };
-    }
-    return { kind: 'potion', ri, heal: Math.round(25 * rar.mult), name: rar.name + ' Potion' };
+    const v = statFor(kind, ri, floor);
+    if (kind === 'sword') return { kind, ri, dmg: v, name: mat + ' Sword' };
+    if (kind === 'armor') return { kind, ri, def: v, name: mat + ' Armor' };
+    if (kind === 'shield') return { kind, ri, blk: v, name: mat + ' Shield' };
+    return { kind: 'potion', ri, heal: v, name: RARITIES[ri].name + ' Potion' };
   }
   function itemStat(it) {
     if (!it) return '';
     if (it.kind === 'sword') return it.dmg + ' dmg';
     if (it.kind === 'armor') return it.def + ' armor';
+    if (it.kind === 'shield') return it.blk + ' block';
     return '+' + it.heal + ' hp';
   }
 
@@ -185,6 +210,7 @@
     skeleton: { spr: SKELETON, w: 24, h: 26, r: 10, spd: 88,  hp: f => 15 + f * 3, dmg: f => 6 + f * 2,  gold: f => 6 + f * 2 },
     wraith:   { spr: WRAITH,   w: 24, h: 26, r: 9,  spd: 132, hp: f => 10 + f * 2, dmg: f => 5 + f * 2,  gold: f => 8 + f * 2 },
     brute:    { spr: BRUTE,    w: 34, h: 30, r: 15, spd: 50,  hp: f => 34 + f * 7, dmg: f => 12 + f * 3, gold: f => 16 + f * 4 },
+    boss:     { spr: BOSS,     w: 56, h: 50, r: 24, spd: 72,  hp: f => 0, dmg: f => 0, gold: f => 60 + f * 20 },
   };
   function pickEnemyType(floor) {
     const pool = [
@@ -206,10 +232,11 @@
   // ---- state -------------------------------------------------------------
   const D = {
     running: false, paused: false, over: false,
-    tiles: null, seen: null, rooms: [], torches: [], chests: [], enemies: [],
+    tiles: null, seen: null, rooms: [], torches: [], chests: [], enemies: [], drops: [],
     stairs: { x: 0, y: 0 },
     hero: { x: 0, y: 0, face: 1, moving: false, hp: 100, maxHp: 100, gold: 0 },
-    equip: { sword: null, armor: null },
+    aim: 0, block: false,
+    equip: { sword: null, shield: null, armor: null },
     bag: new Array(16).fill(null),
     hotbar: new Array(4).fill(null),
     inv: false, invMx: 0, invMy: 0,
@@ -229,6 +256,13 @@
   };
   const heroDmg = () => (D.equip.sword ? D.equip.sword.dmg : 3);
   const heroDef = () => (D.equip.armor ? D.equip.armor.def : 0);
+  const heroBlk = () => (D.equip.shield ? D.equip.shield.blk : 0);
+  const angDiff = (a, b) => {
+    let d = a - b;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return d;
+  };
   function say(text, color) {
     D.msgs.push({ text, color: color || '#c8cdd7', t: 2.6 });
     if (D.msgs.length > 4) D.msgs.shift();
@@ -242,12 +276,23 @@
     D.bag[slot] = it;
     return true;
   }
+  // line of sight: sample the segment, blocked by any wall tile
+  function los(x0, y0, x1, y1) {
+    const d = Math.hypot(x1 - x0, y1 - y0);
+    const steps = Math.max(1, Math.ceil(d / 12));
+    for (let i = 1; i < steps; i++) {
+      const px = x0 + ((x1 - x0) * i) / steps;
+      const py = y0 + ((y1 - y0) * i) / steps;
+      if (solid(Math.floor(px / TILE), Math.floor(py / TILE))) return false;
+    }
+    return true;
+  }
 
   // ---- generation --------------------------------------------------------
   function generate() {
     D.tiles = new Uint8Array(MW * MH);
     D.seen = new Uint8Array(MW * MH);
-    D.rooms = []; D.torches = []; D.chests = []; D.enemies = [];
+    D.rooms = []; D.torches = []; D.chests = []; D.enemies = []; D.drops = [];
     D.floats.length = 0;
     for (let tries = 0; tries < 90 && D.rooms.length < 9; tries++) {
       const w = 5 + Math.floor(Math.random() * 6);
@@ -285,7 +330,15 @@
       if (dd > farD) { farD = dd; far = r; }
     }
     D.stairs = { x: far.cx, y: far.cy };
-    // chests in random non-start rooms, glowing with their rarity
+    // the boss holds the stairs room and never leaves it
+    const bossHp = Math.round(D.hero.maxHp * 2 * (1 + 0.15 * (D.floor - 1)));
+    D.enemies.push({
+      type: 'boss', isBoss: true, room: far,
+      x: (far.cx + 0.5) * TILE, y: (far.y + 1.2) * TILE,
+      hp: bossHp, maxHp: bossHp,
+      dmgv: Math.max(12, heroDmg() * 2),
+      cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1, fa: Math.PI / 2, hurt: 0, aggro: false,
+    });
     const nChests = 3 + Math.floor(Math.random() * 2);
     for (let i = 0; i < nChests && D.rooms.length > 1; i++) {
       const r = D.rooms[1 + Math.floor(Math.random() * (D.rooms.length - 1))];
@@ -295,7 +348,6 @@
       if (cx2 === D.stairs.x && cy2 === D.stairs.y) continue;
       D.chests.push({ x: cx2, y: cy2, ri: rollRarity(D.floor), opened: false });
     }
-    // enemies scattered away from the start room
     const n = 6 + D.floor * 2;
     for (let i = 0; i < n; i++) spawnEnemy(true);
     reveal();
@@ -312,7 +364,8 @@
       D.enemies.push({
         type, x: px, y: py,
         hp: et.hp(D.floor), maxHp: et.hp(D.floor),
-        cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1, hurt: 0,
+        cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1,
+        fa: Math.random() * Math.PI * 2, hurt: 0, aggro: false,
       });
       return;
     }
@@ -332,11 +385,10 @@
   function prime() {
     D.floor = 1; D.t = 0;
     D.hero.hp = 100; D.hero.maxHp = 100; D.hero.gold = 0;
-    D.equip.sword = null; D.equip.armor = null;
+    D.equip.sword = null; D.equip.shield = null; D.equip.armor = null;
     D.bag.fill(null); D.hotbar.fill(null);
-    D.bag[0] = { kind: 'potion', ri: 0, heal: 25, name: 'Common Potion' };
-    D.hotbar[0] = D.bag[0]; D.bag[0] = null;
-    D.inv = false; D.over = false;
+    D.hotbar[0] = { kind: 'potion', ri: 0, heal: 25, name: 'Common Potion' };
+    D.inv = false; D.over = false; D.block = false;
     D.msgs.length = 0;
     generate();
     D.cam.x = D.hero.x; D.cam.y = D.hero.y;
@@ -391,6 +443,7 @@
     launchEl.classList.add('hidden');
     prime();
   });
+  addEventListener('contextmenu', e => { if (window.MODE === 'dungeon') e.preventDefault(); });
   addEventListener('keydown', e => {
     if (window.MODE !== 'dungeon') return;
     if (e.key === 'Escape') {
@@ -405,7 +458,7 @@
       useHotbar(+e.key - 1);
     }
     if (e.key === ' ' && D.running && !D.paused && !D.inv) {
-      attack(D.hero.face > 0 ? 0 : Math.PI);
+      attack();
       e.preventDefault();
       return;
     }
@@ -419,13 +472,13 @@
   addEventListener('pointerdown', e => {
     if (window.MODE !== 'dungeon') return;
     if (D.paused) { togglePause(); return; }
-    if (D.inv) { invClick(e.clientX, e.clientY); return; }
+    if (D.inv) { if (e.button === 0) invClick(e.clientX, e.clientY); return; }
     if (!D.running) { start(); return; }
-    if (e.button === 0) {
-      const ax2 = ARCADE_LOCK.cur.x - (innerWidth / 2);
-      const ay2 = ARCADE_LOCK.cur.y - (innerHeight / 2);
-      attack(Math.atan2(ay2, ax2));
-    }
+    if (e.button === 0) attack();
+    if (e.button === 2 && D.equip.shield) D.block = true;
+  });
+  addEventListener('pointerup', e => {
+    if (e.button === 2) D.block = false;
   });
   addEventListener('arcadecursorunlock', () => {
     if (window.MODE === 'dungeon' && D.running && !D.paused && !D.inv) togglePause();
@@ -442,33 +495,42 @@
   });
 
   // ---- combat ------------------------------------------------------------
-  function attack(dir) {
-    if (D.atkT > 0) return;
+  function attack() {
+    if (D.atkT > 0 || D.block) return;
+    const dir = D.aim;
     D.atkT = 0.34;
     D.atkAnim = 0.16;
     D.atkDir = dir;
-    if (Math.cos(dir) > 0.3) D.hero.face = 1;
-    else if (Math.cos(dir) < -0.3) D.hero.face = -1;
     A.bleep(340, 0.05, 'square', 0.03);
-    const RANGE = 52;
+    const RANGE = 54;
     for (const en of D.enemies) {
       const dx = en.x - D.hero.x, dy = en.y - D.hero.y;
       const d = Math.hypot(dx, dy);
       if (d > RANGE + ETYPES[en.type].r) continue;
-      let ang = Math.atan2(dy, dx) - dir;
-      while (ang > Math.PI) ang -= Math.PI * 2;
-      while (ang < -Math.PI) ang += Math.PI * 2;
-      if (Math.abs(ang) > 1.05) continue;
+      if (Math.abs(angDiff(Math.atan2(dy, dx), dir)) > 1.05) continue;
       const dmg = heroDmg() + Math.floor(Math.random() * 3);
       en.hp -= dmg;
       en.hurt = 0.18;
-      const kn = 150 / (ETYPES[en.type].r / 10);
+      en.aggro = true; // getting stabbed is very informative
       const nd = d || 1;
-      en.x += (dx / nd) * kn * 0.12;
-      en.y += (dy / nd) * kn * 0.12;
+      en.x += (dx / nd) * 16;
+      en.y += (dy / nd) * 16;
       floatText(en.x, en.y - 20, '' + dmg, '#e8e0c8');
       A.bleep(220 + Math.random() * 120, 0.06, 'sawtooth', 0.035);
       if (en.hp <= 0) killEnemy(en);
+    }
+  }
+  function bossLoot(en) {
+    const nItems = 3 + Math.floor(Math.random() * 3);
+    const kinds = ['sword', 'shield', 'armor', 'potion'];
+    for (let i = 0; i < nItems; i++) {
+      const a = (i / nItems) * Math.PI * 2 + Math.random();
+      const it = makeItem(kinds[Math.floor(Math.random() * kinds.length)], D.floor, rollBossRarity());
+      D.drops.push({
+        x: en.x + Math.cos(a) * (24 + Math.random() * 26),
+        y: en.y + Math.sin(a) * (24 + Math.random() * 26),
+        it,
+      });
     }
   }
   function killEnemy(en) {
@@ -477,21 +539,37 @@
     D.hero.gold += gold;
     floatText(en.x, en.y - 26, '+' + gold + 'g', '#d9a94e');
     D.enemies.splice(D.enemies.indexOf(en), 1);
-    D.shake = Math.max(D.shake, 4);
+    D.shake = Math.max(D.shake, en.isBoss ? 14 : 4);
     A.bleep(160, 0.1, 'sawtooth', 0.045);
-    if (Math.random() < 0.1) {
-      const it = makeItem('potion', D.floor);
-      if (addToBag(it)) say('Found ' + it.name, RARITIES[it.ri].color);
+    if (en.isBoss) {
+      say('BOSS SLAIN', '#e8a33d');
+      A.sweep(600, 40, 0.7, 'sawtooth', 0.09);
+      bossLoot(en);
+    } else if (Math.random() < 0.1) {
+      D.drops.push({ x: en.x, y: en.y, it: makeItem('potion', D.floor) });
     }
   }
-  function hurtHero(raw) {
+  function hurtHeroFrom(en, raw) {
     if (D.hurtT > 0) return;
-    const dmg = Math.max(1, raw - heroDef());
+    const toEn = Math.atan2(en.y - D.hero.y, en.x - D.hero.x);
+    const frontal = Math.abs(angDiff(toEn, D.aim)) < 1.15;
+    let dmg;
+    if (D.block && D.equip.shield && frontal) {
+      dmg = Math.max(0, raw - heroBlk() * 2 - heroDef());
+      D.hurtT = 0.35;
+      floatText(D.hero.x, D.hero.y - 24, dmg > 0 ? '-' + dmg : 'BLOCK', '#8fa2b8');
+      A.bleep(520, 0.06, 'square', 0.045);
+      // the shield shoves the attacker back
+      en.x += Math.cos(toEn) * 20;
+      en.y += Math.sin(toEn) * 20;
+    } else {
+      dmg = Math.max(1, raw - heroDef());
+      D.hurtT = 0.6;
+      D.shake = Math.max(D.shake, 8);
+      floatText(D.hero.x, D.hero.y - 24, '-' + dmg, '#a4372e');
+      A.bleep(180, 0.12, 'square', 0.05);
+    }
     D.hero.hp -= dmg;
-    D.hurtT = 0.6;
-    D.shake = Math.max(D.shake, 8);
-    floatText(D.hero.x, D.hero.y - 24, '-' + dmg, '#a4372e');
-    A.bleep(180, 0.12, 'square', 0.05);
     if (D.hero.hp <= 0) { D.hero.hp = 0; die(); }
   }
   function useHotbar(i) {
@@ -520,8 +598,9 @@
       });
     }
     const eq = {
-      sword: { x: px + 60, y: py + 96 },
-      armor: { x: px + 132, y: py + 96 },
+      sword: { x: px + 32, y: py + 96 },
+      shield: { x: px + 96, y: py + 96 },
+      armor: { x: px + 160, y: py + 96 },
     };
     const hot = [];
     for (let i = 0; i < 4; i++) {
@@ -536,7 +615,7 @@
       if (!inSlot(mx, my, L.bag[i])) continue;
       const it = D.bag[i];
       if (!it) return;
-      if (it.kind === 'sword' || it.kind === 'armor') {
+      if (it.kind === 'sword' || it.kind === 'armor' || it.kind === 'shield') {
         const old = D.equip[it.kind];
         D.equip[it.kind] = it;
         D.bag[i] = old;
@@ -551,7 +630,7 @@
       }
       return;
     }
-    for (const kind of ['sword', 'armor']) {
+    for (const kind of ['sword', 'shield', 'armor']) {
       if (inSlot(mx, my, L.eq[kind]) && D.equip[kind]) {
         if (addToBag(D.equip[kind])) {
           D.equip[kind] = null;
@@ -602,7 +681,12 @@
       D.msgs[i].t -= dt;
       if (D.msgs[i].t <= 0) D.msgs.splice(i, 1);
     }
-    if (D.inv) return; // world holds its breath while the bag is open
+    if (D.inv) return;
+
+    // aim follows the mouse; the hero is always screen-center under the lock
+    D.aim = Math.atan2(ARCADE_LOCK.cur.y - innerHeight / 2, ARCADE_LOCK.cur.x - innerWidth / 2);
+    D.hero.face = Math.cos(D.aim) >= 0 ? 1 : -1;
+    if (!D.equip.shield) D.block = false;
 
     let ax = 0, ay = 0;
     if (keys['a'] || keys['arrowleft']) ax -= 1;
@@ -611,17 +695,15 @@
     if (keys['s'] || keys['arrowdown']) ay += 1;
     const m = Math.hypot(ax, ay) || 1;
     D.hero.moving = !!(ax || ay);
-    if (ax) D.hero.face = ax > 0 ? 1 : -1;
-    moveWith(D.hero, (ax / m) * 165, (ay / m) * 165, dt, HERO_R);
+    const spd = D.block ? 75 : 165; // raising the shield slows you
+    moveWith(D.hero, (ax / m) * spd, (ay / m) * spd, dt, HERO_R);
     if (D.hero.moving) reveal();
     D.cam.x = D.hero.x; D.cam.y = D.hero.y;
 
-    // stairs: step on to descend
     if (Math.hypot(D.hero.x - (D.stairs.x + 0.5) * TILE, D.hero.y - (D.stairs.y + 0.5) * TILE) < 20) {
       descend();
       return;
     }
-    // chests: open by touch
     for (const c of D.chests) {
       if (c.opened) continue;
       if (Math.hypot(D.hero.x - (c.x + 0.5) * TILE, D.hero.y - (c.y + 0.5) * TILE) < 30) {
@@ -630,45 +712,87 @@
         const gold = Math.round((8 + D.floor * 5) * rar.mult);
         D.hero.gold += gold;
         floatText(D.hero.x, D.hero.y - 24, '+' + gold + 'g', '#d9a94e');
-        const kinds = ['potion', 'potion', 'sword', 'armor'];
-        const it = makeItem(kinds[Math.floor(Math.random() * kinds.length)], D.floor);
-        it.ri = Math.max(it.ri, c.ri); // chest rarity floors the loot
-        if (it.kind === 'sword') it.dmg = Math.round((4 + D.floor * 1.3) * RARITIES[it.ri].mult);
-        if (it.kind === 'armor') it.def = Math.round((2 + D.floor * 0.8) * RARITIES[it.ri].mult);
-        if (it.kind === 'potion') it.heal = Math.round(25 * RARITIES[it.ri].mult);
+        const kinds = ['potion', 'potion', 'sword', 'armor', 'shield'];
+        const kind = kinds[Math.floor(Math.random() * kinds.length)];
+        const it = makeItem(kind, D.floor, Math.max(rollRarity(D.floor), c.ri));
         if (addToBag(it)) say('Found ' + it.name + ' (' + RARITIES[it.ri].name + ')', RARITIES[it.ri].color);
         A.sweep(500, 80, 0.35, 'sine', 0.05);
         A.bleep(760, 0.08, 'triangle', 0.04);
       }
     }
-    // enemies: wander until the hero is close, then hunt
+    // ground loot pickup
+    for (let i = D.drops.length - 1; i >= 0; i--) {
+      const dr = D.drops[i];
+      if (Math.hypot(D.hero.x - dr.x, D.hero.y - dr.y) < 26) {
+        if (addToBag(dr.it)) {
+          say('Picked up ' + dr.it.name + ' (' + RARITIES[dr.it.ri].name + ')', RARITIES[dr.it.ri].color);
+          A.bleep(640, 0.05, 'triangle', 0.035);
+          D.drops.splice(i, 1);
+        }
+      }
+    }
+
+    // ---- enemies ---------------------------------------------------------
     for (const en of D.enemies) {
       const et = ETYPES[en.type];
       en.cd = Math.max(0, en.cd - dt);
       en.hurt = Math.max(0, en.hurt - dt);
       const dx = D.hero.x - en.x, dy = D.hero.y - en.y;
       const d = Math.hypot(dx, dy);
-      if (d < TILE * 6.5) {
-        moveWith(en, (dx / (d || 1)) * et.spd, (dy / (d || 1)) * et.spd, dt, et.r);
-        if (dx) en.face = dx > 0 ? 1 : -1;
-        if (d < et.r + HERO_R + 5 && en.cd <= 0) {
-          en.cd = 0.85;
-          hurtHero(et.dmg(D.floor));
+
+      if (!en.aggro) {
+        if (en.isBoss) {
+          // wakes only when you set foot in its room
+          const r = en.room;
+          const hx = D.hero.x / TILE, hy = D.hero.y / TILE;
+          if (hx >= r.x - 0.3 && hx <= r.x + r.w + 0.3 && hy >= r.y - 0.3 && hy <= r.y + r.h + 0.3) {
+            en.aggro = true;
+            floatText(en.x, en.y - 34, '!', '#a4372e');
+            say('The floor guardian stirs…', '#a4372e');
+            A.sweep(120, 45, 0.6, 'sawtooth', 0.08);
+          }
+        } else {
+          // roam until the hero enters the vision cone (with line of sight),
+          // or brushes close enough to be heard
+          en.wanderT -= dt;
+          if (en.wanderT <= 0) {
+            en.wanderT = 1 + Math.random() * 2.5;
+            const a = Math.random() * Math.PI * 2;
+            const go = Math.random() < 0.7;
+            en.wx = go ? Math.cos(a) : 0;
+            en.wy = go ? Math.sin(a) : 0;
+            if (go) en.fa = a;
+          }
+          moveWith(en, en.wx * et.spd * 0.4, en.wy * et.spd * 0.4, dt, et.r);
+          if (en.wx) en.face = en.wx > 0 ? 1 : -1;
+          const toHero = Math.atan2(dy, dx);
+          const inCone = d < TILE * 5.5 && Math.abs(angDiff(toHero, en.fa)) < 0.95;
+          const heard = d < TILE * 1.3;
+          if ((inCone && los(en.x, en.y, D.hero.x, D.hero.y)) || heard) {
+            en.aggro = true;
+            floatText(en.x, en.y - 22, '!', '#e8a33d');
+            A.bleep(500, 0.05, 'square', 0.025);
+          }
         }
-      } else {
-        en.wanderT -= dt;
-        if (en.wanderT <= 0) {
-          en.wanderT = 1 + Math.random() * 2.5;
-          const a = Math.random() * Math.PI * 2;
-          const go = Math.random() < 0.7;
-          en.wx = go ? Math.cos(a) : 0;
-          en.wy = go ? Math.sin(a) : 0;
-        }
-        moveWith(en, en.wx * et.spd * 0.4, en.wy * et.spd * 0.4, dt, et.r);
-        if (en.wx) en.face = en.wx > 0 ? 1 : -1;
+        continue;
+      }
+
+      // aggro: hunt the hero
+      const nd = d || 1;
+      moveWith(en, (dx / nd) * et.spd, (dy / nd) * et.spd, dt, et.r);
+      if (en.isBoss) {
+        // never leaves its room
+        const r = en.room;
+        en.x = Math.max(r.x * TILE + et.r, Math.min((r.x + r.w) * TILE - et.r, en.x));
+        en.y = Math.max(r.y * TILE + et.r, Math.min((r.y + r.h) * TILE - et.r, en.y));
+      }
+      if (dx) en.face = dx > 0 ? 1 : -1;
+      en.fa = Math.atan2(dy, dx);
+      if (d < et.r + HERO_R + 5 && en.cd <= 0) {
+        en.cd = en.isBoss ? 1.1 : 0.85;
+        hurtHeroFrom(en, en.isBoss ? en.dmgv : et.dmg(D.floor));
       }
     }
-    // trickle spawns keep the floor dangerous
     D.spawnT -= dt;
     if (D.spawnT <= 0) {
       D.spawnT = 16;
@@ -715,18 +839,18 @@
     ctx.fillText('INVENTORY', L.px + 26, L.py + 38);
     ctx.font = '600 12px ' + MONO;
     ctx.fillStyle = '#8a8f80';
-    ctx.fillText('EQUIPPED', L.px + 60, L.py + 84);
+    ctx.fillText('EQUIPPED', L.px + 32, L.py + 84);
     ctx.fillText('BAG', L.px + 250, L.py + 64);
     ctx.fillText('HOTBAR  [1-4]', L.px + 250, L.py + L.ph - 96);
     let hoverItem = null;
-    for (const kind of ['sword', 'armor']) {
+    for (const kind of ['sword', 'shield', 'armor']) {
       const s = L.eq[kind];
       const hov = inSlot(D.invMx, D.invMy, s);
       drawSlot(s, D.equip[kind], hov);
       if (hov && D.equip[kind]) hoverItem = D.equip[kind];
       ctx.fillStyle = '#8a8f80';
-      ctx.font = '600 10px ' + MONO;
-      ctx.fillText(kind.toUpperCase(), s.x + 4, s.y + SLOT + 14);
+      ctx.font = '600 9px ' + MONO;
+      ctx.fillText(kind.toUpperCase(), s.x + 2, s.y + SLOT + 13);
     }
     for (let i = 0; i < 16; i++) {
       const hov = inSlot(D.invMx, D.invMy, L.bag[i]);
@@ -741,12 +865,12 @@
       ctx.font = '600 10px ' + MONO;
       ctx.fillText('' + (i + 1), L.hot[i].x + 4, L.hot[i].y + 13);
     }
-    // stats line + tooltip
     ctx.font = '600 13px ' + MONO;
     ctx.fillStyle = '#c8cdd7';
-    ctx.fillText('DMG ' + heroDmg(), L.px + 60, L.py + 200);
-    ctx.fillText('ARM ' + heroDef(), L.px + 60, L.py + 222);
-    ctx.fillText('GOLD ' + D.hero.gold, L.px + 60, L.py + 244);
+    ctx.fillText('DMG ' + heroDmg(), L.px + 32, L.py + 210);
+    ctx.fillText('BLK ' + heroBlk(), L.px + 32, L.py + 232);
+    ctx.fillText('ARM ' + heroDef(), L.px + 32, L.py + 254);
+    ctx.fillText('GOLD ' + D.hero.gold, L.px + 32, L.py + 276);
     if (hoverItem) {
       ctx.fillStyle = RARITIES[hoverItem.ri].color;
       ctx.fillText(RARITIES[hoverItem.ri].name + ' ' + hoverItem.name + '  ·  ' + itemStat(hoverItem), L.px + 26, L.py + L.ph - 18);
@@ -801,7 +925,6 @@
       }
     }
 
-    // stairs
     if (D.seen[idx(D.stairs.x, D.stairs.y)]) {
       const sx = ox + D.stairs.x * TILE, sy = oy + D.stairs.y * TILE;
       for (let i = 0; i < 4; i++) {
@@ -809,14 +932,12 @@
         ctx.fillRect(sx + i * 4, sy + i * 4, TILE - i * 8, TILE - i * 8);
       }
     }
-    // chests
     for (const c of D.chests) {
       if (!D.seen[idx(c.x, c.y)]) continue;
       const sx = ox + c.x * TILE + TILE / 2, sy = oy + c.y * TILE + TILE / 2;
       if (!c.opened) {
-        const rc = RARITIES[c.ri].color;
         ctx.globalAlpha = 0.28 + (reducedMotion ? 0 : 0.1 * Math.sin(D.t * 3 + c.x));
-        ctx.fillStyle = rc;
+        ctx.fillStyle = RARITIES[c.ri].color;
         ctx.beginPath();
         ctx.arc(sx, sy, 17, 0, Math.PI * 2);
         ctx.fill();
@@ -825,7 +946,20 @@
       const spr = c.opened ? CHEST_OPEN : CHEST_CLOSED;
       ctx.drawImage(spr, sx - 12, sy - spr.height, 24, spr.height * 2);
     }
-    // torches
+    // ground loot
+    for (const dr of D.drops) {
+      const tx2 = Math.floor(dr.x / TILE), ty2 = Math.floor(dr.y / TILE);
+      if (!D.seen[idx(tx2, ty2)]) continue;
+      const sx = ox + dr.x, sy = oy + dr.y;
+      ctx.globalAlpha = 0.35 + (reducedMotion ? 0 : 0.15 * Math.sin(D.t * 4 + dr.x));
+      ctx.fillStyle = RARITIES[dr.it.ri].color;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      const ic = ICONS[dr.it.kind];
+      ctx.drawImage(ic, sx - ic.width * 1.5, sy - ic.height * 1.5, ic.width * 3, ic.height * 3);
+    }
     for (const tc of D.torches) {
       if (!D.seen[idx(tc.x, tc.y)]) continue;
       const sx = ox + tc.x * TILE, sy = oy + tc.y * TILE;
@@ -838,7 +972,6 @@
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    // enemies
     for (const en of D.enemies) {
       if (!D.seen[idx(Math.floor(en.x / TILE), Math.floor(en.y / TILE))]) continue;
       const et = ETYPES[en.type];
@@ -855,19 +988,27 @@
       ctx.drawImage(et.spr, -et.w / 2, -et.h / 2, et.w, et.h);
       ctx.restore();
       ctx.globalAlpha = 1;
-      if (en.hp < en.maxHp) {
-        const bw = 26;
+      if (en.hp < en.maxHp || en.isBoss) {
+        const bw = en.isBoss ? 44 : 26;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         ctx.fillRect(sx - bw / 2, sy - et.h / 2 - 9, bw, 4);
-        ctx.fillStyle = '#a4372e';
+        ctx.fillStyle = en.isBoss ? '#e8a33d' : '#a4372e';
         ctx.fillRect(sx - bw / 2, sy - et.h / 2 - 9, bw * Math.max(0, en.hp / en.maxHp), 4);
+        if (en.isBoss) {
+          ctx.fillStyle = '#e8a33d';
+          ctx.font = '600 10px ' + MONO;
+          ctx.textAlign = 'center';
+          ctx.fillText('GUARDIAN', sx, sy - et.h / 2 - 14);
+          ctx.textAlign = 'left';
+        }
       }
     }
-    // hero (blinks while invulnerable)
+    // hero + held gear pointing at the mouse
     if (!(D.hurtT > 0 && Math.floor(D.t * 14) % 2)) {
       const frame = D.hero.moving && Math.floor(D.t * 8) % 2 ? HERO_F2 : HERO_F1;
+      const hx = ox + D.hero.x, hy = oy + D.hero.y;
       ctx.save();
-      ctx.translate(ox + D.hero.x, oy + D.hero.y + 2);
+      ctx.translate(hx, hy + 2);
       ctx.scale(D.hero.face, 1);
       ctx.globalAlpha = 0.35;
       ctx.fillStyle = '#000';
@@ -877,8 +1018,28 @@
       ctx.globalAlpha = 1;
       ctx.drawImage(frame, -12, -13, 24, 26);
       ctx.restore();
+      // sword tracks the aim
+      ctx.save();
+      ctx.translate(hx, hy);
+      ctx.rotate(D.aim + Math.PI / 2);
+      const swing = D.atkAnim > 0 ? (1 - D.atkAnim / 0.16) * 10 : 0;
+      ctx.drawImage(ICON_SWORD, -5, -30 - swing, 10, 14);
+      ctx.restore();
+      // raised shield arcs across the guard direction
+      if (D.block && D.equip.shield) {
+        ctx.save();
+        ctx.translate(hx, hy);
+        ctx.rotate(D.aim);
+        ctx.strokeStyle = '#8fa2b8';
+        ctx.lineWidth = 4;
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.arc(0, 0, 20, -1.1, 1.1);
+        ctx.stroke();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
     }
-    // attack swing arc
     if (D.atkAnim > 0) {
       const p = 1 - D.atkAnim / 0.16;
       ctx.save();
@@ -893,7 +1054,6 @@
       ctx.restore();
       ctx.globalAlpha = 1;
     }
-    // floating combat text
     ctx.font = '600 13px ' + MONO;
     ctx.textAlign = 'center';
     for (const f of D.floats) {
@@ -904,7 +1064,6 @@
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
 
-    // lighting
     ensureLight();
     lightCtx.globalCompositeOperation = 'source-over';
     lightCtx.fillStyle = 'rgba(5, 6, 3, 0.88)';
@@ -933,7 +1092,6 @@
     ctx.fillStyle = '#c8cdd7';
     ctx.globalAlpha = 0.9;
     ctx.fillText('FLOOR ' + D.floor, 26, 34);
-    // health bar
     const hbW = 190;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
     ctx.fillRect(26, 46, hbW, 16);
@@ -947,10 +1105,9 @@
     ctx.fillText(D.hero.hp + ' / ' + D.hero.maxHp, 32, 58);
     ctx.font = '600 13px ' + MONO;
     ctx.fillStyle = '#8fa2b8';
-    ctx.fillText('ARMOR ' + heroDef(), 26, 82);
+    ctx.fillText('ARMOR ' + heroDef() + (D.equip.shield ? '  ·  BLOCK ' + heroBlk() : ''), 26, 82);
     ctx.fillStyle = '#d9a94e';
     ctx.fillText('GOLD ' + D.hero.gold, 26, 102);
-    // hotbar, always on screen
     const hbX = W / 2 - (4 * (SLOT + GAP) - GAP) / 2;
     for (let i = 0; i < 4; i++) {
       const s = { x: hbX + i * (SLOT + GAP), y: H - SLOT - 18 };
@@ -959,7 +1116,6 @@
       ctx.font = '600 10px ' + MONO;
       ctx.fillText('' + (i + 1), s.x + 4, s.y + 13);
     }
-    // messages
     ctx.textAlign = 'center';
     ctx.font = '600 14px ' + MONO;
     for (let i = 0; i < D.msgs.length; i++) {
@@ -973,7 +1129,7 @@
       ctx.globalAlpha = 0.6;
       ctx.font = '600 13px ' + MONO;
       ctx.fillStyle = '#c8cdd7';
-      ctx.fillText('CLICK OR ENTER TO DELVE · WASD MOVES · CLICK SWINGS · TAB BAG', W / 2, H - 90);
+      ctx.fillText('CLICK OR ENTER TO DELVE · WASD MOVES · MOUSE AIMS · LMB SWINGS · RMB BLOCKS · TAB BAG', W / 2, H - 90);
     }
     if (D.over) {
       ctx.globalAlpha = 0.8;
@@ -989,6 +1145,18 @@
     }
     ctx.textAlign = 'left';
     ctx.globalAlpha = 1;
+    // crosshair marking the aim point while locked in play
+    if (D.running && !D.inv && !D.over) {
+      const cxp = ARCADE_LOCK.cur.x, cyp = ARCADE_LOCK.cur.y;
+      ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = '#e8e0c8';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cxp - 6, cyp); ctx.lineTo(cxp + 6, cyp);
+      ctx.moveTo(cxp, cyp - 6); ctx.lineTo(cxp, cyp + 6);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
     if (D.inv) drawInventory();
     ctx.imageSmoothingEnabled = true;
