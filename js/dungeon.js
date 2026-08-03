@@ -240,6 +240,7 @@
     bag: new Array(16).fill(null),
     hotbar: new Array(4).fill(null),
     inv: false, invMx: 0, invMy: 0,
+    lootChest: null, drag: null,
     atkT: 0, atkAnim: 0, atkDir: 0,
     hurtT: 0, spawnT: 18,
     floats: [], msgs: [],
@@ -346,7 +347,18 @@
       const cy2 = r.y + 1 + Math.floor(Math.random() * (r.h - 2));
       if (D.chests.some(c => c.x === cx2 && c.y === cy2)) continue;
       if (cx2 === D.stairs.x && cy2 === D.stairs.y) continue;
-      D.chests.push({ x: cx2, y: cy2, ri: rollRarity(D.floor), opened: false });
+      const ri = rollRarity(D.floor);
+      const items = new Array(4).fill(null);
+      const nItems = 2 + Math.floor(Math.random() * 3);
+      const kinds = ['potion', 'potion', 'sword', 'armor', 'shield'];
+      for (let j = 0; j < nItems; j++) {
+        items[j] = makeItem(kinds[Math.floor(Math.random() * kinds.length)], D.floor,
+          Math.max(rollRarity(D.floor), ri));
+      }
+      D.chests.push({
+        x: cx2, y: cy2, ri, opened: false, cool: 0, items,
+        gold: Math.round((8 + D.floor * 5) * RARITIES[ri].mult),
+      });
     }
     const n = 6 + D.floor * 2;
     for (let i = 0; i < n; i++) spawnEnemy(true);
@@ -389,6 +401,7 @@
     D.bag.fill(null); D.hotbar.fill(null);
     D.hotbar[0] = { kind: 'potion', ri: 0, heal: 25, name: 'Common Potion' };
     D.inv = false; D.over = false; D.block = false;
+    D.lootChest = null; D.drag = null;
     D.msgs.length = 0;
     generate();
     D.cam.x = D.hero.x; D.cam.y = D.hero.y;
@@ -426,6 +439,11 @@
   function toggleInv() {
     if (!D.running) return;
     D.inv = !D.inv;
+    D.drag = null;
+    if (!D.inv && D.lootChest) {
+      D.lootChest.cool = 1.1; // step off before it reopens
+      D.lootChest = null;
+    }
     if (D.inv) ARCADE_LOCK.unlock(); else ARCADE_LOCK.lock();
   }
   function descend() {
@@ -467,18 +485,36 @@
   });
   addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
   addEventListener('pointermove', e => {
-    if (window.MODE === 'dungeon' && D.inv) { D.invMx = e.clientX; D.invMy = e.clientY; }
+    if (window.MODE === 'dungeon' && D.inv) {
+      D.invMx = e.clientX; D.invMy = e.clientY;
+      if (D.drag && Math.hypot(e.clientX - D.drag.sx, e.clientY - D.drag.sy) > 6) D.drag.moved = true;
+    }
   });
   addEventListener('pointerdown', e => {
     if (window.MODE !== 'dungeon') return;
     if (D.paused) { togglePause(); return; }
-    if (D.inv) { if (e.button === 0) invClick(e.clientX, e.clientY); return; }
+    if (D.inv) {
+      if (e.button !== 0) return;
+      D.invMx = e.clientX; D.invMy = e.clientY;
+      const s = slotAt(e.clientX, e.clientY);
+      if (s && s.type !== 'takeall' && getSlot(s)) {
+        D.drag = { from: s, sx: e.clientX, sy: e.clientY, moved: false };
+      } else if (s) {
+        clickSlot(s); // take-all button acts on press
+      }
+      return;
+    }
     if (!D.running) { start(); return; }
     if (e.button === 0) attack();
     if (e.button === 2 && D.equip.shield) D.block = true;
   });
   addEventListener('pointerup', e => {
     if (e.button === 2) D.block = false;
+    if (window.MODE !== 'dungeon' || !D.inv || !D.drag || e.button !== 0) return;
+    const drag = D.drag;
+    D.drag = null;
+    if (!drag.moved) { clickSlot(drag.from); return; }
+    dropItem(drag.from, slotAt(e.clientX, e.clientY));
   });
   addEventListener('arcadecursorunlock', () => {
     if (window.MODE === 'dungeon' && D.running && !D.paused && !D.inv) togglePause();
@@ -606,47 +642,106 @@
     for (let i = 0; i < 4; i++) {
       hot.push({ x: px + 250 + i * (SLOT + GAP), y: py + ph - 86 });
     }
-    return { px, py, pw, ph, bag, eq, hot };
+    // chest loot row floats above the panel when a chest is open
+    const chest = [];
+    for (let i = 0; i < 4; i++) {
+      chest.push({ x: px + 250 + i * (SLOT + GAP), y: py - 84 });
+    }
+    const takeAll = { x: px + 26, y: py - 78, w: 130, h: 40 };
+    return { px, py, pw, ph, bag, eq, hot, chest, takeAll };
   }
   const inSlot = (mx, my, s) => mx >= s.x && mx <= s.x + SLOT && my >= s.y && my <= s.y + SLOT;
-  function invClick(mx, my) {
+  // every interactive slot as {type, key}: bag 0-15, hot 0-3, eq kind, chest 0-3
+  function slotAt(mx, my) {
     const L = invLayout();
-    for (let i = 0; i < 16; i++) {
-      if (!inSlot(mx, my, L.bag[i])) continue;
-      const it = D.bag[i];
-      if (!it) return;
-      if (it.kind === 'sword' || it.kind === 'armor' || it.kind === 'shield') {
-        const old = D.equip[it.kind];
-        D.equip[it.kind] = it;
-        D.bag[i] = old;
-        say('Equipped ' + it.name, RARITIES[it.ri].color);
-        A.bleep(500, 0.05, 'triangle', 0.035);
-      } else {
-        const slot = D.hotbar.indexOf(null);
-        if (slot < 0) { say('Hotbar full'); return; }
-        D.hotbar[slot] = it;
-        D.bag[i] = null;
-        A.bleep(560, 0.04, 'triangle', 0.03);
+    for (let i = 0; i < 16; i++) if (inSlot(mx, my, L.bag[i])) return { type: 'bag', key: i };
+    for (let i = 0; i < 4; i++) if (inSlot(mx, my, L.hot[i])) return { type: 'hot', key: i };
+    for (const kind of ['sword', 'shield', 'armor']) {
+      if (inSlot(mx, my, L.eq[kind])) return { type: 'eq', key: kind };
+    }
+    if (D.lootChest) {
+      for (let i = 0; i < 4; i++) if (inSlot(mx, my, L.chest[i])) return { type: 'chest', key: i };
+      if (L.takeAll && mx >= L.takeAll.x && mx <= L.takeAll.x + L.takeAll.w &&
+          my >= L.takeAll.y && my <= L.takeAll.y + L.takeAll.h) return { type: 'takeall' };
+    }
+    return null;
+  }
+  function getSlot(s) {
+    if (s.type === 'bag') return D.bag[s.key];
+    if (s.type === 'hot') return D.hotbar[s.key];
+    if (s.type === 'eq') return D.equip[s.key];
+    if (s.type === 'chest') return D.lootChest ? D.lootChest.items[s.key] : null;
+    return null;
+  }
+  function setSlot(s, it) {
+    if (s.type === 'bag') D.bag[s.key] = it;
+    else if (s.type === 'hot') D.hotbar[s.key] = it;
+    else if (s.type === 'eq') D.equip[s.key] = it;
+    else if (s.type === 'chest' && D.lootChest) D.lootChest.items[s.key] = it;
+  }
+  // can `it` legally live in slot s?
+  function accepts(s, it) {
+    if (!it) return true;
+    if (s.type === 'bag') return true;
+    if (s.type === 'hot') return it.kind === 'potion';
+    if (s.type === 'eq') return it.kind === s.key;
+    if (s.type === 'chest') return true;
+    return false;
+  }
+  function dropItem(from, to) {
+    if (!to || to.type === 'takeall') return false;
+    const a = getSlot(from), b = getSlot(to);
+    if (!a) return false;
+    if (!accepts(to, a) || !accepts(from, b)) return false;
+    setSlot(to, a);
+    setSlot(from, b);
+    if (to.type === 'eq') say('Equipped ' + a.name, RARITIES[a.ri].color);
+    A.bleep(520, 0.04, 'triangle', 0.03);
+    return true;
+  }
+  // click (no drag): the quick-move behaviors
+  function clickSlot(s) {
+    const it = getSlot(s);
+    if (s.type === 'takeall') {
+      if (!D.lootChest) return;
+      for (let i = 0; i < 4; i++) {
+        const ci = D.lootChest.items[i];
+        if (ci && addToBag(ci)) {
+          say('Took ' + ci.name + ' (' + RARITIES[ci.ri].name + ')', RARITIES[ci.ri].color);
+          D.lootChest.items[i] = null;
+        }
+      }
+      A.bleep(640, 0.05, 'triangle', 0.035);
+      return;
+    }
+    if (!it) return;
+    if (s.type === 'chest') {
+      if (addToBag(it)) {
+        say('Took ' + it.name + ' (' + RARITIES[it.ri].name + ')', RARITIES[it.ri].color);
+        setSlot(s, null);
+        A.bleep(640, 0.05, 'triangle', 0.035);
       }
       return;
     }
-    for (const kind of ['sword', 'shield', 'armor']) {
-      if (inSlot(mx, my, L.eq[kind]) && D.equip[kind]) {
-        if (addToBag(D.equip[kind])) {
-          D.equip[kind] = null;
-          A.bleep(420, 0.04, 'triangle', 0.03);
-        }
-        return;
+    if (s.type === 'bag') {
+      if (it.kind === 'potion') {
+        const slot = D.hotbar.indexOf(null);
+        if (slot < 0) { say('Hotbar full'); return; }
+        D.hotbar[slot] = it;
+        D.bag[s.key] = null;
+      } else {
+        const old = D.equip[it.kind];
+        D.equip[it.kind] = it;
+        D.bag[s.key] = old;
+        say('Equipped ' + it.name, RARITIES[it.ri].color);
       }
+      A.bleep(520, 0.04, 'triangle', 0.03);
+      return;
     }
-    for (let i = 0; i < 4; i++) {
-      if (inSlot(mx, my, L.hot[i]) && D.hotbar[i]) {
-        if (addToBag(D.hotbar[i])) {
-          D.hotbar[i] = null;
-          A.bleep(420, 0.04, 'triangle', 0.03);
-        }
-        return;
-      }
+    // eq / hot: send back to the bag
+    if (addToBag(it)) {
+      setSlot(s, null);
+      A.bleep(420, 0.04, 'triangle', 0.03);
     }
   }
 
@@ -705,18 +800,21 @@
       return;
     }
     for (const c of D.chests) {
-      if (c.opened) continue;
+      c.cool = Math.max(0, c.cool - dt);
+      if (c.cool > 0 || D.lootChest) continue;
+      if (!c.items.some(Boolean) && c.opened) continue;
       if (Math.hypot(D.hero.x - (c.x + 0.5) * TILE, D.hero.y - (c.y + 0.5) * TILE) < 30) {
-        c.opened = true;
-        const rar = RARITIES[c.ri];
-        const gold = Math.round((8 + D.floor * 5) * rar.mult);
-        D.hero.gold += gold;
-        floatText(D.hero.x, D.hero.y - 24, '+' + gold + 'g', '#d9a94e');
-        const kinds = ['potion', 'potion', 'sword', 'armor', 'shield'];
-        const kind = kinds[Math.floor(Math.random() * kinds.length)];
-        const it = makeItem(kind, D.floor, Math.max(rollRarity(D.floor), c.ri));
-        if (addToBag(it)) say('Found ' + it.name + ' (' + RARITIES[it.ri].name + ')', RARITIES[it.ri].color);
-        A.sweep(500, 80, 0.35, 'sine', 0.05);
+        if (!c.opened) {
+          c.opened = true;
+          D.hero.gold += c.gold;
+          floatText(D.hero.x, D.hero.y - 24, '+' + c.gold + 'g', '#d9a94e');
+          c.gold = 0;
+          A.sweep(500, 80, 0.35, 'sine', 0.05);
+        }
+        // pop the loot window: inventory opens alongside the chest's slots
+        D.lootChest = c;
+        D.inv = true;
+        ARCADE_LOCK.unlock();
         A.bleep(760, 0.08, 'triangle', 0.04);
       }
     }
@@ -761,10 +859,10 @@
             const go = Math.random() < 0.7;
             en.wx = go ? Math.cos(a) : 0;
             en.wy = go ? Math.sin(a) : 0;
-            if (go) en.fa = a;
+            en.fa = a; // even standing still, they turn to look around
+            en.face = Math.cos(a) >= 0 ? 1 : -1;
           }
           moveWith(en, en.wx * et.spd * 0.4, en.wy * et.spd * 0.4, dt, et.r);
-          if (en.wx) en.face = en.wx > 0 ? 1 : -1;
           const toHero = Math.atan2(dy, dx);
           const inCone = d < TILE * 5.5 && Math.abs(angDiff(toHero, en.fa)) < 0.95;
           const heard = d < TILE * 1.3;
@@ -843,10 +941,40 @@
     ctx.fillText('BAG', L.px + 250, L.py + 64);
     ctx.fillText('HOTBAR  [1-4]', L.px + 250, L.py + L.ph - 96);
     let hoverItem = null;
+    const dragging = D.drag && D.drag.moved;
+    const isDragSrc = s => dragging && D.drag.from.type === s.type && D.drag.from.key === s.key;
+    const showItem = (s, it) => (isDragSrc(s) ? null : it);
+    // chest loot row
+    if (D.lootChest) {
+      ctx.fillStyle = '#181b12';
+      ctx.fillRect(L.px, L.py - 108, L.pw, 96);
+      ctx.strokeStyle = RARITIES[D.lootChest.ri].color;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(L.px + 0.5, L.py - 107.5, L.pw - 1, 95);
+      ctx.fillStyle = RARITIES[D.lootChest.ri].color;
+      ctx.font = '600 13px ' + MONO;
+      ctx.fillText(RARITIES[D.lootChest.ri].name.toUpperCase() + ' CHEST', L.px + 26, L.py - 88);
+      const ta = L.takeAll;
+      const taHov = D.invMx >= ta.x && D.invMx <= ta.x + ta.w && D.invMy >= ta.y && D.invMy <= ta.y + ta.h;
+      ctx.fillStyle = taHov ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.06)';
+      ctx.fillRect(ta.x, ta.y, ta.w, ta.h);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.strokeRect(ta.x + 0.5, ta.y + 0.5, ta.w - 1, ta.h - 1);
+      ctx.fillStyle = '#c8cdd7';
+      ctx.font = '600 12px ' + MONO;
+      ctx.fillText('TAKE ALL', ta.x + 30, ta.y + 25);
+      for (let i = 0; i < 4; i++) {
+        const s = { type: 'chest', key: i };
+        const it = D.lootChest.items[i];
+        const hov = inSlot(D.invMx, D.invMy, L.chest[i]);
+        drawSlot(L.chest[i], showItem(s, it), hov);
+        if (hov && it) hoverItem = it;
+      }
+    }
     for (const kind of ['sword', 'shield', 'armor']) {
       const s = L.eq[kind];
       const hov = inSlot(D.invMx, D.invMy, s);
-      drawSlot(s, D.equip[kind], hov);
+      drawSlot(s, showItem({ type: 'eq', key: kind }, D.equip[kind]), hov);
       if (hov && D.equip[kind]) hoverItem = D.equip[kind];
       ctx.fillStyle = '#8a8f80';
       ctx.font = '600 9px ' + MONO;
@@ -854,16 +982,27 @@
     }
     for (let i = 0; i < 16; i++) {
       const hov = inSlot(D.invMx, D.invMy, L.bag[i]);
-      drawSlot(L.bag[i], D.bag[i], hov);
+      drawSlot(L.bag[i], showItem({ type: 'bag', key: i }, D.bag[i]), hov);
       if (hov && D.bag[i]) hoverItem = D.bag[i];
     }
     for (let i = 0; i < 4; i++) {
       const hov = inSlot(D.invMx, D.invMy, L.hot[i]);
-      drawSlot(L.hot[i], D.hotbar[i], hov);
+      drawSlot(L.hot[i], showItem({ type: 'hot', key: i }, D.hotbar[i]), hov);
       if (hov && D.hotbar[i]) hoverItem = D.hotbar[i];
       ctx.fillStyle = '#8a8f80';
       ctx.font = '600 10px ' + MONO;
       ctx.fillText('' + (i + 1), L.hot[i].x + 4, L.hot[i].y + 13);
+    }
+    // the dragged item rides the cursor
+    if (dragging) {
+      const it = getSlot(D.drag.from);
+      if (it) {
+        const ic = ICONS[it.kind];
+        ctx.globalAlpha = 0.9;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(ic, D.invMx - ic.width * 2, D.invMy - ic.height * 2, ic.width * 4, ic.height * 4);
+        ctx.globalAlpha = 1;
+      }
     }
     ctx.font = '600 13px ' + MONO;
     ctx.fillStyle = '#c8cdd7';
@@ -876,7 +1015,7 @@
       ctx.fillText(RARITIES[hoverItem.ri].name + ' ' + hoverItem.name + '  ·  ' + itemStat(hoverItem), L.px + 26, L.py + L.ph - 18);
     } else {
       ctx.fillStyle = '#8a8f80';
-      ctx.fillText('click gear to equip · potions go to hotbar · Tab closes', L.px + 26, L.py + L.ph - 18);
+      ctx.fillText('click for quick-move · drag to arrange · Tab closes', L.px + 26, L.py + L.ph - 18);
     }
   }
   function draw() {
@@ -976,6 +1115,17 @@
       if (!D.seen[idx(Math.floor(en.x / TILE), Math.floor(en.y / TILE))]) continue;
       const et = ETYPES[en.type];
       const sx = ox + en.x, sy = oy + en.y;
+      // unaware mobs show their vision cone — sneak around it
+      if (!en.aggro && !en.isBoss) {
+        ctx.globalAlpha = 0.05;
+        ctx.fillStyle = '#e8e0c8';
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.arc(sx, sy, TILE * 5.5, en.fa - 0.95, en.fa + 0.95);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
       ctx.save();
       ctx.translate(sx, sy);
       ctx.scale(en.face, 1);
