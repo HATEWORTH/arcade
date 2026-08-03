@@ -201,7 +201,49 @@
     '..kcccck..',
     '...kkkk...',
   ]);
+  const ICON_DAGGER = sprite([
+    '....ss....',
+    '....ss....',
+    '...gggg...',
+    '....bb....',
+  ]);
+  const ICON_AXE = sprite([
+    '..sss.....',
+    '.sssss....',
+    '..sssbb...',
+    '.....bb...',
+    '.....bb...',
+    '.....bb...',
+  ]);
+  const ICON_SPEAR = sprite([
+    '......ss..',
+    '.....ss...',
+    '....bb....',
+    '...bb.....',
+    '..bb......',
+  ]);
+  const ICON_HAMMER = sprite([
+    '..ssss....',
+    '..ssss....',
+    '....bb....',
+    '....bb....',
+    '....bb....',
+  ]);
   const ICONS = { sword: ICON_SWORD, shield: ICON_SHIELD, armor: ICON_ARMOR, potion: ICON_POTION };
+  const WEAPON_ICONS = { dagger: ICON_DAGGER, sword: ICON_SWORD, axe: ICON_AXE, spear: ICON_SPEAR, hammer: ICON_HAMMER };
+  function iconFor(it) {
+    if (it.kind === 'sword') return WEAPON_ICONS[it.wtype] || ICON_SWORD;
+    return ICONS[it.kind];
+  }
+  // weapon classes: same slot, very different handling
+  const WTYPES = {
+    dagger: { n: 'Dagger', dm: 0.6, cd: 0.19, range: 44, arc: 1.0,  knock: 0.7 },
+    sword:  { n: 'Sword',  dm: 1,   cd: 0.34, range: 54, arc: 1.05, knock: 1 },
+    axe:    { n: 'Axe',    dm: 1.5, cd: 0.5,  range: 50, arc: 1.4,  knock: 1.3 },
+    spear:  { n: 'Spear',  dm: 1.1, cd: 0.38, range: 76, arc: 0.55, knock: 1 },
+    hammer: { n: 'Hammer', dm: 1.9, cd: 0.62, range: 52, arc: 1.2,  knock: 2.2 },
+  };
+  const WTYPE_KEYS = Object.keys(WTYPES);
 
   // ---- items and rarity --------------------------------------------------
   const RARITIES = [
@@ -246,14 +288,23 @@
     const ri = forceRi !== undefined ? forceRi : rollRarity(floor);
     const mat = MATS[Math.min(MATS.length - 1, Math.floor((floor - 1) / 2) + (ri >= 3 ? 1 : 0))];
     const v = statFor(kind, ri, floor);
-    if (kind === 'sword') return { kind, ri, dmg: v, name: mat + ' Sword' };
+    if (kind === 'sword') {
+      const wtype = WTYPE_KEYS[Math.floor(Math.random() * WTYPE_KEYS.length)];
+      const wt = WTYPES[wtype];
+      return {
+        kind, wtype, ri,
+        dmg: Math.max(1, Math.round(v * wt.dm)),
+        cd: wt.cd, range: wt.range, arc: wt.arc, knock: wt.knock,
+        name: mat + ' ' + wt.n,
+      };
+    }
     if (kind === 'armor') return { kind, ri, def: v, name: mat + ' Armor' };
     if (kind === 'shield') return { kind, ri, blk: v, name: mat + ' Shield' };
     return { kind: 'potion', ri, heal: v, name: RARITIES[ri].name + ' Potion' };
   }
   function itemStat(it) {
     if (!it) return '';
-    if (it.kind === 'sword') return it.dmg + ' dmg';
+    if (it.kind === 'sword') return it.dmg + ' dmg · ' + (1 / it.cd).toFixed(1) + ' swings/s';
     if (it.kind === 'armor') return it.def + ' armor';
     if (it.kind === 'shield') return it.blk + ' block';
     return '+' + it.heal + ' hp';
@@ -391,7 +442,11 @@
       dmg: D.equip.sword ? D.equip.sword.dmg : 3,
       def: D.equip.armor ? D.equip.armor.def : 0,
       blk: D.equip.shield ? D.equip.shield.blk : 0,
-      maxHp: 100, spd: 165, atkCd: 0.34,
+      maxHp: 100, spd: 165,
+      atkCd: D.equip.sword ? D.equip.sword.cd : 0.34,
+      range: D.equip.sword ? D.equip.sword.range : 46,
+      arc: D.equip.sword ? D.equip.sword.arc : 1.05,
+      knock: D.equip.sword ? D.equip.sword.knock : 1,
       manaMax: 50, manaRegen: 5, spellMult: 1,
       light: 205, goldMult: 1, crit: 0,
       lifesteal: 0, thorns: 0, manaKill: 0,
@@ -570,6 +625,22 @@
       x: treasureRoom.cx, y: treasureRoom.cy,
       relic: randomRelic(), taken: false,
     });
+    // floor 1: pick your starting weapon — three pedestals, take one
+    if (D.floor === 1) {
+      const picks = WTYPE_KEYS.slice().sort(() => Math.random() - 0.5).slice(0, 3);
+      picks.forEach((wt, i) => {
+        const it = makeItem('sword', 1, 0);
+        const prof = WTYPES[wt];
+        it.wtype = wt;
+        it.dmg = Math.max(1, Math.round(statFor('sword', 0, 1) * prof.dm));
+        it.cd = prof.cd; it.range = prof.range; it.arc = prof.arc; it.knock = prof.knock;
+        it.name = MATS[0] + ' ' + prof.n;
+        D.pedestals.push({
+          x: startRoom.cx - 2 + i * 2, y: startRoom.cy - 2,
+          it, taken: false, group: 'startWeapon',
+        });
+      });
+    }
     // chests + enemies fill the normal rooms
     const normals = D.rooms.filter(r => r.type === 'normal');
     const nChests = Math.min(normals.length, 2 + Math.floor(Math.random() * 2));
@@ -845,17 +916,16 @@
     D.atkAnim = 0.16;
     D.atkDir = dir;
     A.bleep(340, 0.05, 'square', 0.03);
-    const RANGE = 54;
     for (const en of D.enemies) {
       const dx = en.x - D.hero.x, dy = en.y - D.hero.y;
       const d = Math.hypot(dx, dy);
-      if (d > RANGE + ETYPES[en.type].r) continue;
-      if (Math.abs(angDiff(Math.atan2(dy, dx), dir)) > 1.05) continue;
+      if (d > D.st.range + ETYPES[en.type].r) continue;
+      if (Math.abs(angDiff(Math.atan2(dy, dx), dir)) > D.st.arc) continue;
       const crit = Math.random() < D.st.crit;
       const dmg = Math.max(1, Math.round((heroDmg() + Math.floor(Math.random() * 3)) * (crit ? 2 : 1)) - (ETYPES[en.type].dr || 0));
       damageEnemy(en, dmg, crit);
       const nd = d || 1;
-      nudge(en, (dx / nd) * 16, (dy / nd) * 16, ETYPES[en.type].r);
+      nudge(en, (dx / nd) * 16 * D.st.knock, (dy / nd) * 16 * D.st.knock, ETYPES[en.type].r);
     }
   }
   function damageEnemy(en, dmg, crit) {
@@ -1164,12 +1234,27 @@
         return;
       }
     }
-    // pedestals: walk up to claim the relic
+    // pedestals: walk up to claim what rests there
     for (const p of D.pedestals) {
       if (p.taken) continue;
       if (Math.hypot(D.hero.x - (p.x + 0.5) * TILE, D.hero.y - (p.y + 0.5) * TILE) < 26) {
         p.taken = true;
-        gainRelic(p.relic);
+        if (p.relic) {
+          gainRelic(p.relic);
+        } else if (p.it) {
+          const old = D.equip.sword;
+          D.equip.sword = p.it;
+          if (old) addToBag(old);
+          recalc();
+          say('Took the ' + p.it.name, RARITIES[p.it.ri].color);
+          A.bleep(560, 0.06, 'triangle', 0.04);
+          // choosing one dismisses its siblings
+          if (p.group) {
+            for (const q of D.pedestals) {
+              if (q !== p && q.group === p.group) q.taken = true;
+            }
+          }
+        }
       }
     }
     for (const c of D.chests) {
@@ -1355,7 +1440,7 @@
     ctx.lineWidth = it ? 2 : 1;
     ctx.strokeRect(s.x + 0.5, s.y + 0.5, SLOT - 1, SLOT - 1);
     if (it) {
-      const ic = ICONS[it.kind];
+      const ic = iconFor(it);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(ic, s.x + SLOT / 2 - ic.width * 2, s.y + SLOT / 2 - ic.height * 2, ic.width * 4, ic.height * 4);
     }
@@ -1498,6 +1583,17 @@
       ctx.font = '600 13px ' + MONO;
       ctx.fillText('click for quick-move · drag to arrange · Tab closes', L.px + 26, L.py + L.ph - 18);
     }
+    // the dragged item rides the cursor
+    if (dragging) {
+      const it = getSlot(D.drag.from);
+      if (it) {
+        const ic = iconFor(it);
+        ctx.globalAlpha = 0.9;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(ic, MP.x - ic.width * 2, MP.y - ic.height * 2, ic.width * 4, ic.height * 4);
+        ctx.globalAlpha = 1;
+      }
+    }
     drawPointer(MP.x, MP.y);
   }
   function draw() {
@@ -1583,13 +1679,19 @@
       ctx.fillRect(sx - 11, sy + 4, 22, 4);
       if (!p.taken) {
         const bob = reducedMotion ? 0 : Math.sin(D.t * 2.4) * 3;
+        const col = p.relic ? p.relic.color : RARITIES[p.it.ri].color;
         ctx.globalAlpha = 0.35;
-        ctx.fillStyle = p.relic.color;
+        ctx.fillStyle = col;
         ctx.beginPath();
         ctx.arc(sx, sy - 14 + bob, 13, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
-        drawRelicGlyph(sx, sy - 14 + bob, p.relic, 8);
+        if (p.relic) {
+          drawRelicGlyph(sx, sy - 14 + bob, p.relic, 8);
+        } else {
+          const ic = iconFor(p.it);
+          ctx.drawImage(ic, sx - ic.width, sy - 14 + bob - ic.height, ic.width * 2, ic.height * 2);
+        }
       }
     }
     for (const c of D.chests) {
@@ -1620,7 +1722,7 @@
       if (dr.relic) {
         drawRelicGlyph(sx, sy, dr.relic, 7);
       } else {
-        const ic = ICONS[dr.it.kind];
+        const ic = iconFor(dr.it);
         ctx.drawImage(ic, sx - ic.width * 1.5, sy - ic.height * 1.5, ic.width * 3, ic.height * 3);
       }
     }
@@ -1738,7 +1840,8 @@
       ctx.translate(hx, hy);
       ctx.rotate(D.aim + Math.PI / 2);
       const swing = D.atkAnim > 0 ? (1 - D.atkAnim / 0.16) * 10 : 0;
-      ctx.drawImage(ICON_SWORD, -5, -30 - swing, 10, 14);
+      const held = D.equip.sword ? iconFor(D.equip.sword) : ICON_SWORD;
+      ctx.drawImage(held, -5, -30 - swing, 10, 14);
       ctx.restore();
       if (D.block && D.equip.shield) {
         ctx.save();
@@ -1763,7 +1866,7 @@
       ctx.strokeStyle = '#e8e0c8';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(0, 0, 30 + p * 22, -0.9, 0.9);
+      ctx.arc(0, 0, D.st.range * 0.55 + p * D.st.range * 0.45, -D.st.arc * 0.85, D.st.arc * 0.85);
       ctx.stroke();
       ctx.restore();
       ctx.globalAlpha = 1;
