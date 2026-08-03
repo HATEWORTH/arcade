@@ -13,6 +13,19 @@ use std::f64::consts::{PI, TAU};
 
 const GRID_SPACING: f64 = 44.0;
 
+/// One identity color per player, hull included — not just the glow. Both
+/// ships used to be stroked white with only a faint colored halo to tell them
+/// apart, which is unreadable once the swarm is on top of you.
+///
+/// Neither color belongs to anything else on screen: enemies are magenta
+/// (chaser), cyan (drifter), lime (weaver) and near-white (bit), bullets are
+/// lime, wells are magenta. Amber is otherwise unused, and the ship is the
+/// only triangle in the game.
+const SHIP_COLORS: [&str; 2] = [CYAN, "#f2903c"];
+fn ship_color(i: usize) -> &'static str {
+    SHIP_COLORS[i % SHIP_COLORS.len()]
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 enum Kind {
     Chaser,
@@ -1751,8 +1764,9 @@ impl Geo {
                 continue;
             }
             let a = (s.aim_y - s.y).atan2(s.aim_x - s.x);
-            g.stroke_color(WHITE);
-            g.shadow(if i == 0 { CYAN } else { LIME }, 14.0);
+            let col = ship_color(i);
+            g.stroke_color(col);
+            g.shadow(col, 14.0);
             g.line_width(2.0);
             g.alpha(1.0);
             g.begin();
