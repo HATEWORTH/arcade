@@ -915,10 +915,16 @@
   function enterRoom(nr) {
     D.curRoom = nr;
     revealRoom(nr);
-    // thralls squeeze through the doorway with you
+    // thralls squeeze through with you, re-forming deeper in the room so
+    // none of them are left wedged in the doorway
+    const rcx = (nr.x + nr.w / 2) * TILE, rcy = (nr.y + nr.h / 2) * TILE;
+    const inAng = Math.atan2(rcy - D.hero.y, rcx - D.hero.x);
     for (const al of D.allies) {
-      al.x = D.hero.x + (Math.random() - 0.5) * 30;
-      al.y = D.hero.y + (Math.random() - 0.5) * 30;
+      al.x = D.hero.x + Math.cos(inAng) * 52 + (Math.random() - 0.5) * 28;
+      al.y = D.hero.y + Math.sin(inAng) * 52 + (Math.random() - 0.5) * 28;
+      // clamp into the room interior — never the door band
+      al.x = Math.max((nr.x + 0.4) * TILE, Math.min((nr.x + nr.w - 0.4) * TILE, al.x));
+      al.y = Math.max((nr.y + 0.4) * TILE, Math.min((nr.y + nr.h - 0.4) * TILE, al.y));
       unstick(al, 8);
     }
     if (!nr.cleared && nr.type !== 'start' && nr.type !== 'treasure') {
