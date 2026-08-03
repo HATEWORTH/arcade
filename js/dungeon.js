@@ -1835,13 +1835,22 @@
     ctx.globalAlpha = 1;
     if (D.running && !D.inv && !D.over) {
       const cxp = ARCADE_LOCK.cur.x, cyp = ARCADE_LOCK.cur.y;
-      ctx.globalAlpha = 0.7;
-      ctx.strokeStyle = '#e8e0c8';
-      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.95;
+      // dark halo so the reticle reads on any backdrop
+      ctx.strokeStyle = 'rgba(10, 12, 6, 0.9)';
+      ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(cxp - 6, cyp); ctx.lineTo(cxp + 6, cyp);
-      ctx.moveTo(cxp, cyp - 6); ctx.lineTo(cxp, cyp + 6);
+      ctx.moveTo(cxp - 9, cyp); ctx.lineTo(cxp + 9, cyp);
+      ctx.moveTo(cxp, cyp - 9); ctx.lineTo(cxp, cyp + 9);
       ctx.stroke();
+      ctx.strokeStyle = '#e8e0c8';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(cxp - 8, cyp); ctx.lineTo(cxp + 8, cyp);
+      ctx.moveTo(cxp, cyp - 8); ctx.lineTo(cxp, cyp + 8);
+      ctx.stroke();
+      ctx.fillStyle = '#e8a33d';
+      ctx.fillRect(cxp - 1.5, cyp - 1.5, 3, 3);
       ctx.globalAlpha = 1;
     }
 
@@ -1855,8 +1864,10 @@
     last = now;
     dt = Math.min(dt, 1 / 30);
     if (window.MODE === 'dungeon') {
-      // any menu-ish state gets a visible OS cursor
-      stageEl.classList.toggle('freecursor', D.inv || D.over || !D.running || D.paused);
+      // any menu-ish state gets a visible OS cursor — and if the pointer
+      // lock isn't actually held mid-game, fall back to it there too
+      stageEl.classList.toggle('freecursor',
+        D.inv || D.over || !D.running || D.paused || !ARCADE_LOCK.locked());
       if (!D.paused) {
         if (D.running) update(dt);
         draw();
