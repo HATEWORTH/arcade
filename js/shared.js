@@ -45,10 +45,22 @@ window.ARCADE_LOCK = (() => {
   }
   addEventListener('pointermove', e => {
     if (locked()) {
-      // per-game locked-cursor sensitivity: aiming in geo wants a quicker hand
-      const SENS = window.MODE === 'geo' ? 0.9 : 0.6;
-      cur.x = Math.max(0, Math.min(innerWidth, cur.x + e.movementX * SENS));
-      cur.y = Math.max(0, Math.min(innerHeight, cur.y + e.movementY * SENS));
+      // per-game locked-cursor sensitivity: twin-stick aiming wants a much
+      // quicker hand than a pong paddle, which is tracking a slow target
+      const SENS = window.MODE === 'geo' ? 1.7 : 0.6;
+      // A high-polling-rate mouse fires many moves per frame and the browser
+      // delivers them as one event with the rest folded into getCoalescedEvents.
+      // Reading only the top-level movementX loses the shape of a fast flick;
+      // integrating every sample keeps the sweep smooth at any poll rate.
+      const samples = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
+      let dx = 0, dy = 0;
+      if (samples && samples.length) {
+        for (const s of samples) { dx += s.movementX; dy += s.movementY; }
+      } else {
+        dx = e.movementX; dy = e.movementY;
+      }
+      cur.x = Math.max(0, Math.min(innerWidth, cur.x + dx * SENS));
+      cur.y = Math.max(0, Math.min(innerHeight, cur.y + dy * SENS));
     } else {
       cur.x = e.clientX; cur.y = e.clientY;
     }

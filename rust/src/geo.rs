@@ -13,6 +13,13 @@ use std::f64::consts::{PI, TAU};
 
 const GRID_SPACING: f64 = 44.0;
 
+/// Inside this many pixels of the reticle the ship keeps its last heading
+/// instead of chasing an unstable angle.
+const AIM_DEADZONE: f64 = 26.0;
+/// Distance over which the drift toward the reticle eases off, so the ship
+/// settles on the cursor instead of oscillating around it.
+const AIM_EASE: f64 = 110.0;
+
 /// One identity color per player, hull included — not just the glow. Both
 /// ships used to be stroked white with only a faint colored halo to tell them
 /// apart, which is unreadable once the swarm is on top of you.
@@ -55,6 +62,10 @@ struct Ship {
     mov_y: f64,
     aim_x: f64,
     aim_y: f64,
+    /// Heading held between updates. Deriving it from the cursor vector every
+    /// frame makes the ship spin when the cursor is on top of it, because
+    /// atan2 of a near-zero vector is noise.
+    aim_a: f64,
     firing: bool,
     fire_t: f64,
     alive: bool,
@@ -282,6 +293,7 @@ impl Geo {
             s.y = self.g.h * 0.5;
             s.aim_x = s.x;
             s.aim_y = s.y - 100.0;
+            s.aim_a = -std::f64::consts::FRAC_PI_2;
             self.ships.push(s);
         }
     }
@@ -367,6 +379,7 @@ impl Geo {
             s.mov_y = 0.0;
             s.aim_x = s.x;
             s.aim_y = h * 0.3;
+            s.aim_a = -std::f64::consts::FRAC_PI_2;
             s.fire_t = 0.0;
             s.firing = false;
             s.alive = true;
@@ -864,10 +877,13 @@ impl Geo {
                 s.mov_y += ((say / m) - s.mov_y) * k;
                 s.vx += s.mov_x * 3100.0 * dt;
                 s.vy += s.mov_y * 3100.0 * dt;
+                // drift toward the reticle, easing to nothing as it arrives —
+                // at full strength the ship overshoots and jitters on the spot
                 let (adx, ady) = (s.aim_x - s.x, s.aim_y - s.y);
                 let ad = adx.hypot(ady).max(1.0);
-                s.vx += (adx / ad) * 260.0 * dt;
-                s.vy += (ady / ad) * 260.0 * dt;
+                let pull = 260.0 * (ad / AIM_EASE).min(1.0);
+                s.vx += (adx / ad) * pull * dt;
+                s.vy += (ady / ad) * pull * dt;
                 let drag = (1.0 - dt * 1.8).max(0.0);
                 s.vx *= drag;
                 s.vy *= drag;
@@ -895,6 +911,11 @@ impl Geo {
                     s.vy = -s.vy.abs() * 0.55;
                 }
                 s.fire_t -= dt;
+                // hold the heading when the reticle is basically on top of us
+                let ad2 = (s.aim_x - s.x).hypot(s.aim_y - s.y);
+                if ad2 > AIM_DEADZONE {
+                    s.aim_a = (s.aim_y - s.y).atan2(s.aim_x - s.x);
+                }
             }
 
             // twin cannons
@@ -902,7 +923,7 @@ impl Geo {
             if fire {
                 let spread = self.rng.signed() * 0.08 + self.rng.signed() * 0.08;
                 let s = self.ships[i];
-                let aim_a = (s.aim_y - s.y).atan2(s.aim_x - s.x) + spread;
+                let aim_a = s.aim_a + spread;
                 let (ca, sa) = (aim_a.cos(), aim_a.sin());
                 for side in [-5.0, 5.0] {
                     self.bullets.push(Bullet {
@@ -1763,7 +1784,7 @@ impl Geo {
             if i == 0 && self.inv > 0.0 && ((self.t * 12.0).floor() as i64) % 2 != 0 {
                 continue;
             }
-            let a = (s.aim_y - s.y).atan2(s.aim_x - s.x);
+            let a = s.aim_a;
             let col = ship_color(i);
             g.stroke_color(col);
             g.shadow(col, 14.0);
