@@ -44,6 +44,10 @@ extern "C" {
     /// Game-over / lifecycle notifications the shell turns into DOM overlays.
     #[wasm_bindgen(js_namespace = ARCADE_WASM_HOST, js_name = event)]
     fn js_event(game: &str, name: &str, detail: &str);
+
+    /// One packet to the connected peer, via the shell's data channel.
+    #[wasm_bindgen(js_namespace = ARCADE_WASM_HOST, js_name = netSend)]
+    fn js_net_send(data: &[u8]);
 }
 
 pub fn bleep(freq: f64, dur: f64, wave: &str, gain: f64) {
@@ -57,6 +61,9 @@ pub fn hat(dur: f64, gain: f64) {
 }
 pub fn event(game: &str, name: &str, detail: &str) {
     js_event(game, name, detail);
+}
+pub fn net_send(data: &[u8]) {
+    js_net_send(data);
 }
 pub fn reduced_motion() -> bool {
     js_reduced_motion()

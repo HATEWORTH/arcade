@@ -26,9 +26,20 @@ export function key(game: string, name: string, down: boolean): void;
 export function net_close(game: string): void;
 
 /**
- * Open a netplay session. `role` is "host" or "guest".
+ * Open a netplay session. `role` is "host" or "guest". The shell owns the
+ * actual connection and feeds it in via `net_peer` / `net_packet`.
  */
-export function net_open(game: string, url: string, role: string): void;
+export function net_open(game: string, role: string): void;
+
+/**
+ * The shell delivers one packet received from the peer.
+ */
+export function net_packet(game: string, data: Uint8Array): void;
+
+/**
+ * The shell reports the peer's data channel opening (true) or dying (false).
+ */
+export function net_peer(game: string, connected: boolean): void;
 
 /**
  * "off" | "waiting" | "host" | "guest" — drives the lobby text in the shell.
@@ -60,32 +71,24 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly boot: () => void;
-    readonly button: (a: number, b: number, c: number, d: number) => void;
-    readonly hud: (a: number, b: number) => [number, number];
     readonly init: (a: number, b: number, c: number, d: number, e: number) => void;
-    readonly key: (a: number, b: number, c: number, d: number, e: number) => void;
-    readonly net_close: (a: number, b: number) => void;
-    readonly net_open: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
-    readonly net_status: (a: number, b: number) => [number, number];
-    readonly pointer: (a: number, b: number, c: number, d: number) => void;
-    readonly running: (a: number, b: number) => number;
-    readonly start: (a: number, b: number) => void;
     readonly tick: (a: number, b: number, c: number) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h1640237add5a99b3: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen__convert__closures_____invoke__h196b57bda68afff6: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h196b57bda68afff6_2: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h196b57bda68afff6_3: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__hed18c246d52ebd85: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h196b57bda68afff6_5: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h579fcc4fdc37a792: (a: number, b: number) => void;
+    readonly start: (a: number, b: number) => void;
+    readonly running: (a: number, b: number) => number;
+    readonly pointer: (a: number, b: number, c: number, d: number) => void;
+    readonly button: (a: number, b: number, c: number, d: number) => void;
+    readonly key: (a: number, b: number, c: number, d: number, e: number) => void;
+    readonly hud: (a: number, b: number, c: number) => void;
+    readonly net_open: (a: number, b: number, c: number, d: number) => void;
+    readonly net_peer: (a: number, b: number, c: number) => void;
+    readonly net_packet: (a: number, b: number, c: number, d: number) => void;
+    readonly net_close: (a: number, b: number) => void;
+    readonly net_status: (a: number, b: number, c: number) => void;
+    readonly __wbindgen_exn_store: (a: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
-    readonly __wbindgen_exn_store: (a: number) => void;
-    readonly __externref_table_alloc: () => number;
-    readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __wbindgen_destroy_closure: (a: number, b: number) => void;
+    readonly __wbindgen_add_to_stack_pointer: (a: number) => number;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
-    readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

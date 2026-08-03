@@ -141,19 +141,56 @@ pub fn hud(game: &str) -> String {
     }
 }
 
-/// Open a netplay session. `role` is "host" or "guest".
+/// Open a netplay session. `role` is "host" or "guest". The shell owns the
+/// actual connection and feeds it in via `net_peer` / `net_packet`.
 #[wasm_bindgen]
-pub fn net_open(game: &str, url: &str, role: &str) {
+pub fn net_open(game: &str, role: &str) {
     let host = role == "host";
     match game {
         "pong" => PONG.with(|c| {
             if let Some(g) = c.borrow_mut().as_mut() {
-                g.net_open(url, host);
+                g.net_open(host);
             }
         }),
         "geo" => GEO.with(|c| {
             if let Some(g) = c.borrow_mut().as_mut() {
-                g.net_open(url, host);
+                g.net_open(host);
+            }
+        }),
+        _ => {}
+    }
+}
+
+/// The shell reports the peer's data channel opening (true) or dying (false).
+#[wasm_bindgen]
+pub fn net_peer(game: &str, connected: bool) {
+    match game {
+        "pong" => PONG.with(|c| {
+            if let Some(g) = c.borrow_mut().as_mut() {
+                g.net.peer(connected);
+            }
+        }),
+        "geo" => GEO.with(|c| {
+            if let Some(g) = c.borrow_mut().as_mut() {
+                g.net.peer(connected);
+            }
+        }),
+        _ => {}
+    }
+}
+
+/// The shell delivers one packet received from the peer.
+#[wasm_bindgen]
+pub fn net_packet(game: &str, data: &[u8]) {
+    match game {
+        "pong" => PONG.with(|c| {
+            if let Some(g) = c.borrow_mut().as_mut() {
+                g.net.packet(data);
+            }
+        }),
+        "geo" => GEO.with(|c| {
+            if let Some(g) = c.borrow_mut().as_mut() {
+                g.net.packet(data);
             }
         }),
         _ => {}
