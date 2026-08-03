@@ -859,6 +859,7 @@
     const n = 5 + D.floor * 2;
     for (let i = 0; i < n; i++) spawnEnemy(true);
     D.curRoom = startRoom;
+    startRoom.visited = true;
     revealRoom(startRoom);
     D.cam.x = (startRoom.x + startRoom.w / 2) * TILE;
     D.cam.y = (startRoom.y + startRoom.h / 2) * TILE;
@@ -970,6 +971,7 @@
   }
   function enterRoom(nr) {
     D.curRoom = nr;
+    nr.visited = true;
     revealRoom(nr);
     // thralls squeeze through with you, re-forming deeper in the room so
     // none of them are left wedged in the doorway
@@ -2499,6 +2501,38 @@
       const spInfo = { bolt: ['#e8763d', 'FIREBOLT 12mp'], nova: ['#5aa2e8', 'FROST NOVA 22mp'] }[sp];
       ctx.fillStyle = spInfo[0];
       ctx.fillText('[F] ' + spInfo[1], 26, spellY);
+    }
+    // minimap: discovered rooms in the corner, Isaac-style
+    if (D.running) {
+      const MS = 15, MG = 3;
+      const mapW = GW * (MS + MG) - MG;
+      const mx0 = W - mapW - 26, my0 = 26;
+      const discovered = r => r.visited ||
+        D.rooms.some(o => o.visited && Math.abs(o.gx - r.gx) + Math.abs(o.gy - r.gy) === 1);
+      ctx.globalAlpha = 0.85;
+      for (const r of D.rooms) {
+        if (!discovered(r)) continue;
+        const rx = mx0 + r.gx * (MS + MG), ry = my0 + r.gy * (MS + MG);
+        if (r === D.curRoom) {
+          ctx.fillStyle = '#c8cdd7';
+          ctx.fillRect(rx, ry, MS, MS);
+        } else if (r.visited) {
+          ctx.fillStyle = '#565b48';
+          ctx.fillRect(rx, ry, MS, MS);
+        } else {
+          ctx.strokeStyle = 'rgba(200, 205, 215, 0.4)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(rx + 0.5, ry + 0.5, MS - 1, MS - 1);
+        }
+        const mk = r.type === 'boss' ? '#a4372e' :
+          r.type === 'treasure' ? '#b06ae0' :
+          r.type === 'shop' ? '#d9a94e' : null;
+        if (mk) {
+          ctx.fillStyle = mk;
+          ctx.fillRect(rx + MS / 2 - 2, ry + MS / 2 - 2, 5, 5);
+        }
+      }
+      ctx.globalAlpha = 1;
     }
     const hbX = W / 2 - (4 * (SLOT + GAP) - GAP) / 2;
     for (let i = 0; i < 4; i++) {
