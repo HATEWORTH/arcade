@@ -4,13 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NEON ARCADE</title>
-<link rel="stylesheet" href="css/style.css">
+<script>
+// cache-buster: every page load fetches fresh css/js so deploys show
+// up immediately instead of fighting the 10-minute Pages cache
+window.__V = Date.now();
+document.write('<link rel="stylesheet" href="css/style.css?v=' + window.__V + '">');
+</script>
 </head>
 <body>
 
 <div id="stage"><canvas id="c"></canvas></div>
 
-<script src="js/shared.js"></script>
+<script>document.write('<script src="js/shared.js?v=' + window.__V + '"><\/script>');</script>
 
 <div class="hud hidden" id="pongHud">
   <div class="score you"><div class="bar" id="hpYou"></div><span class="tag">You</span></div>
@@ -100,18 +105,10 @@
   <p class="prompt">Click to rematch</p>
 </div>
 
-<script src="js/pong.js"></script>
-
-<script src="js/tetris.js"></script>
-
-<script src="js/snake.js"></script>
-
-<script src="js/geo.js"></script>
-
-<script src="js/cards.js"></script>
-
-<script src="js/dungeon.js"></script>
-
-<script src="js/splash.js"></script>
+<script>
+for (const f of ['pong', 'tetris', 'snake', 'geo', 'cards', 'dungeon', 'splash']) {
+  document.write('<script src="js/' + f + '.js?v=' + window.__V + '"><\/script>');
+}
+</script>
 
 </body></html>
