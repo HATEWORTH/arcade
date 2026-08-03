@@ -289,14 +289,14 @@
 
   // ---- enemy catalogue ---------------------------------------------------
   const ETYPES = {
-    slime:      { spr: SLIME,    w: 26, h: 18, r: 11, spd: 52,  move: 'chase',   hp: f => 9 + f * 2,  dmg: f => 3 + f,      gold: f => 3 + f },
-    skeleton:   { spr: SKELETON, w: 24, h: 26, r: 10, spd: 88,  move: 'chase',   hp: f => 15 + f * 3, dmg: f => 6 + f * 2,  gold: f => 6 + f * 2 },
-    wraith:     { spr: WRAITH,   w: 24, h: 26, r: 9,  spd: 132, move: 'chase',   hp: f => 10 + f * 2, dmg: f => 5 + f * 2,  gold: f => 8 + f * 2 },
-    brute:      { spr: BRUTE,    w: 34, h: 30, r: 15, spd: 50,  move: 'chase',   hp: f => 34 + f * 7, dmg: f => 12 + f * 3, gold: f => 16 + f * 4 },
-    bat:        { spr: BAT,      w: 20, h: 16, r: 8,  spd: 150, move: 'erratic', hp: f => 6 + f,      dmg: f => 3 + f,      gold: f => 4 + f },
-    spider:     { spr: SPIDER,   w: 28, h: 18, r: 10, spd: 68,  move: 'lunge',   dash: 265, hp: f => 12 + f * 2, dmg: f => 5 + f * 2, gold: f => 9 + f * 2 },
-    golem:      { spr: GOLEM,    w: 34, h: 30, r: 15, spd: 42,  move: 'chase',   dr: 3, hp: f => 42 + f * 8, dmg: f => 10 + f * 2, gold: f => 20 + f * 4 },
-    spiderling: { spr: SPIDER,   w: 16, h: 11, r: 6,  spd: 125, move: 'chase',   hp: f => 5 + f,      dmg: f => 3 + f,      gold: f => 2 + f },
+    slime:      { spr: SLIME,    w: 26, h: 18, r: 11, spd: 52,  move: 'chase',   hp: f => 9 + f * 2,  dmg: f => 10 + f * 2,  gold: f => 3 + f },
+    skeleton:   { spr: SKELETON, w: 24, h: 26, r: 10, spd: 88,  move: 'chase',   hp: f => 18 + f * 4, dmg: f => 14 + f * 3,  gold: f => 6 + f * 2 },
+    wraith:     { spr: WRAITH,   w: 24, h: 26, r: 9,  spd: 132, move: 'chase',   hp: f => 12 + f * 3, dmg: f => 12 + f * 3,  gold: f => 8 + f * 2 },
+    brute:      { spr: BRUTE,    w: 34, h: 30, r: 15, spd: 50,  move: 'chase',   hp: f => 45 + f * 9, dmg: f => 22 + f * 4,  gold: f => 16 + f * 4 },
+    bat:        { spr: BAT,      w: 20, h: 16, r: 8,  spd: 150, move: 'erratic', hp: f => 6 + f,      dmg: f => 8 + f * 2,   gold: f => 4 + f },
+    spider:     { spr: SPIDER,   w: 28, h: 18, r: 10, spd: 68,  move: 'lunge',   dash: 265, hp: f => 14 + f * 3, dmg: f => 14 + f * 3, gold: f => 9 + f * 2 },
+    golem:      { spr: GOLEM,    w: 34, h: 30, r: 15, spd: 42,  move: 'chase',   dr: 3, hp: f => 55 + f * 10, dmg: f => 18 + f * 3, gold: f => 20 + f * 4 },
+    spiderling: { spr: SPIDER,   w: 16, h: 11, r: 6,  spd: 125, move: 'chase',   hp: f => 5 + f,      dmg: f => 8 + f * 2,   gold: f => 2 + f },
     guardian:   { spr: BOSS_GUARDIAN, w: 56, h: 50, r: 24, spd: 72,  move: 'chase', gold: f => 60 + f * 20 },
     brood:      { spr: BOSS_BROOD,    w: 60, h: 40, r: 24, spd: 58,  move: 'chase', gold: f => 60 + f * 20 },
     boneking:   { spr: BOSS_BONEKING, w: 44, h: 50, r: 20, spd: 96,  move: 'lunge', dash: 300, gold: f => 60 + f * 20 },
@@ -554,14 +554,14 @@
     D.hero.x = (startRoom.cx + 0.5) * TILE;
     D.hero.y = (startRoom.cy + 0.5) * TILE;
     D.stairs = { x: bossRoom.cx, y: bossRoom.cy };
-    // boss guards the stairs room
-    const bossHp = Math.round(D.hero.maxHp * 2 * (1 + 0.15 * (D.floor - 1)));
+    // boss guards the stairs room: a long fight that hits like a truck
+    const bossHp = Math.round(240 + (D.floor - 1) * 110 + heroDmgSafe() * 8);
     D.enemies.push({
       type: BOSS_KINDS[Math.floor(Math.random() * BOSS_KINDS.length)],
       isBoss: true, room: bossRoom,
       x: (bossRoom.cx + 0.5) * TILE, y: (bossRoom.y + 1.2) * TILE,
       hp: bossHp, maxHp: bossHp,
-      dmgv: Math.max(12, heroDmgSafe() * 2),
+      dmgv: 25 + D.floor * 4,
       cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1, fa: Math.PI / 2, hurt: 0, aggro: false,
       broodT: 5,
     });
@@ -735,7 +735,7 @@
   }
   function descend() {
     D.floor++;
-    D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + 25);
+    D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + 15);
     say('FLOOR ' + D.floor, '#d9a94e');
     A.sweep(400, 60, 0.5, 'sine', 0.06);
     generate();
@@ -1338,11 +1338,13 @@
   }
 
   // ---- rendering ---------------------------------------------------------
+  const ZOOM = 2.4; // Isaac-close camera
   let lightCv = null, lightCtx = null;
-  function ensureLight() {
-    if (!lightCv || lightCv.width !== innerWidth || lightCv.height !== innerHeight) {
+  function ensureLight(w, h) {
+    const cw = Math.ceil(w), chh = Math.ceil(h);
+    if (!lightCv || lightCv.width !== cw || lightCv.height !== chh) {
       lightCv = document.createElement('canvas');
-      lightCv.width = innerWidth; lightCv.height = innerHeight;
+      lightCv.width = cw; lightCv.height = chh;
       lightCtx = lightCv.getContext('2d');
     }
   }
@@ -1502,13 +1504,18 @@
     const W = innerWidth, H = innerHeight;
     ARCADE_FX.screen(ctx);
     ctx.imageSmoothingEnabled = false;
-    let ox = Math.round(W / 2 - D.cam.x), oy = Math.round(H / 2 - D.cam.y);
+    // everything world-space renders through the zoom; the effective
+    // viewport is the screen divided by it
+    const VW = W / ZOOM, VH = H / ZOOM;
+    ctx.save();
+    ctx.scale(ZOOM, ZOOM);
+    let ox = Math.round(VW / 2 - D.cam.x), oy = Math.round(VH / 2 - D.cam.y);
     if (D.shake > 0 && !reducedMotion) {
       ox += Math.round((Math.random() - 0.5) * D.shake);
       oy += Math.round((Math.random() - 0.5) * D.shake);
     }
-    const tx0 = Math.max(0, Math.floor(-ox / TILE)), tx1 = Math.min(MW - 1, Math.ceil((W - ox) / TILE));
-    const ty0 = Math.max(0, Math.floor(-oy / TILE)), ty1 = Math.min(MH - 1, Math.ceil((H - oy) / TILE));
+    const tx0 = Math.max(0, Math.floor(-ox / TILE)), tx1 = Math.min(MW - 1, Math.ceil((VW - ox) / TILE));
+    const ty0 = Math.max(0, Math.floor(-oy / TILE)), ty1 = Math.min(MH - 1, Math.ceil((VH - oy) / TILE));
 
     for (let y = ty0; y <= ty1; y++) {
       for (let x = tx0; x <= tx1; x++) {
@@ -1771,10 +1778,10 @@
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
 
-    ensureLight();
+    ensureLight(VW, VH);
     lightCtx.globalCompositeOperation = 'source-over';
     lightCtx.fillStyle = 'rgba(5, 6, 3, 0.88)';
-    lightCtx.fillRect(0, 0, W, H);
+    lightCtx.fillRect(0, 0, lightCv.width, lightCv.height);
     lightCtx.globalCompositeOperation = 'destination-out';
     const punch = (px, py, r, a) => {
       const g = lightCtx.createRadialGradient(px, py, 0, px, py, r);
@@ -1788,11 +1795,12 @@
     for (const tc of D.torches) {
       if (!D.seen[idx(tc.x, tc.y)]) continue;
       const sx = ox + tc.x * TILE + TILE / 2, sy = oy + tc.y * TILE + TILE - 11;
-      if (sx < -160 || sx > W + 160 || sy < -160 || sy > H + 160) continue;
+      if (sx < -160 || sx > VW + 160 || sy < -160 || sy > VH + 160) continue;
       const fl = reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(D.t * 9 + tc.ph);
       punch(sx, sy, 120 * fl, 0.85);
     }
     ctx.drawImage(lightCv, 0, 0);
+    ctx.restore(); // back to native pixels for the HUD
 
     // ---- HUD -------------------------------------------------------------
     ctx.font = '600 15px ' + MONO;
