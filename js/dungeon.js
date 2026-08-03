@@ -381,6 +381,20 @@
     return RELICS[Math.floor(Math.random() * RELICS.length)];
   }
 
+  // ---- level-up perks: pick 1 of 3, stack forever ------------------------
+  const PERKS = [
+    { name: 'Vitality', desc: '+15 max health', color: '#7ec96f', maxHp: 15 },
+    { name: 'Brutality', desc: '+3 damage', color: '#a4372e', dmg: 3 },
+    { name: 'Quick Hands', desc: '+10% attack speed', color: '#c8cdd7', atkMult: 0.9 },
+    { name: 'Fleet Foot', desc: '+8% move speed', color: '#7ec96f', spdMult: 1.08 },
+    { name: 'Stone Skin', desc: '+2 armor', color: '#8a8f80', def: 2 },
+    { name: 'Deep Well', desc: '+20 max mana', color: '#5aa2e8', manaMax: 20 },
+    { name: 'Flow', desc: '+2 mana regen', color: '#5aa2e8', manaRegen: 2 },
+    { name: 'Archon', desc: '+20% spell power', color: '#b06ae0', spellMult: 1.2 },
+    { name: 'Killer Eye', desc: '+8% crit', color: '#b06ae0', crit: 0.08 },
+    { name: 'Second Wind', desc: 'heal to full, right now', color: '#7ec96f', instant: 'heal' },
+  ];
+
   // ---- classes -----------------------------------------------------------
   const CLASSES = {
     knight: { name: 'KNIGHT', blurb: 'sword & board · 100 hp', hp: 100, mana: 50, regen: 5, spellMult: 1, melee: 3, color: '#a4372e' },
@@ -435,7 +449,8 @@
     stairs: { x: 0, y: 0 },
     hero: { x: 0, y: 0, face: 1, moving: false, hp: 100, maxHp: 100, gold: 0 },
     mana: 50,
-    relics: [],
+    relics: [], perks: [],
+    level: 1, xp: 0, xpNext: 50, pendingLvls: 0, lvlChoices: null, lvlBtns: [],
     st: null, // derived stats, recalc()'d
     aim: 0, block: false,
     equip: { sword: null, shield: null, armor: null },
@@ -506,7 +521,7 @@
       lifesteal: 0, thorns: 0, manaKill: 0,
       spells: cls.spell ? [cls.spell] : [], berserk: 0,
     };
-    for (const r of D.relics) {
+    for (const r of D.relics.concat(D.perks)) {
       if (r.dmg) st.dmg += r.dmg;
       if (r.def) st.def += r.def;
       if (r.maxHp) st.maxHp += r.maxHp;
@@ -553,6 +568,42 @@
   }
   // raise dead lives on its own key [E]; F cycles to the newest other spell
   const knowsRaise = () => D.st.spells.includes('raise');
+  function gainXp(n) {
+    D.xp += n;
+    while (D.xp >= D.xpNext) {
+      D.xp -= D.xpNext;
+      D.xpNext = Math.round(D.xpNext * 1.45);
+      D.level++;
+      D.pendingLvls++;
+      say('LEVEL ' + D.level + '!', '#e8a33d');
+      A.sweep(300, 900, 0.4, 'sine', 0.06);
+    }
+    if (D.pendingLvls > 0 && !D.lvlChoices) openLevelChoice();
+  }
+  function openLevelChoice() {
+    const pool = PERKS.slice().sort(() => Math.random() - 0.5);
+    D.lvlChoices = pool.slice(0, 3);
+    D.invMx = ARCADE_LOCK.cur.x; D.invMy = ARCADE_LOCK.cur.y;
+    ARCADE_LOCK.unlock();
+  }
+  function pickPerk(perk) {
+    if (perk.instant === 'heal') {
+      D.hero.hp = D.hero.maxHp;
+      floatText(D.hero.x, D.hero.y - 24, 'FULL', '#7ec96f');
+    } else {
+      D.perks.push(perk);
+      recalc();
+      if (perk.maxHp > 0) D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + perk.maxHp);
+    }
+    say(perk.name + ' — ' + perk.desc, perk.color);
+    A.bleep(660, 0.08, 'triangle', 0.05);
+    D.pendingLvls--;
+    if (D.pendingLvls > 0) openLevelChoice();
+    else {
+      D.lvlChoices = null;
+      ARCADE_LOCK.lock();
+    }
+  }
   const activeSpell = () => {
     const others = D.st.spells.filter(s => s !== 'raise');
     return others.length ? others[others.length - 1] : null;
@@ -1002,7 +1053,8 @@
   function prime() {
     D.floor = 1; D.t = 0;
     D.hero.hp = 100; D.hero.gold = 0;
-    D.relics = [];
+    D.relics = []; D.perks = [];
+    D.level = 1; D.xp = 0; D.xpNext = 50; D.pendingLvls = 0; D.lvlChoices = null;
     D.equip.sword = null; D.equip.shield = null; D.equip.armor = null;
     D.bag.fill(null); D.hotbar.fill(null);
     D.hotbar[0] = { kind: 'potion', ri: 0, heal: 25, name: 'Common Potion' };
@@ -1079,6 +1131,10 @@
   addEventListener('contextmenu', e => { if (window.MODE === 'dungeon') e.preventDefault(); });
   addEventListener('keydown', e => {
     if (window.MODE !== 'dungeon') return;
+    if (D.lvlChoices) {
+      if (['1', '2', '3'].includes(e.key)) pickPerk(D.lvlChoices[+e.key - 1]);
+      return; // the choice must be made
+    }
     if (e.key === 'Escape') {
       if (D.inv) { toggleInv(); return; }
       togglePause();
@@ -1121,7 +1177,7 @@
     if (window.MODE === 'dungeon' && !D.running && !ARCADE_LOCK.locked()) {
       D.invMx = e.clientX; D.invMy = e.clientY;
     }
-    if (window.MODE === 'dungeon' && D.inv) {
+    if (window.MODE === 'dungeon' && (D.inv || D.lvlChoices)) {
       if (!ARCADE_LOCK.locked()) { D.invMx = e.clientX; D.invMy = e.clientY; }
       const p = invPos();
       if (D.drag && Math.hypot(p.x - D.drag.sx, p.y - D.drag.sy) > 6) D.drag.moved = true;
@@ -1130,6 +1186,18 @@
   addEventListener('pointerdown', e => {
     if (window.MODE !== 'dungeon') return;
     if (D.paused) { togglePause(); return; }
+    if (D.lvlChoices) {
+      if (e.button !== 0) return;
+      const p = invPos();
+      for (let i = 0; i < D.lvlBtns.length; i++) {
+        const b = D.lvlBtns[i];
+        if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) {
+          pickPerk(D.lvlChoices[i]);
+          return;
+        }
+      }
+      return;
+    }
     if (D.inv) {
       if (e.button !== 0) return;
       if (!ARCADE_LOCK.locked()) { D.invMx = e.clientX; D.invMy = e.clientY; }
@@ -1299,6 +1367,7 @@
   function killEnemy(en) {
     const et = ETYPES[en.type];
     gainGold(et.gold(D.floor) + Math.floor(Math.random() * 4), en.x, en.y - 26);
+    gainXp(Math.round(en.maxHp / 3) + D.floor);
     D.enemies.splice(D.enemies.indexOf(en), 1);
     // the fallen stay where they fell, all floor long
     D.corpses.push({ x: en.x, y: en.y, type: en.type, face: en.face, rot: Math.random() < 0.5 ? 1 : -1 });
@@ -1537,7 +1606,7 @@
       D.msgs[i].t -= dt;
       if (D.msgs[i].t <= 0) D.msgs.splice(i, 1);
     }
-    if (D.inv) return;
+    if (D.inv || D.lvlChoices) return;
 
     D.mana = Math.min(D.st.manaMax, D.mana + D.st.manaRegen * dt);
     D.aim = Math.atan2(ARCADE_LOCK.cur.y - innerHeight / 2, ARCADE_LOCK.cur.x - innerWidth / 2);
@@ -2463,7 +2532,7 @@
     ctx.font = '600 15px ' + MONO;
     ctx.fillStyle = '#c8cdd7';
     ctx.globalAlpha = 0.9;
-    ctx.fillText('FLOOR ' + D.floor, 26, 34);
+    ctx.fillText('FLOOR ' + D.floor + '  ·  LV ' + D.level, 26, 34);
     const hbW = 190;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
     ctx.fillRect(26, 46, hbW, 16);
@@ -2485,12 +2554,17 @@
     ctx.fillStyle = '#c8d8e8';
     ctx.font = '600 9px ' + MONO;
     ctx.fillText(Math.floor(D.mana) + ' / ' + D.st.manaMax, 32, 75);
+    // xp sliver under the mana bar
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(26, 82, hbW, 6);
+    ctx.fillStyle = '#b8a44e';
+    ctx.fillRect(26, 82, hbW * Math.min(1, D.xp / D.xpNext), 6);
     ctx.font = '600 13px ' + MONO;
     ctx.fillStyle = '#8fa2b8';
-    ctx.fillText('ARMOR ' + D.st.def + (D.equip.shield ? '  ·  BLOCK ' + D.st.blk : ''), 26, 96);
+    ctx.fillText('ARMOR ' + D.st.def + (D.equip.shield ? '  ·  BLOCK ' + D.st.blk : ''), 26, 106);
     ctx.fillStyle = '#d9a94e';
-    ctx.fillText('GOLD ' + D.hero.gold, 26, 116);
-    let spellY = 136;
+    ctx.fillText('GOLD ' + D.hero.gold, 26, 126);
+    let spellY = 146;
     if (knowsRaise()) {
       ctx.fillStyle = '#9fd8a8';
       ctx.fillText('[E] RAISE DEAD 20mp', 26, spellY);
@@ -2623,6 +2697,46 @@
     }
 
     if (D.inv) drawInventory();
+    // level-up: the run holds its breath until you choose
+    if (D.lvlChoices) {
+      const MP2 = invPos();
+      ctx.globalAlpha = 0.78;
+      ctx.fillStyle = '#0c0e08';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#e8a33d';
+      ctx.font = '800 30px ' + MONO;
+      ctx.fillText('LEVEL ' + D.level, W / 2, H / 2 - 130);
+      ctx.fillStyle = '#8a8f80';
+      ctx.font = '600 12px ' + MONO;
+      ctx.fillText('choose an upgrade', W / 2, H / 2 - 104);
+      const cw2 = 200, chh2 = 130, gap2 = 22;
+      const x0 = W / 2 - (3 * cw2 + 2 * gap2) / 2;
+      const y0 = H / 2 - 70;
+      D.lvlBtns = [];
+      D.lvlChoices.forEach((pk, i) => {
+        const cx2 = x0 + i * (cw2 + gap2);
+        const hov = MP2.x >= cx2 && MP2.x <= cx2 + cw2 && MP2.y >= y0 && MP2.y <= y0 + chh2;
+        ctx.fillStyle = hov ? 'rgba(255, 255, 255, 0.13)' : 'rgba(255, 255, 255, 0.05)';
+        ctx.fillRect(cx2, y0, cw2, chh2);
+        ctx.strokeStyle = pk.color;
+        ctx.lineWidth = hov ? 2.5 : 1.5;
+        ctx.strokeRect(cx2 + 0.75, y0 + 0.75, cw2 - 1.5, chh2 - 1.5);
+        ctx.fillStyle = pk.color;
+        ctx.font = '800 15px ' + MONO;
+        ctx.fillText(pk.name, cx2 + cw2 / 2, y0 + 44);
+        ctx.fillStyle = '#c8cdd7';
+        ctx.font = '600 11px ' + MONO;
+        ctx.fillText(pk.desc, cx2 + cw2 / 2, y0 + 72);
+        ctx.fillStyle = '#8a8f80';
+        ctx.font = '600 10px ' + MONO;
+        ctx.fillText('[' + (i + 1) + ']', cx2 + cw2 / 2, y0 + chh2 - 14);
+        D.lvlBtns.push({ x: cx2, y: y0, w: cw2, h: chh2 });
+      });
+      ctx.textAlign = 'left';
+      drawPointer(MP2.x, MP2.y);
+    }
     ctx.imageSmoothingEnabled = true;
   }
 
