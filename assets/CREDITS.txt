@@ -30,3 +30,18 @@ cata_tiles.png
 (downloaded, not yet used) "Crawling Depths" by pingupollas
   https://pingupollas.itch.io/crawling-depths
   License: free / pay-what-you-want
+
+---------------------------------------------------------------------------
+GEO WARS (assets/geo/)
+
+sfx/*.ogg
+  Kenney — Sci-Fi Sounds, Impact Sounds, Interface Sounds
+  https://kenney.nl/assets/category:Audio
+  CC0 1.0 Universal (public domain). Attribution not required.
+  Nine clips selected from the three packs and renamed by role.
+
+fx/glow.png
+  Brackeys' VFX Bundle — particles/opague/light_01.png
+  https://brackeysgames.itch.io/brackeys-vfx-bundle
+  CC0 1.0 Universal (public domain). Attribution not required.
+  Downscaled 512x512 -> 128x128; it is only ever drawn small.

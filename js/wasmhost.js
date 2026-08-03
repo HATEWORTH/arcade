@@ -27,6 +27,7 @@
     netSend: bytes => {
       if (net && net.chan && net.chan.readyState === 'open') net.chan.send(bytes);
     },
+    sample: (name, vol) => A.sample(name, vol),
     // [glow, shake, particles] — read once per frame by the Rust renderer
     gfx: () => {
       const S = window.ARCADE_SETTINGS;
@@ -382,8 +383,10 @@
     pongHud.classList.remove('hidden');
     initGame('pong');
   });
+  const GEO_SFX = ['shoot', 'sniper', 'kill', 'hit', 'death', 'blast', 'hole', 'pulse', 'life'];
   document.getElementById('pickGeo').addEventListener('click', () => {
     window.MODE = 'geo';
+    A.preload(GEO_SFX);
     A.setStyle('geo');
     launchOverlay.classList.add('hidden');
     geoEnd.classList.add('hidden');

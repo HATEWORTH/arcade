@@ -6,7 +6,7 @@
 
 use wasm_bindgen::JsCast;
 
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement};
 
 pub const CYAN: &str = "#8fce9a";
 pub const MAGENTA: &str = "#e0459b";
@@ -25,6 +25,9 @@ pub struct Gfx {
     pub glow: f64,
     pub shake_scale: f64,
     pub particle_scale: f64,
+    /// Soft additive light, used to give explosions a hot core. Loaded once;
+    /// everything still draws if it never arrives.
+    glow_img: Option<HtmlImageElement>,
 }
 
 impl Gfx {
@@ -45,6 +48,10 @@ impl Gfx {
             glow: 1.0,
             shake_scale: 1.0,
             particle_scale: 1.0,
+            glow_img: HtmlImageElement::new().ok().map(|img| {
+                img.set_src("assets/geo/fx/glow.png");
+                img
+            }),
         };
         g.resize();
         Some(g)
@@ -198,6 +205,24 @@ impl Gfx {
             let _ = g.add_color_stop(*at as f32, color);
         }
         Some(g)
+    }
+
+    /// True once the glow texture has decoded.
+    pub fn glow_ready(&self) -> bool {
+        self.glow_img.as_ref().map(|i| i.complete() && i.natural_width() > 0).unwrap_or(false)
+    }
+
+    /// Stamp the soft light, centred, at the given diameter.
+    pub fn draw_glow(&self, cx: f64, cy: f64, size: f64) {
+        if let Some(img) = self.glow_img.as_ref() {
+            let _ = self.ctx.draw_image_with_html_image_element_and_dw_and_dh(
+                img,
+                cx - size / 2.0,
+                cy - size / 2.0,
+                size,
+                size,
+            );
+        }
     }
 
     pub fn fill_gradient(&self, g: &web_sys::CanvasGradient) {

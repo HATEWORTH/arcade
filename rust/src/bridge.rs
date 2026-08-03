@@ -49,6 +49,12 @@ extern "C" {
     #[wasm_bindgen(js_namespace = ARCADE_WASM_HOST, js_name = netSend)]
     fn js_net_send(data: &[u8]);
 
+    /// Play a recorded one-shot by name. Silently does nothing if the clip
+    /// has not finished loading, so callers keep a synth fallback where the
+    /// sound actually carries information.
+    #[wasm_bindgen(js_namespace = ARCADE_WASM_HOST, js_name = sample, catch)]
+    fn js_sample(name: &str, vol: f64) -> Result<JsValue, JsValue>;
+
     /// Player graphics settings as [glow, shake, particles].
     ///
     /// Caught rather than plain: this is an optional shim, and an older cached
@@ -105,6 +111,9 @@ pub fn event(game: &str, name: &str, detail: &str) {
 }
 pub fn net_send(data: &[u8]) {
     js_net_send(data);
+}
+pub fn sample(name: &str, vol: f64) {
+    let _ = js_sample(name, vol);
 }
 pub fn reduced_motion() -> bool {
     js_reduced_motion()

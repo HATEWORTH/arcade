@@ -115,6 +115,10 @@ struct Enemy {
     pv: i32,
     /// shot cooldown for the sniper, charge for the pulsar
     cool: f64,
+    /// hits still to take. Zero and one both mean one — only the mobs whose
+    /// trick needs time to land bother setting it, because a pulsar that dies
+    /// to the first stray bullet never gets to do the one thing it is for.
+    hp: i32,
     /// heading it presents, which is the side a bulwark can block from
     face: f64,
 }
@@ -140,6 +144,16 @@ struct Particle {
     color: String,
     len: f64,
     grav: bool,
+}
+
+/// A soft light stamped on a detonation. The line shards read as debris;
+/// this is the heat they came off.
+struct Flash {
+    x: f64,
+    y: f64,
+    r: f64,
+    life: f64,
+    decay: f64,
 }
 
 struct Spray {
@@ -237,6 +251,7 @@ pub struct Geo {
     enemies: Vec<Enemy>,
     parts: Vec<Particle>,
     spray: Vec<Spray>,
+    flashes: Vec<Flash>,
     holes: Vec<Hole>,
     shocks: Vec<Shock>,
     hole_t: f64,
@@ -291,6 +306,7 @@ impl Geo {
             enemies: Vec::new(),
             parts: Vec::new(),
             spray: Vec::new(),
+            flashes: Vec::new(),
             holes: Vec::new(),
             shocks: Vec::new(),
             hole_t: 12.0,
@@ -462,6 +478,7 @@ impl Geo {
         self.enemies.clear();
         self.parts.clear();
         self.spray.clear();
+        self.flashes.clear();
         self.holes.clear();
         self.shocks.clear();
         self.hole_t = 12.0;
@@ -633,6 +650,10 @@ impl Geo {
         }
     }
 
+    fn flash(&mut self, x: f64, y: f64, r: f64, decay: f64) {
+        self.flashes.push(Flash { x, y, r, life: 1.0, decay });
+    }
+
     /// Particle counts scale with the graphics setting; always leave at least
     /// one so an effect never silently vanishes.
     fn scaled(&self, n: usize) -> usize {
@@ -728,7 +749,7 @@ impl Geo {
         while self.score >= self.next_life {
             self.next_life += 20000;
             self.lives += 1;
-            bridge::bleep(660.0, 0.12, "triangle", 0.06);
+            bridge::sample("life", 0.7);
         }
     }
     fn bump_mult(&mut self) {
@@ -751,10 +772,11 @@ impl Geo {
         }
         let (x, y) = (self.ships[0].x, self.ships[0].y);
         self.player_burst(x, y);
+        self.flash(x, y, 260.0, 1.1);
         self.grid_explosive(120.0, x, y, 300.0);
         self.shake = 16.0;
         self.save_best();
-        bridge::bleep(220.0, 0.25, "sawtooth", 0.06);
+        bridge::sample("death", 0.9);
         bridge::event(
             "geo",
             "over",
@@ -771,9 +793,10 @@ impl Geo {
         self.mult_t = 0.0;
         let (x, y) = (self.ships[0].x, self.ships[0].y);
         self.player_burst(x, y);
+        self.flash(x, y, 200.0, 1.5);
         self.grid_explosive(100.0, x, y, 280.0);
         self.shake = 14.0;
-        bridge::sweep(500.0, 40.0, 0.4, "sawtooth", 0.07);
+        bridge::sample("hit", 0.8);
         bridge::hat(0.09, 0.12);
         let corpses: Vec<(f64, f64, Kind)> =
             self.enemies.iter().map(|e| (e.x, e.y, e.kind)).collect();
@@ -834,7 +857,7 @@ impl Geo {
                 kind, r: 11.0, vx: a.cos() * 150.0, vy: a.sin() * 150.0, pv: 1, ..Default::default()
             },
             Kind::Splitter => Enemy {
-                kind, r: 14.0, spd: 78.0 + t * 0.7, pv: 3, ..Default::default()
+                kind, r: 14.0, spd: 78.0 + t * 0.7, pv: 3, hp: 2, ..Default::default()
             },
             Kind::Sniper => Enemy {
                 // hangs back at range; the cooldown is staggered so a pair
@@ -843,10 +866,10 @@ impl Geo {
                 cool: 1.2 + self.rng.f() * 1.4, ..Default::default()
             },
             Kind::Bulwark => Enemy {
-                kind, r: 13.0, spd: 74.0 + t * 0.6, pv: 4, ..Default::default()
+                kind, r: 13.0, spd: 74.0 + t * 0.6, pv: 4, hp: 3, ..Default::default()
             },
             Kind::Pulsar => Enemy {
-                kind, r: 12.0, spd: 0.0, pv: 5, cool: 2.6, ..Default::default()
+                kind, r: 12.0, spd: 0.0, pv: 5, cool: 2.6, hp: 4, ..Default::default()
             },
             _ => Enemy {
                 kind: Kind::Chaser, r: 12.0, spd: 110.0 + t * 1.4, pv: 2, ..Default::default()
@@ -875,7 +898,7 @@ impl Geo {
             flash: 0.0,
             spray_a: a,
         });
-        bridge::sweep(300.0, 45.0, 0.7, "sine", 0.06);
+        bridge::sample("hole", 0.6);
     }
 
     fn explode_hole(&mut self, i: usize, with_bits: bool) {
@@ -892,9 +915,10 @@ impl Geo {
             max_rad: 700.0,
         });
         self.grid_explosive(140.0, h.x, h.y, 420.0);
+        self.flash(h.x, h.y, 300.0, 1.3);
         self.ring_burst(h.x, h.y);
         self.shake = 18.0;
-        bridge::sweep(700.0, 24.0, 0.7, "sawtooth", 0.11);
+        bridge::sample("blast", 0.85);
         bridge::hat(0.12, 0.2);
         if with_bits {
             let n = h.eaten.min(14).max(0) as usize;
@@ -1019,7 +1043,7 @@ impl Geo {
                     });
                 }
                 self.ships[i].fire_t = 0.1;
-                bridge::bleep(880.0, 0.018, "square", 0.012);
+                bridge::sample("shoot", 0.3);
             }
         }
 
@@ -1195,7 +1219,7 @@ impl Geo {
                 vy: a.sin() * sp,
                 life: 4.0,
             });
-            bridge::bleep(190.0, 0.06, "square", 0.03);
+            bridge::sample("sniper", 0.55);
         }
         for (x, y) in blasts {
             self.shocks.push(Shock {
@@ -1206,8 +1230,9 @@ impl Geo {
                 max_rad: 240.0,
             });
             self.grid_explosive(70.0, x, y, 240.0);
+            self.flash(x, y, 150.0, 2.0);
             self.burst(x, y, Kind::Pulsar.color(), 14, 0.9);
-            bridge::sweep(360.0, 90.0, 0.35, "sine", 0.05);
+            bridge::sample("pulse", 0.6);
             // the wave itself is what hurts, and only near the ring
             let s = self.ships[0];
             let d = (s.x - x).hypot(s.y - y);
@@ -1460,15 +1485,23 @@ impl Geo {
                     }
                 }
                 self.bullets.remove(j);
+                if self.enemies[i].hp > 1 {
+                    self.enemies[i].hp -= 1;
+                    // visible chip so it is obvious the thing is taking damage
+                    self.burst(b.x, b.y, kind.color(), 4, 0.6);
+                    self.flash(b.x, b.y, 26.0, 5.0);
+                    bridge::sample("kill", 0.22);
+                    continue;
+                }
                 self.enemies.remove(i);
                 self.kills += 1;
                 self.add_points((pv.max(1) as u32) * 10);
                 self.bump_mult();
                 self.enemy_burst(ex, ey);
+                self.flash(ex, ey, 54.0, 3.4);
                 self.grid_explosive(15.0, ex, ey, 110.0);
                 self.shake = self.shake.max(5.0);
-                let f = 280.0 + self.rng.f() * 220.0;
-                bridge::bleep(f, 0.05, "sawtooth", 0.032);
+                bridge::sample("kill", 0.5);
                 if self.kills % 4 == 0 {
                     bridge::hat(0.04, 0.05);
                 }
@@ -1568,6 +1601,10 @@ impl Geo {
             }
         }
 
+        self.flashes.retain_mut(|f| {
+            f.life -= f.decay * dt;
+            f.life > 0.0
+        });
         self.shake = (self.shake - dt * 30.0).max(0.0);
 
         let (w, h) = (self.g.w, self.g.h);
@@ -1870,6 +1907,7 @@ impl Geo {
         for i in 0..self.enemies.len() {
             self.draw_enemy(i);
         }
+        self.draw_flashes();
         self.draw_reticle();
         self.draw_ships();
         self.draw_parts();
@@ -1987,6 +2025,24 @@ impl Geo {
         }
         g.stroke();
         g.no_shadow();
+    }
+
+    /// The detonation cores, added on top of the scene rather than over it.
+    fn draw_flashes(&self) {
+        if self.flashes.is_empty() || !self.g.glow_ready() {
+            return;
+        }
+        let g = &self.g;
+        g.composite("lighter");
+        for f in &self.flashes {
+            let a = f.life.clamp(0.0, 1.0);
+            // swells as it fades, the way a real flash blooms out
+            let r = f.r * (1.6 - a * 0.6);
+            g.alpha(a * a * 0.85);
+            g.draw_glow(f.x, f.y, r);
+        }
+        g.alpha(1.0);
+        g.composite("source-over");
     }
 
     /// Sniper fire: hot, small, and unmistakably not yours.

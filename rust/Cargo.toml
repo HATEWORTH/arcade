@@ -21,6 +21,7 @@ features = [
   "HtmlCanvasElement",
   "CanvasRenderingContext2d",
   "CanvasGradient",
+  "HtmlImageElement",
   "Storage",
   "Performance",
 ]

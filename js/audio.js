@@ -702,6 +702,37 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     beat.bass = song.bass[barIdx % song.bass.length][s16] >= 0 ? Math.max(0, 1 - frac * 1.3) : 0;
     beat.arp  = song.arp[barIdx % song.arp.length][s16] >= 0 ? Math.max(0, 1 - frac * 2) : 0;
   }
+  // ---- sampled one-shots -------------------------------------------------
+  // Geo Wars uses recorded clips alongside the synth. They go through the same
+  // sfx bus as everything else, so the game-volume slider still governs them.
+  const samples = {};
+  function preload(names) {
+    audio();
+    if (!AC) return;
+    for (const n of names) {
+      if (samples[n] !== undefined) continue;
+      samples[n] = 'loading';
+      fetch('assets/geo/sfx/' + n + '.ogg?v=' + (window.__V || ''))
+        .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+        .then(b => AC.decodeAudioData(b))
+        .then(buf => { samples[n] = buf; })
+        .catch(() => { samples[n] = null; });   // stay silent, never throw
+    }
+  }
+  function sample(name, vol) {
+    if (!AC) return;
+    const buf = samples[name];
+    // not loaded (or failed): the caller keeps its synth fallback
+    if (!buf || typeof buf === 'string') return false;
+    const src = AC.createBufferSource();
+    src.buffer = buf;
+    const g = AC.createGain();
+    g.gain.value = vol === undefined ? 1 : vol;
+    src.connect(g).connect(sfxOut() || AC.destination);
+    src.start();
+    return true;
+  }
+
   if (S) {
     S.onChange((k, v) => {
       if (!AC) return;
@@ -715,6 +746,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   // shared services for every game in the cabinet
   window.ARCADE = {
     audio, startMusic, toggleMusic, setStyle, bleep, sweep, hat, beat,
+    sample, preload,
     suspend: () => { if (AC) AC.suspend(); },
     resume: () => { if (AC) AC.resume(); },
   };
