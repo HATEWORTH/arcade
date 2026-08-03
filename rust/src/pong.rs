@@ -228,8 +228,8 @@ impl Pong {
         Some(p)
     }
 
-    pub fn net_open(&mut self, url: &str, host: bool) {
-        self.net.open(url, host);
+    pub fn net_open(&mut self, host: bool) {
+        self.net.open(host);
     }
 
     // ---- geometry -------------------------------------------------------
@@ -769,7 +769,6 @@ impl Pong {
         self.beat = bridge::beat();
         self.t += dt;
 
-        self.net.poll();
         if self.net.is_guest() {
             // the host owns the world; we send our paddle and draw its answer
             let input = Input {

@@ -24,6 +24,9 @@
       try { localStorage.setItem(k, v); } catch (e) {}
     },
     event: (game, name, detail) => onGameEvent(game, name, detail),
+    netSend: bytes => {
+      if (net && net.chan && net.chan.readyState === 'open') net.chan.send(bytes);
+    },
   };
 
   // ---- DOM --------------------------------------------------------------
@@ -49,25 +52,126 @@
   const paused = { pong: false, geo: false };
 
   // ---- lobby ------------------------------------------------------------
-  // matchbox needs a signalling server. Point this at your own deployment;
-  // ?net=wss://host/ overrides it without a rebuild.
-  const DEFAULT_SIGNAL = 'ws://localhost:3536';
-  function signalUrl(room) {
-    const q = new URLSearchParams(location.search);
-    const base = (q.get('net') || DEFAULT_SIGNAL).replace(/\/+$/, '');
-    return base + '/' + room;
-  }
-  function roomName() {
-    const q = new URLSearchParams(location.search);
-    return q.get('room') || 'arcade';
-  }
+  // Serverless P2P: trystero rendezvous over public nostr relays carries the
+  // WebRTC handshake (the room code is both the meeting point and the
+  // encryption secret for it), then the game itself flows peer-to-peer over
+  // an unreliable datachannel. Nothing of ours runs anywhere.
+  // ?host=1 opens a room, ?join=1&room=CODE joins one.
+  let net = null; // { room, chan, peer, game }
+  let mintedRoom = null;
 
   function lobbyRequest() {
-    // ?host=1 opens as host, ?join=1 as guest, otherwise stay single-player
     const q = new URLSearchParams(location.search);
     if (q.get('host') === '1') return 'host';
     if (q.get('join') === '1') return 'guest';
     return null;
+  }
+
+  function roomCode() {
+    const q = new URLSearchParams(location.search);
+    if (q.get('room')) return q.get('room');
+    if (!mintedRoom) {
+      // no ambiguous chars: this gets read out loud over voice chat
+      const abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+      mintedRoom = Array.from(crypto.getRandomValues(new Uint8Array(5)), b => abc[b % abc.length]).join('');
+    }
+    return mintedRoom;
+  }
+
+  async function netOpen(game, role) {
+    if (net) netClose();
+    const code = roomCode();
+    if (role === 'guest' && !new URLSearchParams(location.search).get('room')) {
+      netPill('no room code in the link — ask the host to share theirs', '#e0459b');
+      return;
+    }
+    let joinRoom;
+    try {
+      ({ joinRoom } = await import('./vendor/trystero-nostr.min.js?v=' + (window.__V || '')));
+    } catch (e) {
+      console.error('trystero failed to load', e);
+      netPill('p2p module failed to load', '#e0459b');
+      return;
+    }
+    // rooms are per-game so two people who picked different games never
+    // half-connect; the code stays short because the game rides the appId
+    const room = joinRoom({ appId: 'neon-arcade-' + game, password: code }, code);
+    net = { room, chan: null, peer: null, game };
+    room.onPeerJoin = id => {
+      if (!net || net.peer) return; // two players only: first arrival takes the slot
+      net.peer = id;
+      openChannel(game, room.getPeers()[id]);
+    };
+    room.onPeerLeave = id => {
+      if (!net || net.peer !== id) return;
+      net.peer = null;
+      net.chan = null;
+      if (ready) wasm.net_peer(game, false);
+      netPill('player left — waiting for a new one…', '#e0a545');
+    };
+    if (role === 'host') {
+      const link = location.href.split('?')[0] + '?join=1&room=' + code + '&game=' + game;
+      netPill('room ' + code + ' — click to copy invite link', '#45e0a5', link);
+    } else {
+      netPill('joining room ' + code + '…', '#e0a545');
+    }
+  }
+
+  function openChannel(game, pc) {
+    // negotiated on a fixed stream id: both sides create it, no renegotiation.
+    // unreliable + unordered — the newest snapshot is the only one that
+    // matters, so never pay for a retransmit of a stale one
+    const ch = pc.createDataChannel('arcade', { negotiated: true, id: 77, ordered: false, maxRetransmits: 0 });
+    ch.binaryType = 'arraybuffer';
+    ch.onopen = () => {
+      if (!net) return;
+      net.chan = ch;
+      if (ready) wasm.net_peer(game, true);
+      netPill('connected', '#45e0a5');
+      setTimeout(() => { if (net && net.chan === ch) netPill(null); }, 2500);
+    };
+    ch.onmessage = e => {
+      if (ready && net && net.chan === ch) wasm.net_packet(game, new Uint8Array(e.data));
+    };
+    ch.onclose = () => {
+      if (net && net.chan === ch) net.chan = null;
+    };
+  }
+
+  function netClose() {
+    if (!net) return;
+    try { net.room.leave(); } catch (e) {}
+    net = null;
+    netPill(null);
+  }
+
+  // one small status pill, top center; hosts click it to copy the invite
+  let pillEl = null;
+  function netPill(text, color, copyLink) {
+    if (!pillEl) {
+      pillEl = document.createElement('div');
+      pillEl.style.cssText =
+        'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:98;' +
+        'font:600 13px Consolas,monospace;background:#12140d;padding:8px 14px;' +
+        'border:1px solid;cursor:default;user-select:none';
+      document.body.appendChild(pillEl);
+    }
+    if (!text) { pillEl.style.display = 'none'; pillEl.onclick = null; return; }
+    pillEl.style.display = 'block';
+    pillEl.textContent = text;
+    pillEl.style.color = color;
+    pillEl.style.borderColor = color;
+    if (copyLink) {
+      pillEl.style.cursor = 'pointer';
+      pillEl.onclick = () => {
+        navigator.clipboard.writeText(copyLink).then(() => {
+          pillEl.textContent = 'invite link copied — send it to your player 2';
+        }).catch(() => { pillEl.textContent = copyLink; });
+      };
+    } else {
+      pillEl.style.cursor = 'default';
+      pillEl.onclick = null;
+    }
   }
 
   // ---- boot -------------------------------------------------------------
@@ -93,7 +197,10 @@
     if (!ready) return;
     wasm.init(game, 'c', Math.floor(Math.random() * 4294967295));
     const role = lobbyRequest();
-    if (role) wasm.net_open(game, signalUrl(roomName()), role);
+    if (role) {
+      wasm.net_open(game, role);
+      netOpen(game, role);
+    }
   }
 
   // ---- events from Rust -------------------------------------------------
@@ -159,6 +266,7 @@
     const game = window.MODE;
     paused[game] = false;
     if (ready) wasm.net_close(game);
+    netClose();
     ARCADE_LOCK.unlock();
     A.setStyle('neon');
     A.resume();
@@ -262,5 +370,10 @@
   }
   requestAnimationFrame(frame);
 
-  boot();
+  boot().then(() => {
+    // an invite link names the game: walk the guest straight into its lobby
+    const game = new URLSearchParams(location.search).get('game');
+    if (!ready || !lobbyRequest() || !WASM_GAMES.includes(game)) return;
+    document.getElementById(game === 'pong' ? 'pickPong' : 'pickGeo').click();
+  });
 })();

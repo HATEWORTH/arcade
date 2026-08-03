@@ -1,4 +1,9 @@
-//! WebRTC transport over matchbox.
+//! WebRTC transport, driven by the JS shell.
+//!
+//! Signalling and the RTCPeerConnection live in JavaScript (trystero over
+//! public nostr relays — no server of ours anywhere; the room code is both
+//! the rendezvous point and the handshake-encryption secret). Rust sees four
+//! things: a peer appeared, a peer left, bytes arrived, send these bytes.
 //!
 //! Host-authoritative: the host runs the simulation and broadcasts snapshots,
 //! the guest sends input and draws what it is told. Both games share this
@@ -8,7 +13,7 @@
 //! with plenty of per-frame randomness, and at Pong/Geo speeds snapshot sync
 //! plus interpolation is indistinguishable from it.
 
-use matchbox_socket::{PeerState, WebRtcSocket};
+use crate::bridge;
 use serde::{Deserialize, Serialize};
 
 /// What the guest sends upstream every frame.
@@ -39,10 +44,8 @@ pub enum Role {
 }
 
 pub struct Net {
-    socket: Option<WebRtcSocket>,
     role: Role,
     want_host: bool,
-    peer: Option<matchbox_socket::PeerId>,
     /// newest snapshot the guest has received
     pub last_snapshot: Option<Vec<u8>>,
     /// newest input the host has received
@@ -60,39 +63,58 @@ impl Default for Net {
 impl Net {
     pub fn new() -> Self {
         Net {
-            socket: None,
             role: Role::Off,
             want_host: false,
-            peer: None,
             last_snapshot: None,
             last_input: Input::default(),
             peer_lost: false,
         }
     }
 
-    pub fn open(&mut self, url: &str, want_host: bool) {
-        // unreliable + unordered: the newest snapshot is the only one that
-        // matters, so never pay for a retransmit of a stale one
-        let (socket, driver) = WebRtcSocket::new_unreliable(url);
-        wasm_bindgen_futures::spawn_local(async move {
-            // the driver future owns the signalling loop; it ends when the
-            // socket is dropped or the server hangs up
-            let _ = driver.await;
-        });
-        self.socket = Some(socket);
+    /// Enter the lobby. The shell owns the actual connection; this just
+    /// records which side of it we asked to be.
+    pub fn open(&mut self, want_host: bool) {
         self.want_host = want_host;
         self.role = Role::Waiting;
-        self.peer = None;
         self.peer_lost = false;
         self.last_snapshot = None;
+        self.last_input = Input::default();
     }
 
     pub fn close(&mut self) {
-        self.socket = None;
         self.role = Role::Off;
-        self.peer = None;
         self.last_snapshot = None;
         self.peer_lost = false;
+    }
+
+    /// The shell reports the data channel opening or the peer vanishing.
+    pub fn peer(&mut self, connected: bool) {
+        if self.role == Role::Off {
+            return;
+        }
+        if connected {
+            self.role = if self.want_host { Role::Host } else { Role::Guest };
+        } else if self.is_live() {
+            self.peer_lost = true;
+            self.role = Role::Waiting;
+        }
+    }
+
+    /// The shell delivers one packet off the wire. Only the newest of each
+    /// kind is kept — stale snapshots and inputs are worthless.
+    pub fn packet(&mut self, data: &[u8]) {
+        if data.is_empty() {
+            return;
+        }
+        match data[0] {
+            TAG_SNAPSHOT => self.last_snapshot = Some(data[1..].to_vec()),
+            TAG_INPUT => {
+                if let Ok(i) = bincode::deserialize::<Input>(&data[1..]) {
+                    self.last_input = i;
+                }
+            }
+            _ => {}
+        }
     }
 
     pub fn status(&self) -> &'static str {
@@ -117,53 +139,6 @@ impl Net {
         matches!(self.role, Role::Host | Role::Guest)
     }
 
-    /// Pump the socket. Call once per frame before using the game state.
-    pub fn poll(&mut self) {
-        let socket = match self.socket.as_mut() {
-            Some(s) => s,
-            None => return,
-        };
-
-        // connection churn
-        let updates = socket.try_update_peers().unwrap_or_default();
-        for (id, state) in updates {
-            match state {
-                PeerState::Connected => {
-                    if self.peer.is_none() {
-                        self.peer = Some(id);
-                        // whoever asked to host, hosts; if both or neither did,
-                        // the larger peer id breaks the tie deterministically
-                        self.role = if self.want_host { Role::Host } else { Role::Guest };
-                    }
-                }
-                PeerState::Disconnected => {
-                    if self.peer == Some(id) {
-                        self.peer = None;
-                        self.peer_lost = true;
-                        self.role = Role::Waiting;
-                    }
-                }
-            }
-        }
-
-        // drain, keeping only the newest of each kind
-        for (_id, packet) in socket.channel_mut(0).receive() {
-            let packet: Box<[u8]> = packet;
-            if packet.is_empty() {
-                continue;
-            }
-            match packet[0] {
-                TAG_SNAPSHOT => self.last_snapshot = Some(packet[1..].to_vec()),
-                TAG_INPUT => {
-                    if let Ok(i) = bincode::deserialize::<Input>(&packet[1..]) {
-                        self.last_input = i;
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
     pub fn send_snapshot<T: Serialize>(&mut self, snap: &T) {
         self.send_tagged(TAG_SNAPSHOT, snap);
     }
@@ -173,10 +148,9 @@ impl Net {
     }
 
     fn send_tagged<T: Serialize>(&mut self, tag: u8, value: &T) {
-        let (socket, peer) = match (self.socket.as_mut(), self.peer) {
-            (Some(s), Some(p)) => (s, p),
-            _ => return,
-        };
+        if !self.is_live() {
+            return;
+        }
         let body = match bincode::serialize(value) {
             Ok(b) => b,
             Err(_) => return,
@@ -184,7 +158,7 @@ impl Net {
         let mut packet = Vec::with_capacity(body.len() + 1);
         packet.push(tag);
         packet.extend_from_slice(&body);
-        socket.channel_mut(0).send(packet.into_boxed_slice(), peer);
+        bridge::net_send(&packet);
     }
 
     /// Take the pending snapshot, decoded.

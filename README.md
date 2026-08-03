@@ -38,27 +38,23 @@ host-authoritative: the host simulates, the guest sends input and draws the
 snapshots it gets back. Traffic is peer-to-peer over an unreliable, unordered
 WebRTC data channel — nothing but connection setup touches a server.
 
-WebRTC still needs a signalling server to introduce the peers. That is
-[`matchbox_server`](https://github.com/johanhelsing/matchbox):
-
-```sh
-cargo install matchbox_server
-matchbox_server            # listens on ws://localhost:3536
-```
-
-Then open the site with the lobby query parameters:
+WebRTC still needs a way to introduce the peers. Rather than running a
+signalling server, the shell uses [trystero](https://github.com/dmotz/trystero)
+(vendored in `js/vendor/`): the handshake rides public nostr relays, encrypted
+with the room code, and after that everything is peer-to-peer. There is no
+server to deploy — it works straight off GitHub Pages, for free.
 
 | parameter | meaning |
 | --- | --- |
-| `?host=1` | open this tab as the host |
-| `?join=1` | open this tab as the guest |
-| `?room=NAME` | which room to meet in (default `arcade`) |
-| `?net=wss://…` | signalling server, overriding `ws://localhost:3536` |
+| `?host=1` | open this tab as the host; a room code is minted and shown |
+| `?join=1&room=CODE` | join a host's room |
+| `?game=pong` / `?game=geo` | jump straight into that game's lobby |
 
-So one player opens `…/?host=1&room=abc` and the other `…/?join=1&room=abc`.
-With no parameters both games run single-player exactly as before — Pong
-against the CPU, Geo Wars solo.
+The host opens `…/?host=1`, picks a game, and clicks the status pill to copy
+an invite link (it carries the room code and the game). Player 2 just opens
+the link. With no parameters both games run single-player exactly as before —
+Pong against the CPU, Geo Wars solo.
 
-To play over the internet rather than a LAN, deploy `matchbox_server`
-somewhere with TLS and pass it as `?net=wss://your-host`. A public deployment
-will also want a TURN relay for players behind symmetric NAT.
+The usual WebRTC caveat applies: peers behind symmetric NAT (some mobile
+carriers, strict corporate networks) can't hole-punch and would need a TURN
+relay, which is the one thing this setup doesn't include.

@@ -257,8 +257,8 @@ impl Geo {
         Some(geo)
     }
 
-    pub fn net_open(&mut self, url: &str, host: bool) {
-        self.net.open(url, host);
+    pub fn net_open(&mut self, host: bool) {
+        self.net.open(host);
         // co-op needs a second hull
         if self.ships.len() < 2 {
             let mut s = Ship {
@@ -1370,7 +1370,6 @@ impl Geo {
     // ---- frame ----------------------------------------------------------
     pub fn frame(&mut self, dt: f64) {
         self.g.resize();
-        self.net.poll();
 
         if self.net.is_guest() {
             let s = self.ships[0];
