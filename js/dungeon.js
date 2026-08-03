@@ -96,6 +96,19 @@
     necro: buildHero({ c: '#4a3a5a', s: '#8a8f80', d: '#565b48', g: '#7ec96f' }),
   };
   const TORCH = sprite(['..ww..', '.wggw.', '..gg..', '..bb..', '..bb..', '.kbbk.']);
+  const MERCHANT = sprite([
+    '....kkkk....',
+    '...khhhhk...',
+    '..khhhhhhk..',
+    '..khkkkkhk..',
+    '..khhhhhhk..',
+    '..khhhhhhk..',
+    '.khhhhhhhhk.',
+    '.khhhhhhhhk.',
+    '.khhghhghhk.',
+    '.khhhhhhhhk.',
+    '..kkkkkkkk..',
+  ], { h: '#7a6a4a' });
   const SKEL_ROWS = [
     '....kkkk....',
     '...kWWWWk...',
@@ -417,7 +430,7 @@
     running: false, paused: false, over: false,
     tiles: null, seen: null, rooms: [], torches: [], chests: [], enemies: [],
     drops: [], pedestals: [], bolts: [], corpses: [], allies: [],
-    spikes: [], spikeSet: new Set(), braziers: [],
+    spikes: [], spikeSet: new Set(), braziers: [], wares: [],
     cls: null, clsBtns: [], sealedRoom: null, curRoom: null,
     stairs: { x: 0, y: 0 },
     hero: { x: 0, y: 0, face: 1, moving: false, hp: 100, maxHp: 100, gold: 0 },
@@ -599,8 +612,10 @@
     if (deadEnds.length < 2) return null;
     deadEnds.sort((a, b) => dist[key(b.gx, b.gy)] - dist[key(a.gx, a.gy)]);
     const bossCell = deadEnds[0];
-    const treasureCell = deadEnds[1 + Math.floor(Math.random() * (deadEnds.length - 1))];
-    return { placed, cells, startG, bossCell, treasureCell, key };
+    const rest = deadEnds.slice(1).sort(() => Math.random() - 0.5);
+    const treasureCell = rest[0];
+    const shopCell = rest[1] || null; // most floors have one; some don't
+    return { placed, cells, startG, bossCell, treasureCell, shopCell, key };
   }
   function roomRect(gx, gy) {
     return { x: gx * CW + 1, y: gy * CH + 1, w: CW - 1, h: CH - 1 };
@@ -716,7 +731,7 @@
     D.seen = new Uint8Array(MW * MH);
     D.rooms = []; D.torches = []; D.chests = []; D.enemies = [];
     D.drops = []; D.pedestals = []; D.bolts = []; D.corpses = []; D.allies = [];
-    D.spikes = []; D.spikeSet = new Set(); D.braziers = [];
+    D.spikes = []; D.spikeSet = new Set(); D.braziers = []; D.wares = [];
     D.bossDoors = []; D.stairsLocked = true; D.sealedRoom = null;
     D.floats.length = 0;
     // carve room interiors
@@ -725,7 +740,8 @@
       const type =
         c.gx === L.startG.gx && c.gy === L.startG.gy ? 'start' :
         c.gx === L.bossCell.gx && c.gy === L.bossCell.gy ? 'boss' :
-        c.gx === L.treasureCell.gx && c.gy === L.treasureCell.gy ? 'treasure' : 'normal';
+        c.gx === L.treasureCell.gx && c.gy === L.treasureCell.gy ? 'treasure' :
+        L.shopCell && c.gx === L.shopCell.gx && c.gy === L.shopCell.gy ? 'shop' : 'normal';
       D.rooms.push({ ...r, gx: c.gx, gy: c.gy, cx: r.x + Math.floor(r.w / 2), cy: r.y + Math.floor(r.h / 2), type });
       for (let ty = r.y; ty < r.y + r.h; ty++) {
         for (let tx = r.x; tx < r.x + r.w; tx++) D.tiles[idx(tx, ty)] = 1;
@@ -788,6 +804,20 @@
       x: treasureRoom.cx, y: treasureRoom.cy,
       relic: randomRelic(), taken: false,
     });
+    // the shop stocks a potion, a piece of gear, and a relic — for a price
+    const shopRoom = D.rooms.find(r => r.type === 'shop');
+    if (shopRoom) {
+      const potion = makeItem('potion', D.floor);
+      const gearKinds = ['sword', 'armor', 'shield'];
+      const gear = makeItem(gearKinds[Math.floor(Math.random() * gearKinds.length)], D.floor + 1);
+      const relic = randomRelic();
+      D.wares.push(
+        { x: shopRoom.cx - 2, y: shopRoom.cy, it: potion, price: 12 + D.floor * 3, sold: false, msgT: 0 },
+        { x: shopRoom.cx, y: shopRoom.cy, it: gear, price: Math.round((18 + D.floor * 5) * RARITIES[gear.ri].mult), sold: false, msgT: 0 },
+        { x: shopRoom.cx + 2, y: shopRoom.cy, relic, price: relic.cursed ? 45 + D.floor * 8 : 65 + D.floor * 12, sold: false, msgT: 0 },
+      );
+      shopRoom.merchant = { x: shopRoom.cx, y: shopRoom.cy - 2 };
+    }
     // floor 1: pick your starting weapon — three pedestals, take one
     if (D.floor === 1) {
       const picks = WTYPE_KEYS.slice().sort(() => Math.random() - 0.5).slice(0, 3);
@@ -953,7 +983,7 @@
       al.y = Math.max((nr.y + 0.4) * TILE, Math.min((nr.y + nr.h - 0.4) * TILE, al.y));
       unstick(al, 8);
     }
-    if (!nr.cleared && nr.type !== 'start' && nr.type !== 'treasure') {
+    if (!nr.cleared && nr.type !== 'start' && nr.type !== 'treasure' && nr.type !== 'shop') {
       if (D.enemies.some(en => en.homeRoom === nr)) {
         sealRoom(nr);
         if (nr.type === 'boss') {
@@ -1555,6 +1585,35 @@
         return;
       }
     }
+    // shop wares: touch to buy, if your purse can cover it
+    for (const w of D.wares) {
+      w.msgT = Math.max(0, w.msgT - dt);
+      if (w.sold) continue;
+      if (Math.hypot(D.hero.x - (w.x + 0.5) * TILE, D.hero.y - (w.y + 0.5) * TILE) < 24) {
+        if (D.hero.gold < w.price) {
+          if (w.msgT <= 0) {
+            w.msgT = 2;
+            say('Costs ' + w.price + 'g — you have ' + D.hero.gold, '#d9a94e');
+            A.bleep(160, 0.07, 'square', 0.03);
+          }
+          continue;
+        }
+        if (w.it && D.bag.indexOf(null) < 0) {
+          if (w.msgT <= 0) { w.msgT = 2; say('Bag full!', '#a4372e'); }
+          continue;
+        }
+        D.hero.gold -= w.price;
+        w.sold = true;
+        if (w.relic) {
+          gainRelic(w.relic);
+        } else {
+          addToBag(w.it);
+          say('Bought ' + w.it.name + ' (' + RARITIES[w.it.ri].name + ')', RARITIES[w.it.ri].color);
+        }
+        A.bleep(880, 0.06, 'triangle', 0.05);
+        setTimeout(() => A.bleep(1180, 0.08, 'triangle', 0.05), 70);
+      }
+    }
     // pedestals: walk up to claim what rests there
     for (const p of D.pedestals) {
       if (p.taken) continue;
@@ -2115,6 +2174,44 @@
       ctx.drawImage(aspr, -aw / 2, -ah / 2, aw, ah);
       ctx.restore();
       ctx.globalAlpha = 1;
+    }
+    // the shop: rug, merchant, and priced wares
+    if (cr.type === 'shop' && cr.merchant) {
+      const rugX = ox + (cr.cx - 2.5) * TILE, rugY = oy + (cr.cy - 0.5) * TILE;
+      ctx.fillStyle = 'rgba(122, 90, 50, 0.25)';
+      ctx.fillRect(rugX, rugY, TILE * 6, TILE * 2);
+      const msx = ox + (cr.merchant.x + 0.5) * TILE, msy = oy + (cr.merchant.y + 0.5) * TILE;
+      const bob = reducedMotion ? 0 : Math.sin(D.t * 1.6) * 1.5;
+      ctx.drawImage(MERCHANT, msx - 12, msy - 14 + bob, 24, 22);
+      ctx.fillStyle = '#d9a94e';
+      ctx.font = '600 9px ' + MONO;
+      ctx.textAlign = 'center';
+      ctx.fillText('SHOP', msx, msy - 20 + bob);
+      ctx.textAlign = 'left';
+    }
+    for (const w of D.wares) {
+      if (w.sold || !inV(w.x, w.y)) continue;
+      const sx = ox + (w.x + 0.5) * TILE, sy = oy + (w.y + 0.5) * TILE;
+      const col = w.relic ? w.relic.color : RARITIES[w.it.ri].color;
+      ctx.fillStyle = '#565b48';
+      ctx.fillRect(sx - 8, sy - 2, 16, 8);
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(sx, sy - 12, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      if (w.relic) {
+        drawRelicGlyph(sx, sy - 12, w.relic, 7);
+      } else {
+        const ic = iconFor(w.it);
+        ctx.drawImage(ic, sx - ic.width, sy - 12 - ic.height, ic.width * 2, ic.height * 2);
+      }
+      ctx.fillStyle = D.hero.gold >= w.price ? '#d9a94e' : '#a4372e';
+      ctx.font = '600 9px ' + MONO;
+      ctx.textAlign = 'center';
+      ctx.fillText(w.price + 'g', sx, sy + 16);
+      ctx.textAlign = 'left';
     }
     // pedestals
     for (const p of D.pedestals) {
