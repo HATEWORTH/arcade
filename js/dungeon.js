@@ -534,8 +534,10 @@
   // ---- enemy catalogue ---------------------------------------------------
   const ETYPES = {
     slime:      { spr: SLIME,    w: 26, h: 18, r: 11, spd: 52,  move: 'chase',   hp: f => 9 + f * 2,  dmg: f => 10 + f * 2,  gold: f => 3 + f },
-    skeleton:   { spr: SKELETON, w: 24, h: 26, r: 10, spd: 88,  move: 'chase',   hp: f => 18 + f * 4, dmg: f => 14 + f * 3,  gold: f => 6 + f * 2 },
-    wraith:     { spr: WRAITH,   w: 24, h: 26, r: 9,  spd: 132, move: 'chase',   hp: f => 12 + f * 3, dmg: f => 12 + f * 3,  gold: f => 8 + f * 2 },
+    skeleton:   { spr: SKELETON, w: 24, h: 26, r: 10, spd: 88,  move: 'chase',   hp: f => 18 + f * 4, dmg: f => 14 + f * 3,  gold: f => 6 + f * 2,
+                  shot: { cd: 2.4, spd: 150, dmg: f => 9 + f * 2, col: '#e8d48a' } },
+    wraith:     { spr: WRAITH,   w: 24, h: 26, r: 9,  spd: 132, move: 'chase',   hp: f => 12 + f * 3, dmg: f => 12 + f * 3,  gold: f => 8 + f * 2,
+                  shot: { cd: 2.0, spd: 190, dmg: f => 10 + f * 2, col: '#8fb8e8' } },
     brute:      { spr: BRUTE,    w: 34, h: 30, r: 15, spd: 50,  move: 'chase',   hp: f => 45 + f * 9, dmg: f => 22 + f * 4,  gold: f => 16 + f * 4 },
     bat:        { spr: BAT,      w: 20, h: 16, r: 8,  spd: 150, move: 'erratic', hp: f => 6 + f,      dmg: f => 8 + f * 2,   gold: f => 4 + f },
     spider:     { spr: SPIDER,   w: 28, h: 18, r: 10, spd: 68,  move: 'lunge',   dash: 265, hp: f => 14 + f * 3, dmg: f => 14 + f * 3, gold: f => 9 + f * 2 },
@@ -571,7 +573,8 @@
   const D = {
     running: false, paused: false, over: false,
     tiles: null, seen: null, rooms: [], torches: [], chests: [], enemies: [],
-    drops: [], pedestals: [], bolts: [], corpses: [], allies: [],
+    drops: [], pedestals: [], bolts: [], eshots: [], corpses: [], allies: [],
+    rollT: 0, rollCd: 0, rollDir: 0,
     spikes: [], spikeSet: new Set(), braziers: [], wares: [],
     cls: null, clsBtns: [], sealedRoom: null, curRoom: null,
     stairs: { x: 0, y: 0 },
@@ -940,6 +943,7 @@
     D.drops = []; D.pedestals = []; D.bolts = []; D.corpses = []; D.allies = [];
     D.spikes = []; D.spikeSet = new Set(); D.braziers = []; D.wares = [];
     D.bossDoors = []; D.stairsLocked = true; D.sealedRoom = null;
+    D.eshots = []; D.rollT = 0; D.rollCd = 0;
     D.floats.length = 0;
     // carve room interiors
     for (const c of L.cells) {
@@ -1063,7 +1067,7 @@
         gold: Math.round((8 + D.floor * 5) * RARITIES[ri].mult),
       });
     }
-    const n = 5 + D.floor * 2;
+    const n = 7 + D.floor * 2;
     for (let i = 0; i < n; i++) spawnEnemy(true);
     D.curRoom = startRoom;
     startRoom.visited = true;
@@ -1226,6 +1230,7 @@
     D.running = true;
     ARCADE_LOCK.lock();
     A.audio(); A.startMusic();
+    say('SHIFT — dodge roll', '#8fa2b8');
   }
   function die() {
     D.running = false;
@@ -1356,6 +1361,10 @@
       if (nearInteractable()) D.interact = true;
       else attack();
       e.preventDefault();
+      return;
+    }
+    if (e.key === 'Shift') {
+      startRoll();
       return;
     }
     keys[e.key.toLowerCase()] = true;
@@ -1579,7 +1588,7 @@
       bossLoot(en);
       openSeal(true);
     } else {
-      if (Math.random() < 0.1) {
+      if (Math.random() < 0.06) {
         D.drops.push({ x: en.x, y: en.y, it: makeItem('potion', D.floor) });
       }
       // room cleared? the doors release
@@ -1590,8 +1599,21 @@
       }
     }
   }
+  // Shift: a short dash with full invulnerability — the Isaac-style skill out
+  function startRoll() {
+    if (D.rollT > 0 || D.rollCd > 0 || !D.running || D.paused || D.inv) return;
+    let ax = 0, ay = 0;
+    if (keys['a'] || keys['arrowleft']) ax -= 1;
+    if (keys['d'] || keys['arrowright']) ax += 1;
+    if (keys['w'] || keys['arrowup']) ay -= 1;
+    if (keys['s'] || keys['arrowdown']) ay += 1;
+    D.rollDir = (ax || ay) ? Math.atan2(ay, ax) : D.aim;
+    D.rollT = 0.3;
+    D.rollCd = 1.0;
+    A.sweep(280, 620, 0.12, 'triangle', 0.04);
+  }
   function hurtHeroFrom(en, raw) {
-    if (D.hurtT > 0) return;
+    if (D.hurtT > 0 || D.rollT > 0) return;
     if (D.st.dodge && Math.random() < D.st.dodge) {
       D.hurtT = 0.25;
       floatText(D.hero.x, D.hero.y - 24, 'DODGE', '#7ec96f');
@@ -1619,8 +1641,41 @@
     if (D.hero.hp <= 0) { D.hero.hp = 0; die(); }
   }
   // environmental damage: spikes and flames ignore blocking
+  function fireShot(en, ang, spd, dmg, col) {
+    D.eshots.push({
+      x: en.x, y: en.y - 6,
+      vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+      dmg, col, ttl: 3.2,
+    });
+  }
+  function hurtHeroShot(s) {
+    if (D.hurtT > 0 || D.rollT > 0) return;
+    if (D.st.dodge && Math.random() < D.st.dodge) {
+      D.hurtT = 0.25;
+      floatText(D.hero.x, D.hero.y - 24, 'DODGE', '#7ec96f');
+      A.bleep(700, 0.04, 'triangle', 0.03);
+      return;
+    }
+    const from = Math.atan2(-s.vy, -s.vx); // where the shot came from
+    const frontal = Math.abs(angDiff(from, D.aim)) < 1.15;
+    let dmg;
+    if (D.block && D.equip.shield && frontal) {
+      dmg = Math.max(0, s.dmg - D.st.blk * 2 - D.st.def);
+      D.hurtT = 0.35;
+      floatText(D.hero.x, D.hero.y - 24, dmg > 0 ? '-' + dmg : 'BLOCK', '#8fa2b8');
+      A.bleep(520, 0.06, 'square', 0.045);
+    } else {
+      dmg = Math.max(1, s.dmg - D.st.def);
+      D.hurtT = 0.6;
+      D.shake = Math.max(D.shake, 8);
+      floatText(D.hero.x, D.hero.y - 24, '-' + dmg, '#a4372e');
+      A.bleep(180, 0.12, 'square', 0.05);
+    }
+    D.hero.hp -= dmg;
+    if (D.hero.hp <= 0) { D.hero.hp = 0; die(); }
+  }
   function hurtHeroEnv(raw) {
-    if (D.hurtT > 0) return;
+    if (D.hurtT > 0 || D.rollT > 0) return;
     const dmg = Math.max(1, raw - Math.floor(D.st.def / 2));
     D.hero.hp -= dmg;
     D.hurtT = 0.6;
@@ -1832,9 +1887,16 @@
     D.hero.moving = !!(ax || ay);
     D.hasteT = Math.max(0, (D.hasteT || 0) - dt);
     if (D.st.regen) D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + D.st.regen * dt);
-    let spd = D.block ? D.st.spd * 0.45 : D.st.spd;
-    if (D.hasteT > 0) spd *= 1.35;
-    moveWith(D.hero, (ax / m) * spd, (ay / m) * spd, dt, HERO_R);
+    D.rollT = Math.max(0, D.rollT - dt);
+    D.rollCd = Math.max(0, D.rollCd - dt);
+    if (D.rollT > 0) {
+      moveWith(D.hero, Math.cos(D.rollDir) * D.st.spd * 2.7, Math.sin(D.rollDir) * D.st.spd * 2.7, dt, HERO_R);
+      D.hero.moving = true;
+    } else {
+      let spd = D.block ? D.st.spd * 0.45 : D.st.spd;
+      if (D.hasteT > 0) spd *= 1.35;
+      moveWith(D.hero, (ax / m) * spd, (ay / m) * spd, dt, HERO_R);
+    }
     // crossing a doorway loads the next room
     const htx2 = Math.floor(D.hero.x / TILE), hty2 = Math.floor(D.hero.y / TILE);
     const nr = roomAt(htx2, hty2);
@@ -1975,6 +2037,21 @@
       }
     }
 
+    // ---- enemy shots: slow, visible, and meant to be dodged --------------
+    for (let i = D.eshots.length - 1; i >= 0; i--) {
+      const s = D.eshots[i];
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      s.ttl -= dt;
+      if (s.ttl <= 0 || solid(Math.floor(s.x / TILE), Math.floor(s.y / TILE))) {
+        D.eshots.splice(i, 1);
+        continue;
+      }
+      if (Math.hypot(s.x - D.hero.x, s.y - D.hero.y) < HERO_R + 4) {
+        hurtHeroShot(s);
+        D.eshots.splice(i, 1);
+      }
+    }
+
     // ---- enemies ---------------------------------------------------------
     for (const en of D.enemies) {
       if (en.homeRoom !== D.curRoom) continue; // other rooms sleep
@@ -2048,7 +2125,24 @@
           }
         }
       } else {
-        moveWith(en, (dx / nd) * et.spd * slowMul, (dy / nd) * et.spd * slowMul, dt, et.r);
+        let mx = dx / nd, my = dy / nd;
+        if (et.shot) {
+          // shooters hold their range and strafe instead of face-tanking
+          if (d < TILE * 2.2) { mx = -mx; my = -my; }
+          else if (d < TILE * 4.5) {
+            if (!en.strafeDir) en.strafeDir = Math.random() < 0.5 ? 1 : -1;
+            mx = -(dy / nd) * en.strafeDir; my = (dx / nd) * en.strafeDir;
+          }
+        }
+        moveWith(en, mx * et.spd * slowMul, my * et.spd * slowMul, dt, et.r);
+      }
+      if (et.shot) {
+        en.shotT = (en.shotT === undefined ? 0.8 + Math.random() : en.shotT) - dt;
+        if (en.shotT <= 0 && d < TILE * 7 && los(en.x, en.y, D.hero.x, D.hero.y)) {
+          en.shotT = et.shot.cd;
+          fireShot(en, Math.atan2(dy, dx), et.shot.spd, et.shot.dmg(D.floor), et.shot.col);
+          A.bleep(340, 0.05, 'square', 0.03);
+        }
       }
       clampRoom();
       if (en.isBoss) {
@@ -2072,11 +2166,33 @@
             A.bleep(300, 0.1, 'square', 0.04);
           }
         }
+        // every boss runs a bullet pattern on top of its movement
+        const bDmg = 16 + D.floor * 3;
+        en.shotT = (en.shotT === undefined ? 1.5 : en.shotT) - dt;
+        if (en.shotT <= 0) {
+          const aim2 = Math.atan2(dy, dx);
+          if (en.type === 'guardian') {
+            en.volley = ((en.volley || 0) + 1) % 2;
+            if (en.volley) {
+              for (let k = 0; k < 12; k++) fireShot(en, (k / 12) * Math.PI * 2, 125, bDmg, '#e86a4a');
+            } else {
+              for (const off of [-0.28, 0, 0.28]) fireShot(en, aim2 + off, 205, bDmg, '#e86a4a');
+            }
+            en.shotT = 2.3;
+          } else if (en.type === 'brood') {
+            for (const off of [-0.32, 0, 0.32]) fireShot(en, aim2 + off, 170, bDmg, '#b06ae0');
+            en.shotT = 2.5;
+          } else {
+            for (let k = 0; k < 8; k++) fireShot(en, (k / 8) * Math.PI * 2 + D.t, 150, bDmg, '#e8d48a');
+            en.shotT = 3;
+          }
+          A.bleep(240, 0.08, 'sawtooth', 0.04);
+        }
       }
       if (dx) en.face = dx > 0 ? 1 : -1;
       en.fa = Math.atan2(dy, dx);
       if (d < et.r + HERO_R + 5 && en.cd <= 0) {
-        en.cd = en.isBoss ? 1.1 : 0.85;
+        en.cd = en.isBoss ? 0.95 : 0.7;
         hurtHeroFrom(en, en.isBoss ? en.dmgv : et.dmg(D.floor));
       }
     }
@@ -2703,11 +2819,24 @@
         }
       }
     }
+    for (const s of D.eshots) {
+      const sx = ox + s.x, sy = oy + s.y;
+      ctx.fillStyle = s.col || '#e86a4a';
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if (!(D.hurtT > 0 && Math.floor(D.t * 14) % 2)) {
       const hx = ox + D.hero.x, hy = oy + D.hero.y;
       ctx.save();
       ctx.translate(hx, hy + 2);
       ctx.scale(D.hero.face, 1);
+      if (D.rollT > 0) ctx.rotate(((0.3 - D.rollT) / 0.3) * Math.PI * 2);
       ctx.globalAlpha = 0.35;
       ctx.fillStyle = '#000';
       ctx.beginPath();
