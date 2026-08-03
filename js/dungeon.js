@@ -1361,6 +1361,26 @@
       ctx.stroke();
     }
   }
+  // canvas-drawn pointer arrow — immune to CSS/pointer-lock cursor quirks
+  function drawPointer(x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, 16);
+    ctx.lineTo(4.5, 12.5);
+    ctx.lineTo(7.5, 18);
+    ctx.lineTo(10, 16.5);
+    ctx.lineTo(7, 11.5);
+    ctx.lineTo(12, 11);
+    ctx.closePath();
+    ctx.fillStyle = '#e8e0c8';
+    ctx.fill();
+    ctx.strokeStyle = '#14160f';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+  }
   function drawInventory() {
     const W = innerWidth, H = innerHeight;
     const L = invLayout();
@@ -1463,6 +1483,7 @@
       ctx.font = '600 13px ' + MONO;
       ctx.fillText('click for quick-move · drag to arrange · Tab closes', L.px + 26, L.py + L.ph - 18);
     }
+    drawPointer(D.invMx, D.invMy);
   }
   function draw() {
     const W = innerWidth, H = innerHeight;
@@ -1864,10 +1885,11 @@
     last = now;
     dt = Math.min(dt, 1 / 30);
     if (window.MODE === 'dungeon') {
-      // any menu-ish state gets a visible OS cursor — and if the pointer
-      // lock isn't actually held mid-game, fall back to it there too
+      // menu-ish states get a visible OS cursor (the inventory draws its
+      // own canvas pointer instead); if the pointer lock isn't actually
+      // held mid-game, fall back to the OS cursor there too
       stageEl.classList.toggle('freecursor',
-        D.inv || D.over || !D.running || D.paused || !ARCADE_LOCK.locked());
+        (!D.inv && (D.over || !D.running || D.paused)) || (!D.inv && !ARCADE_LOCK.locked()));
       if (!D.paused) {
         if (D.running) update(dt);
         draw();
