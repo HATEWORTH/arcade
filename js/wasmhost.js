@@ -154,6 +154,11 @@
         'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:98;' +
         'font:600 13px Consolas,monospace;background:#12140d;padding:8px 14px;' +
         'border:1px solid;cursor:default;user-select:none';
+      // clicks on the pill are the pill's business — without this the shell's
+      // global pointerdown treats them as "start the game" and steals the click
+      for (const ev of ['pointerdown', 'pointerup', 'click']) {
+        pillEl.addEventListener(ev, e => e.stopPropagation());
+      }
       document.body.appendChild(pillEl);
     }
     if (!text) { pillEl.style.display = 'none'; pillEl.onclick = null; return; }
@@ -371,9 +376,18 @@
   requestAnimationFrame(frame);
 
   boot().then(() => {
-    // an invite link names the game: walk the guest straight into its lobby
+    const role = lobbyRequest();
+    if (!ready || !role) return;
+    // an invite link names the game: walk the guest straight into its lobby.
+    // otherwise say what the lobby flag is waiting for — a bare ?host=1 on
+    // the menu looks like nothing happened
     const game = new URLSearchParams(location.search).get('game');
-    if (!ready || !lobbyRequest() || !WASM_GAMES.includes(game)) return;
-    document.getElementById(game === 'pong' ? 'pickPong' : 'pickGeo').click();
+    if (WASM_GAMES.includes(game)) {
+      document.getElementById(game === 'pong' ? 'pickPong' : 'pickGeo').click();
+    } else if (role === 'host') {
+      netPill('hosting — pick Pong 3D or Geo Wars to open your room', '#45e0a5');
+    } else {
+      netPill('joining room ' + roomCode() + ' — pick the same game as your host', '#e0a545');
+    }
   });
 })();
