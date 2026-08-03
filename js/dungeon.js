@@ -1958,15 +1958,6 @@
     const Z2 = zoomFactor();
     const heroSX = innerWidth / 2 + (D.hero.x - D.cam.x) * Z2;
     const heroSY = innerHeight / 2 + (D.hero.y - D.cam.y) * Z2;
-    // tether the aim cursor to the hero — a far-strayed cursor makes turning
-    // feel stuck because big mouse moves barely change the angle
-    const AIM_R = 400;
-    const cdx = ARCADE_LOCK.cur.x - heroSX, cdy = ARCADE_LOCK.cur.y - heroSY;
-    const cdist = Math.hypot(cdx, cdy);
-    if (cdist > AIM_R) {
-      ARCADE_LOCK.cur.x = heroSX + (cdx / cdist) * AIM_R;
-      ARCADE_LOCK.cur.y = heroSY + (cdy / cdist) * AIM_R;
-    }
     D.aim = Math.atan2(ARCADE_LOCK.cur.y - heroSY, ARCADE_LOCK.cur.x - heroSX);
     D.hero.face = Math.cos(D.aim) >= 0 ? 1 : -1;
     if (!D.equip.shield) D.block = false;
