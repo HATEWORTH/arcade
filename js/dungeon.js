@@ -549,8 +549,7 @@
       en.hurt = 0.18;
       en.aggro = true; // getting stabbed is very informative
       const nd = d || 1;
-      en.x += (dx / nd) * 16;
-      en.y += (dy / nd) * 16;
+      nudge(en, (dx / nd) * 16, (dy / nd) * 16, ETYPES[en.type].r);
       floatText(en.x, en.y - 20, '' + dmg, '#e8e0c8');
       A.bleep(220 + Math.random() * 120, 0.06, 'sawtooth', 0.035);
       if (en.hp <= 0) killEnemy(en);
@@ -596,8 +595,7 @@
       floatText(D.hero.x, D.hero.y - 24, dmg > 0 ? '-' + dmg : 'BLOCK', '#8fa2b8');
       A.bleep(520, 0.06, 'square', 0.045);
       // the shield shoves the attacker back
-      en.x += Math.cos(toEn) * 20;
-      en.y += Math.sin(toEn) * 20;
+      nudge(en, Math.cos(toEn) * 20, Math.sin(toEn) * 20, ETYPES[en.type].r);
     } else {
       dmg = Math.max(1, raw - heroDef());
       D.hurtT = 0.6;
@@ -761,6 +759,25 @@
     const ny = o.y + vy * dt;
     if (!collide(o.x, ny, r)) o.y = ny;
   }
+  // knockback that respects walls: each axis only moves if it stays clear
+  function nudge(o, dx, dy, r) {
+    const nx = o.x + dx;
+    if (!collide(nx, o.y, r)) o.x = nx;
+    const ny = o.y + dy;
+    if (!collide(o.x, ny, r)) o.y = ny;
+  }
+  // safety net: anything that somehow ends up inside a wall gets walked
+  // back out to the nearest open spot
+  function unstick(o, r) {
+    if (!collide(o.x, o.y, r)) return;
+    for (let rad = 4; rad <= 64; rad += 4) {
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const nx = o.x + Math.cos(a) * rad, ny = o.y + Math.sin(a) * rad;
+        if (!collide(nx, ny, r)) { o.x = nx; o.y = ny; return; }
+      }
+    }
+  }
   function update(dt) {
     D.t += dt;
     D.shake = Math.max(0, D.shake - dt * 30);
@@ -833,6 +850,7 @@
     // ---- enemies ---------------------------------------------------------
     for (const en of D.enemies) {
       const et = ETYPES[en.type];
+      unstick(en, et.r);
       en.cd = Math.max(0, en.cd - dt);
       en.hurt = Math.max(0, en.hurt - dt);
       const dx = D.hero.x - en.x, dy = D.hero.y - en.y;
