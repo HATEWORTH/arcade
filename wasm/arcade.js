@@ -487,9 +487,6 @@ function __wbg_get_imports() {
             const ret = setTimeout(arg0, arg1);
             return ret;
         }, arguments); },
-        __wbg_setTransform_d3001e44d696c566: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5, arg6) {
-            arg0.setTransform(arg1, arg2, arg3, arg4, arg5, arg6);
-        }, arguments); },
         __wbg_set_6be42768c690e380: function(arg0, arg1, arg2) {
             arg0[arg1] = arg2;
         },
@@ -517,9 +514,6 @@ function __wbg_get_imports() {
         __wbg_set_globalCompositeOperation_91a4a7202a4f36d5: function() { return handleError(function (arg0, arg1, arg2) {
             arg0.globalCompositeOperation = getStringFromWasm0(arg1, arg2);
         }, arguments); },
-        __wbg_set_height_7d9d8f892e6964c6: function(arg0, arg1) {
-            arg0.height = arg1 >>> 0;
-        },
         __wbg_set_ice_servers_6f53a44e0587e42f: function(arg0, arg1) {
             arg0.iceServers = arg1;
         },
@@ -594,9 +588,6 @@ function __wbg_get_imports() {
         },
         __wbg_set_type_0a410d31ee19e04c: function(arg0, arg1) {
             arg0.type = __wbindgen_enum_RtcSdpType[arg1];
-        },
-        __wbg_set_width_8e30d010cd66830d: function(arg0, arg1) {
-            arg0.width = arg1 >>> 0;
         },
         __wbg_static_accessor_GLOBAL_4ef717fb391d88b7: function() {
             const ret = typeof global === 'undefined' ? null : global;
