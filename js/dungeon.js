@@ -5,6 +5,7 @@
 (() => {
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
+  const stageEl = document.getElementById('stage');
   const A = window.ARCADE;
   const pauseEl = document.getElementById('pauseOverlay');
   const launchEl = document.getElementById('launchOverlay');
@@ -706,6 +707,7 @@
   }
   function quitToMenu() {
     D.running = false; D.paused = false; D.inv = false; D.over = false;
+    stageEl.classList.remove('freecursor');
     ARCADE_LOCK.unlock();
     A.setStyle('neon');
     A.resume();
@@ -1852,9 +1854,13 @@
     let dt = (now - last) / 1000;
     last = now;
     dt = Math.min(dt, 1 / 30);
-    if (window.MODE === 'dungeon' && !D.paused) {
-      if (D.running) update(dt);
-      draw();
+    if (window.MODE === 'dungeon') {
+      // any menu-ish state gets a visible OS cursor
+      stageEl.classList.toggle('freecursor', D.inv || D.over || !D.running || D.paused);
+      if (!D.paused) {
+        if (D.running) update(dt);
+        draw();
+      }
     }
     requestAnimationFrame(loop);
   }
