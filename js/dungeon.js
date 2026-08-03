@@ -1423,7 +1423,7 @@
   }
 
   // ---- rendering ---------------------------------------------------------
-  const ZOOM = 2.4; // Isaac-close camera
+  const ZOOM = 3.1; // Isaac-close camera
   let lightCv = null, lightCtx = null;
   function ensureLight(w, h) {
     const cw = Math.ceil(w), chh = Math.ceil(h);
