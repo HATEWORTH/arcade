@@ -52,8 +52,10 @@ Player 2 just opens the link. Query parameters also work:
 | --- | --- |
 | `?host=1` | pre-arm the host toggle |
 | `?join=1&room=CODE` | join a host's room |
-| `?game=pong` / `?game=geo` | jump straight into that game's lobby | With no parameters both games run single-player exactly as before —
-Pong against the CPU, Geo Wars solo.
+| `?game=pong` / `?game=geo` | jump straight into that game's lobby |
+
+With no parameters both games run single-player exactly as before — Pong
+against the CPU, Geo Wars solo.
 
 The usual WebRTC caveat applies: peers behind symmetric NAT (some mobile
 carriers, strict corporate networks) can't hole-punch and would need a TURN
