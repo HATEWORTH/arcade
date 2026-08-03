@@ -1,0 +1,18 @@
+Asset credits
+=============
+
+0x72_dungeon.png
+  "16x16 DungeonTileset II" by 0x72
+  https://0x72.itch.io/dungeontileset-ii
+  License: CC0 (public domain)
+
+fx/
+  "Free Pixel Effects Pack" by CodeManu
+  https://codemanu.itch.io/pixelart-effect-pack
+  License: public domain / CC-BY 4.0 (no credit required, given anyway)
+
+icons/
+  "Shikashi's Fantasy Icons Pack v2" by Matt Firth (shikashipx)
+  https://shikashipx.itch.io/shikashis-fantasy-icons-pack
+  Based in part on designs from game-icons.net
+  License: CC-BY 4.0 — credit Matt Firth (shikashipx) and game-icons.net

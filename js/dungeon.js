@@ -17,6 +17,42 @@
   const MW = GW * CW + 1, MH = GH * CH + 1;
   const MONO = 'Consolas, "Courier New", monospace';
 
+  // ---- 0x72 DungeonTileset II atlas (CC0) --------------------------------
+  // Code-authored sprites remain as the fallback until the image loads.
+  const atlasImg = new Image();
+  let atlasReady = false;
+  atlasImg.onload = () => { atlasReady = true; };
+  atlasImg.src = 'assets/0x72_dungeon.png';
+  const seq = (x, y, w, h, n) => {
+    const out = [];
+    for (let i = 0; i < n; i++) out.push([x + i * w, y, w, h]);
+    return out;
+  };
+  const AT = {
+    knight:   { idle: seq(128, 100, 16, 28, 4), run: seq(192, 100, 16, 28, 4), hit: seq(256, 100, 16, 28, 1) },
+    wizard:   { idle: seq(128, 164, 16, 28, 4), run: seq(192, 164, 16, 28, 4), hit: seq(256, 164, 16, 28, 1) },
+    necro:    { idle: seq(368, 225, 16, 23, 4), run: seq(368, 225, 16, 23, 4) },
+    slime:    { idle: seq(432, 112, 16, 16, 4), run: seq(432, 112, 16, 16, 4) },   // swampy
+    skeleton: { idle: seq(368, 88, 16, 16, 4),  run: seq(432, 88, 16, 16, 4) },
+    wraith:   { idle: seq(432, 136, 16, 16, 4), run: seq(432, 136, 16, 16, 4) },   // ice_zombie
+    brute:    { idle: seq(368, 177, 16, 23, 4), run: seq(432, 177, 16, 23, 4) },   // orc_warrior
+    golem:    { idle: seq(368, 153, 16, 23, 4), run: seq(432, 153, 16, 23, 4) },   // masked_orc
+    bat:      { idle: seq(368, 64, 16, 16, 4),  run: seq(432, 64, 16, 16, 4) },    // imp
+    guardian: { idle: seq(16, 428, 32, 36, 4),  run: seq(144, 428, 32, 36, 4) },   // big_demon
+    boneking: { idle: seq(16, 332, 32, 36, 4),  run: seq(144, 332, 32, 36, 4) },   // big_zombie
+    merchant: { idle: seq(368, 345, 16, 23, 4), run: seq(432, 345, 16, 23, 4) },   // doc
+    chestClosed: [[304, 416, 16, 16]],
+    chestOpen: [[336, 416, 16, 16]],
+    spikes: seq(16, 192, 16, 16, 4),
+    stairs: [[80, 192, 16, 16]],
+  };
+  function aframe(list, rate) {
+    return list[Math.floor(performance.now() / 1000 * (rate || 8)) % list.length];
+  }
+  function drawA(r, dx, dy, dw, dh) {
+    ctx.drawImage(atlasImg, r[0], r[1], r[2], r[3], dx, dy, dw, dh);
+  }
+
   // ---- pixel-art sprites, authored once as data --------------------------
   const PAL = {
     k: '#14160f', s: '#a8b0bc', d: '#6a7280', c: '#a4372e',
@@ -130,16 +166,24 @@
   // necromancy keeps the victim's shape: same sprite, rotted zombie-green
   const zombieCache = {};
   function zombieSpr(type) {
-    if (zombieCache[type]) return zombieCache[type];
-    const src = ETYPES[type].spr;
+    const useAtlas = atlasReady && AT[type];
+    const key = (useAtlas ? 'a_' : 'c_') + type;
+    if (zombieCache[key]) return zombieCache[key];
     const c = document.createElement('canvas');
-    c.width = src.width; c.height = src.height;
     const g = c.getContext('2d');
-    g.drawImage(src, 0, 0);
+    if (useAtlas) {
+      const r = AT[type].idle[0];
+      c.width = r[2]; c.height = r[3];
+      g.drawImage(atlasImg, r[0], r[1], r[2], r[3], 0, 0, r[2], r[3]);
+    } else {
+      const src = ETYPES[type].spr;
+      c.width = src.width; c.height = src.height;
+      g.drawImage(src, 0, 0);
+    }
     g.globalCompositeOperation = 'source-atop';
     g.fillStyle = 'rgba(112, 196, 122, 0.5)';
     g.fillRect(0, 0, c.width, c.height);
-    zombieCache[type] = c;
+    zombieCache[key] = c;
     return c;
   }
   const SLIME = sprite([
@@ -2268,9 +2312,13 @@
 
     if (inV(D.stairs.x, D.stairs.y)) {
       const sx = ox + D.stairs.x * TILE, sy = oy + D.stairs.y * TILE;
-      for (let i = 0; i < 4; i++) {
-        ctx.fillStyle = 'rgba(0, 0, 0, ' + (0.35 + i * 0.13) + ')';
-        ctx.fillRect(sx + i * 4, sy + i * 4, TILE - i * 8, TILE - i * 8);
+      if (atlasReady) {
+        drawA(AT.stairs[0], sx, sy, TILE, TILE);
+      } else {
+        for (let i = 0; i < 4; i++) {
+          ctx.fillStyle = 'rgba(0, 0, 0, ' + (0.35 + i * 0.13) + ')';
+          ctx.fillRect(sx + i * 4, sy + i * 4, TILE - i * 8, TILE - i * 8);
+        }
       }
       if (D.stairsLocked) {
         ctx.fillStyle = '#8a8f80';
@@ -2278,20 +2326,24 @@
         ctx.fillRect(sx + 2, sy + TILE / 2 - 2, TILE - 4, 3);
       }
     }
-    // spikes: rows of points on the floor tile
+    // spikes: animated blades rising from the floor
     for (const sp2 of D.spikes) {
       if (!inV(sp2.x, sp2.y)) continue;
       const sx = ox + sp2.x * TILE, sy = oy + sp2.y * TILE;
-      ctx.fillStyle = '#8a8f80';
-      for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 3; j++) {
-          const px2 = sx + 6 + i * 10, py2 = sy + 8 + j * 9;
-          ctx.beginPath();
-          ctx.moveTo(px2, py2 + 6);
-          ctx.lineTo(px2 + 3, py2);
-          ctx.lineTo(px2 + 6, py2 + 6);
-          ctx.closePath();
-          ctx.fill();
+      if (atlasReady) {
+        drawA(aframe(AT.spikes, 5), sx, sy, TILE, TILE);
+      } else {
+        ctx.fillStyle = '#8a8f80';
+        for (let i = 0; i < 3; i++) {
+          for (let j = 0; j < 3; j++) {
+            const px2 = sx + 6 + i * 10, py2 = sy + 8 + j * 9;
+            ctx.beginPath();
+            ctx.moveTo(px2, py2 + 6);
+            ctx.lineTo(px2 + 3, py2);
+            ctx.lineTo(px2 + 6, py2 + 6);
+            ctx.closePath();
+            ctx.fill();
+          }
         }
       }
     }
@@ -2328,7 +2380,13 @@
       ctx.translate(sx, sy + et.h * 0.18);
       ctx.rotate((Math.PI / 2) * c.rot);
       ctx.scale(c.face, 0.62); // squashed flat on its side
-      ctx.drawImage(et.spr, -et.w / 2, -et.h / 2, et.w, et.h);
+      if (atlasReady && AT[c.type]) {
+        const r2 = AT[c.type].idle[0];
+        const dh2 = et.h, dw2 = r2[2] * (et.h / r2[3]);
+        drawA(r2, -dw2 / 2, -dh2 / 2, dw2, dh2);
+      } else {
+        ctx.drawImage(et.spr, -et.w / 2, -et.h / 2, et.w, et.h);
+      }
       ctx.restore();
       ctx.globalAlpha = 1;
     }
@@ -2353,7 +2411,12 @@
       ctx.fillRect(rugX, rugY, TILE * 6, TILE * 2);
       const msx = ox + (cr.merchant.x + 0.5) * TILE, msy = oy + (cr.merchant.y + 0.5) * TILE;
       const bob = reducedMotion ? 0 : Math.sin(D.t * 1.6) * 1.5;
-      ctx.drawImage(MERCHANT, msx - 12, msy - 14 + bob, 24, 22);
+      if (atlasReady) {
+        const r2 = aframe(AT.merchant.idle, 6);
+        drawA(r2, msx - 12, msy - 22 + bob, 24, 34);
+      } else {
+        ctx.drawImage(MERCHANT, msx - 12, msy - 14 + bob, 24, 22);
+      }
       ctx.fillStyle = '#d9a94e';
       ctx.font = '600 9px ' + MONO;
       ctx.textAlign = 'center';
@@ -2421,8 +2484,12 @@
         ctx.fill();
         ctx.globalAlpha = 1;
       }
-      const spr = c.opened ? CHEST_OPEN : CHEST_CLOSED;
-      ctx.drawImage(spr, sx - 12, sy - spr.height, 24, spr.height * 2);
+      if (atlasReady) {
+        drawA((c.opened ? AT.chestOpen : AT.chestClosed)[0], sx - 13, sy - 18, 26, 26);
+      } else {
+        const spr = c.opened ? CHEST_OPEN : CHEST_CLOSED;
+        ctx.drawImage(spr, sx - 12, sy - spr.height, 24, spr.height * 2);
+      }
     }
     for (const dr of D.drops) {
       const tx2 = Math.floor(dr.x / TILE), ty2 = Math.floor(dr.y / TILE);
@@ -2498,7 +2565,14 @@
       ctx.ellipse(0, et.h / 2, et.r, 4, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = en.hurt > 0 ? 0.55 : 1;
-      ctx.drawImage(et.spr, -et.w / 2, -et.h / 2, et.w, et.h);
+      const eanim = atlasReady && AT[en.type];
+      if (eanim) {
+        const r = aframe(en.aggro ? eanim.run : eanim.idle);
+        const dh2 = et.h, dw2 = r[2] * (et.h / r[3]);
+        drawA(r, -dw2 / 2, -dh2 / 2, dw2, dh2);
+      } else {
+        ctx.drawImage(et.spr, -et.w / 2, -et.h / 2, et.w, et.h);
+      }
       ctx.restore();
       ctx.globalAlpha = 1;
       if (en.slow > 0) {
@@ -2535,12 +2609,6 @@
       }
     }
     if (!(D.hurtT > 0 && Math.floor(D.t * 14) % 2)) {
-      const HS = HERO_SETS[D.cls || 'knight'];
-      const step = D.hero.moving && Math.floor(D.t * 8) % 2;
-      let frame;
-      if (Math.abs(Math.cos(D.aim)) > 0.42) frame = step ? HS.S2 : HS.S1;
-      else if (Math.sin(D.aim) < 0) frame = step ? HS.B2 : HS.B1;
-      else frame = step ? HS.F2 : HS.F1;
       const hx = ox + D.hero.x, hy = oy + D.hero.y;
       ctx.save();
       ctx.translate(hx, hy + 2);
@@ -2551,7 +2619,22 @@
       ctx.ellipse(0, 12, 10, 4, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.drawImage(frame, -12, -13, 24, 26);
+      const HA = atlasReady && AT[{ knight: 'knight', wizard: 'wizard', necro: 'necro' }[D.cls || 'knight']];
+      if (HA) {
+        let r;
+        if (D.hurtT > 0 && HA.hit) r = HA.hit[0];
+        else r = aframe(D.hero.moving ? HA.run : HA.idle, 10);
+        const dh2 = 34, dw2 = r[2] * (dh2 / r[3]);
+        drawA(r, -dw2 / 2, 14 - dh2, dw2, dh2);
+      } else {
+        const HS = HERO_SETS[D.cls || 'knight'];
+        const step = D.hero.moving && Math.floor(D.t * 8) % 2;
+        let frame;
+        if (Math.abs(Math.cos(D.aim)) > 0.42) frame = step ? HS.S2 : HS.S1;
+        else if (Math.sin(D.aim) < 0) frame = step ? HS.B2 : HS.B1;
+        else frame = step ? HS.F2 : HS.F1;
+        ctx.drawImage(frame, -12, -13, 24, 26);
+      }
       ctx.restore();
       ctx.save();
       ctx.translate(hx, hy);
@@ -2743,9 +2826,15 @@
         ctx.strokeStyle = cd.color;
         ctx.lineWidth = hov ? 2.5 : 1.5;
         ctx.strokeRect(cx2 + 0.75, y0 + 0.75, cw2 - 1.5, chh2 - 1.5);
-        const hs = HERO_SETS[ck].F1;
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(hs, cx2 + cw2 / 2 - 24, y0 + 30, 48, 52);
+        const CA = atlasReady && AT[{ knight: 'knight', wizard: 'wizard', necro: 'necro' }[ck]];
+        if (CA) {
+          const r2 = aframe(CA.idle, 4);
+          const ph2 = 56, pw2 = r2[2] * (ph2 / r2[3]);
+          drawA(r2, cx2 + cw2 / 2 - pw2 / 2, y0 + 28, pw2, ph2);
+        } else {
+          ctx.drawImage(HERO_SETS[ck].F1, cx2 + cw2 / 2 - 24, y0 + 30, 48, 52);
+        }
         ctx.fillStyle = cd.color;
         ctx.font = '800 15px ' + MONO;
         ctx.fillText(cd.name, cx2 + cw2 / 2, y0 + 118);
