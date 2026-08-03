@@ -2271,7 +2271,8 @@
 
     for (let y = ty0; y <= ty1; y++) {
       for (let x = tx0; x <= tx1; x++) {
-        if (!D.seen[idx(x, y)]) continue;
+        // walls always render — skipping unseen ones punches black gaps in the wall mass
+        if (!D.seen[idx(x, y)] && D.tiles[idx(x, y)] !== 0) continue;
         const sx = ox + x * TILE, sy = oy + y * TILE;
         const hv = hash(x, y);
         if (D.tiles[idx(x, y)] === 1) {
