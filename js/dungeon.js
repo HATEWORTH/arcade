@@ -2358,9 +2358,10 @@
           }
         } else {
           if (atlasReady) {
-            ctx.globalAlpha = 0.55;
-            drawA(AT.wallTop, sx, sy, TILE, TILE);
-            ctx.globalAlpha = 1;
+            // deep wall mass: same solid brick as the face, dimmed for depth
+            drawA(AT.wallMid, sx, sy, TILE, TILE);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+            ctx.fillRect(sx, sy, TILE, TILE);
           } else {
             ctx.fillStyle = '#20241a';
             ctx.fillRect(sx, sy, TILE, TILE);
