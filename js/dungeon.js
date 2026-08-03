@@ -55,6 +55,7 @@
       axe: [324, 168, 12, 23],
       spear: [309, 161, 6, 30],
       hammer: [291, 26, 10, 37],
+      staff: [310, 186, 8, 30],
     },
   };
   const FLOORS = [[16, 64], [32, 64], [48, 64], [16, 80], [32, 80], [48, 80], [16, 96], [32, 96]];
@@ -369,6 +370,7 @@
     axe:    { n: 'Axe',    dm: 1.5, cd: 0.5,  range: 50, arc: 1.4,  knock: 1.3 },
     spear:  { n: 'Spear',  dm: 1.1, cd: 0.38, range: 76, arc: 0.55, knock: 1 },
     hammer: { n: 'Hammer', dm: 1.9, cd: 0.62, range: 52, arc: 1.2,  knock: 2.2 },
+    staff:  { n: 'Staff',  dm: 0.7, cd: 0.36, range: 50, arc: 0.9,  knock: 0.9 },
   };
   const WTYPE_KEYS = Object.keys(WTYPES);
 
@@ -1459,11 +1461,18 @@
   });
 
   // ---- combat + magic ----------------------------------------------------
+  function heldWtype() {
+    if (D.equip.sword) return D.equip.sword.wtype || 'sword';
+    return (D.cls === 'wizard' || D.cls === 'necro') ? 'staff' : 'dagger';
+  }
+  // heavier arms take visibly longer to swing
+  const SWING_DUR = { dagger: 0.12, sword: 0.18, axe: 0.26, spear: 0.16, hammer: 0.32, staff: 0.2 };
   function attack() {
     if (D.atkT > 0 || D.block) return;
     const dir = D.aim;
     D.atkT = D.st.atkCd;
-    D.atkAnim = 0.16;
+    D.atkDur = SWING_DUR[heldWtype()] || 0.16;
+    D.atkAnim = D.atkDur;
     D.atkDir = dir;
     A.bleep(340, 0.05, 'square', 0.03);
     for (const en of D.enemies) {
@@ -1516,11 +1525,12 @@
         const spread = n > 1 ? (i - (n - 1) / 2) * 0.16 : 0;
         const a = D.aim + spread;
         D.bolts.push({
-          x: D.hero.x + Math.cos(a) * 14, y: D.hero.y + Math.sin(a) * 14,
+          x: D.hero.x + Math.cos(a) * 26, y: D.hero.y + Math.sin(a) * 26,
           vx: Math.cos(a) * 380, vy: Math.sin(a) * 380,
           dmg: Math.round((9 + D.floor * 2) * D.st.spellMult), t: 1.6,
         });
       }
+      D.castT = 0.25; D.castCol = '#e8763d';
       A.bleep(700, 0.07, 'square', 0.045);
     } else if (sp === 'nova') {
       if (D.mana < 22) { say('Not enough mana', '#5aa2e8'); return; }
@@ -1533,6 +1543,7 @@
         en.slow = 2.2;
       }
       D.novaT = 0.3;
+      D.castT = 0.25; D.castCol = '#5aa2e8';
       A.sweep(900, 90, 0.4, 'sine', 0.07);
     }
   }
@@ -1549,6 +1560,7 @@
     D.mana -= 20;
     const c = D.corpses.splice(best, 1)[0];
     D.allies.push({ x: c.x, y: c.y, ttl: 30 + D.st.thrallTtl, cd: 0, face: c.face || 1, type: c.type });
+    D.castT = 0.3; D.castCol = '#9fd8a8';
     floatText(c.x, c.y - 18, 'RISE', '#9fd8a8');
     A.sweep(100, 400, 0.5, 'sine', 0.06);
   }
@@ -1855,6 +1867,7 @@
     D.shake = Math.max(0, D.shake - dt * 30);
     D.atkT = Math.max(0, D.atkT - dt);
     D.atkAnim = Math.max(0, D.atkAnim - dt);
+    D.castT = Math.max(0, (D.castT || 0) - dt);
     D.hurtT = Math.max(0, D.hurtT - dt);
     D.novaT = Math.max(0, (D.novaT || 0) - dt);
     for (let i = D.floats.length - 1; i >= 0; i--) {
@@ -2860,17 +2873,55 @@
         ctx.drawImage(frame, -12, -13, 24, 26);
       }
       ctx.restore();
+      // ---- held weapon: every arm swings its own way ---------------------
       ctx.save();
       ctx.translate(hx, hy);
-      ctx.rotate(D.aim + Math.PI / 2);
-      const swing = D.atkAnim > 0 ? (1 - D.atkAnim / 0.16) * 10 : 0;
+      const hw = heldWtype();
+      const dur = D.atkDur || 0.16;
+      const ap = D.atkAnim > 0 ? 1 - D.atkAnim / dur : -1;
+      const cp = D.castT > 0 ? 1 - D.castT / 0.25 : -1;
+      const sgn = Math.cos(D.aim) >= 0 ? 1 : -1;
+      let wAng = D.aim + sgn * 0.85, wRad = 8; // rest: held off to the side
+      if (cp >= 0 && hw === 'staff') {
+        wAng = D.aim; wRad = 8 + Math.sin(Math.min(1, cp) * Math.PI) * 16;
+      } else if (ap >= 0) {
+        const dir = D.atkDir;
+        const ease = 1 - (1 - ap) * (1 - ap); // fast start, soft landing
+        if (hw === 'spear') {
+          wAng = dir; wRad = 6 + Math.sin(ap * Math.PI) * 26; // straight poke
+        } else if (hw === 'axe' || hw === 'hammer') {
+          wAng = dir + sgn * (-2.0 + ease * 2.5); wRad = 12; // overhead chop
+        } else if (hw === 'staff') {
+          wAng = dir; wRad = 8 + Math.sin(ap * Math.PI) * 18; // forward shove
+        } else {
+          wAng = dir + sgn * (-1.15 + ease * 2.3); wRad = 12; // diagonal slash
+        }
+      }
+      ctx.rotate(wAng + Math.PI / 2);
       if (atlasReady) {
-        const wr = D.equip.sword ? (AT.wpn[D.equip.sword.wtype] || AT.wpn.sword) : AT.wpn.dagger;
-        const dh2 = 26, dw2 = wr[2] * (dh2 / wr[3]);
-        drawA(wr, -dw2 / 2, -32 - swing, dw2, dh2);
+        const wr = AT.wpn[hw] || AT.wpn.sword;
+        const dh2 = hw === 'staff' ? 30 : 26, dw2 = wr[2] * (dh2 / wr[3]);
+        if (cp >= 0 && hw === 'staff') {
+          // the spell's color halos the staff as the charge leaves it
+          ctx.fillStyle = D.castCol || '#8fb8e8';
+          ctx.globalAlpha = (1 - cp) * 0.5;
+          ctx.beginPath();
+          ctx.ellipse(0, -wRad - dh2 / 2, dw2 + 7, dh2 / 2 + 7, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        drawA(wr, -dw2 / 2, -wRad - dh2, dw2, dh2);
+        if (cp >= 0 && hw === 'staff') {
+          ctx.fillStyle = D.castCol || '#8fb8e8';
+          ctx.globalAlpha = (1 - cp) * 0.9;
+          ctx.beginPath();
+          ctx.arc(0, -wRad - dh2 - 3 - cp * 12, 3 + (1 - cp) * 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
       } else {
         const held = D.equip.sword ? iconFor(D.equip.sword) : ICON_SWORD;
-        ctx.drawImage(held, -5, -30 - swing, 10, 14);
+        ctx.drawImage(held, -5, -wRad - 22, 10, 14);
       }
       ctx.restore();
       if (D.block && D.equip.shield) {
@@ -2888,7 +2939,7 @@
       }
     }
     if (D.atkAnim > 0) {
-      const p = 1 - D.atkAnim / 0.16;
+      const p = 1 - D.atkAnim / (D.atkDur || 0.16);
       ctx.save();
       ctx.translate(ox + D.hero.x, oy + D.hero.y);
       ctx.rotate(D.atkDir);
