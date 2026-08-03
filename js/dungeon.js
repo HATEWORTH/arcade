@@ -50,13 +50,33 @@
     wallMid: [32, 16, 16, 16],
     wallTop: [32, 0, 16, 16],
     wpn: {
+      // every distinct arm the 0x72 sheet carries — one sprite per weapon type
       dagger: [293, 10, 6, 13],
+      shiv: [294, 105, 5, 22],
+      butcher: [310, 108, 8, 19],
       sword: [323, 10, 10, 21],
+      saw: [307, 10, 10, 21],
+      ruby: [339, 10, 10, 21],
+      falchion: [307, 70, 10, 25],
+      rapier: [293, 66, 6, 29],
+      katana: [325, 97, 9, 30],
+      greatblade: [339, 98, 10, 29],
+      gilded: [291, 137, 10, 22],
+      greatsword: [307, 129, 10, 30],
+      cleaver: [322, 65, 12, 30],
       axe: [324, 168, 12, 23],
-      spear: [309, 161, 6, 30],
+      greataxe: [288, 167, 16, 24],
+      hatchet: [340, 161, 10, 14],
+      handaxe: [341, 74, 9, 21],
       hammer: [291, 26, 10, 37],
+      mallet: [307, 39, 10, 24],
+      club: [323, 41, 10, 22],
+      mace: [339, 39, 10, 24],
+      spear: [309, 161, 6, 30],
       staff: [324, 129, 8, 30],
-      bow: [289, 195, 14, 26],
+      greenstaff: [340, 129, 8, 30],
+      bow: [296, 195, 7, 26],
+      longbow: [305, 195, 14, 26],
       arrow: [324, 202, 7, 21],
     },
   };
@@ -132,6 +152,12 @@
       const s = size / Math.max(r[2], r[3]);
       const dw = r[2] * s, dh = r[3] * s;
       drawA(r, cx2 - dw / 2, cy2 - dh / 2, dw, dh);
+      return;
+    }
+    // most gear carries its own icon-sheet cell, so no two look alike
+    if (it.ic && iconsReady) {
+      ctx.drawImage(iconsImg, it.ic[0], it.ic[1], 32, 32,
+        cx2 - size / 2, cy2 - size / 2, size, size);
       return;
     }
     if (it.kind === 'potion' && atlasReady) {
@@ -419,20 +445,41 @@
   const ICONS = { sword: ICON_SWORD, shield: ICON_SHIELD, armor: ICON_ARMOR, potion: ICON_POTION };
   const WEAPON_ICONS = { dagger: ICON_DAGGER, sword: ICON_SWORD, axe: ICON_AXE, spear: ICON_SPEAR, hammer: ICON_HAMMER };
   function iconFor(it) {
-    if (it.kind === 'sword') return WEAPON_ICONS[it.wtype] || ICON_SWORD;
-    return ICONS[it.kind];
+    if (it.kind === 'sword') return WEAPON_ICONS[wfam(it.wtype)] || ICON_SWORD;
+    return ICONS[it.kind] || ICON_POTION;
   }
-  // weapon classes: same slot, very different handling
+  // weapon classes: same slot, very different handling.
+  // fam picks the swing animation and heft; every type has its own sprite.
   const WTYPES = {
-    dagger: { n: 'Dagger', dm: 0.6, cd: 0.19, range: 44, arc: 1.0,  knock: 0.7 },
-    sword:  { n: 'Sword',  dm: 1,   cd: 0.34, range: 54, arc: 1.05, knock: 1 },
-    axe:    { n: 'Axe',    dm: 1.5, cd: 0.5,  range: 50, arc: 1.4,  knock: 1.3 },
-    spear:  { n: 'Spear',  dm: 1.1, cd: 0.38, range: 76, arc: 0.55, knock: 1 },
-    hammer: { n: 'Hammer', dm: 1.9, cd: 0.62, range: 52, arc: 1.2,  knock: 2.2 },
-    staff:  { n: 'Staff',  dm: 0.7, cd: 0.36, range: 50, arc: 0.9,  knock: 0.9 },
-    bow:    { n: 'Bow',    dm: 0.8, cd: 0.5,  range: 60, arc: 0.9,  knock: 0.6 },
+    dagger:     { n: 'Dagger',        fam: 'dagger', dm: 0.6,  cd: 0.19, range: 44, arc: 1.0,  knock: 0.7 },
+    shiv:       { n: 'Shiv',          fam: 'dagger', dm: 0.5,  cd: 0.16, range: 42, arc: 1.1,  knock: 0.5 },
+    butcher:    { n: 'Butcher Knife', fam: 'dagger', dm: 0.8,  cd: 0.24, range: 44, arc: 1.15, knock: 0.9 },
+    sword:      { n: 'Sword',         fam: 'sword',  dm: 1,    cd: 0.34, range: 54, arc: 1.05, knock: 1 },
+    saw:        { n: 'Serrated Blade', fam: 'sword', dm: 1.15, cd: 0.38, range: 52, arc: 1.0,  knock: 0.9 },
+    ruby:       { n: 'Ruby Sword',    fam: 'sword',  dm: 1.2,  cd: 0.36, range: 54, arc: 1.05, knock: 1 },
+    falchion:   { n: 'Falchion',      fam: 'sword',  dm: 1.1,  cd: 0.32, range: 52, arc: 1.2,  knock: 1.1 },
+    rapier:     { n: 'Rapier',        fam: 'sword',  dm: 0.85, cd: 0.24, range: 62, arc: 0.7,  knock: 0.6 },
+    katana:     { n: 'Katana',        fam: 'sword',  dm: 1.25, cd: 0.33, range: 58, arc: 0.95, knock: 1 },
+    greatblade: { n: 'Great Blade',   fam: 'sword',  dm: 1.6,  cd: 0.48, range: 60, arc: 1.15, knock: 1.5 },
+    gilded:     { n: 'Gilded Sword',  fam: 'sword',  dm: 1.3,  cd: 0.35, range: 54, arc: 1.1,  knock: 1.1 },
+    greatsword: { n: 'Greatsword',    fam: 'axe',    dm: 1.8,  cd: 0.55, range: 58, arc: 1.35, knock: 1.8 },
+    cleaver:    { n: 'Cleaver',       fam: 'axe',    dm: 1.55, cd: 0.5,  range: 48, arc: 1.3,  knock: 1.4 },
+    axe:        { n: 'Axe',           fam: 'axe',    dm: 1.5,  cd: 0.5,  range: 50, arc: 1.4,  knock: 1.3 },
+    greataxe:   { n: 'Greataxe',      fam: 'axe',    dm: 2,    cd: 0.66, range: 54, arc: 1.6,  knock: 2 },
+    hatchet:    { n: 'Hatchet',       fam: 'axe',    dm: 1.05, cd: 0.32, range: 44, arc: 1.25, knock: 1 },
+    handaxe:    { n: 'Hand Axe',      fam: 'axe',    dm: 1.2,  cd: 0.38, range: 46, arc: 1.3,  knock: 1.1 },
+    hammer:     { n: 'Hammer',        fam: 'hammer', dm: 1.9,  cd: 0.62, range: 52, arc: 1.2,  knock: 2.2 },
+    mallet:     { n: 'Mallet',        fam: 'hammer', dm: 1.45, cd: 0.48, range: 46, arc: 1.1,  knock: 1.9 },
+    club:       { n: 'Spiked Club',   fam: 'hammer', dm: 1.35, cd: 0.44, range: 46, arc: 1.15, knock: 1.6 },
+    mace:       { n: 'Mace',          fam: 'hammer', dm: 1.65, cd: 0.54, range: 48, arc: 1.1,  knock: 2 },
+    spear:      { n: 'Spear',         fam: 'spear',  dm: 1.1,  cd: 0.38, range: 76, arc: 0.55, knock: 1 },
+    staff:      { n: 'Staff',         fam: 'staff',  dm: 0.7,  cd: 0.36, range: 50, arc: 0.9,  knock: 0.9 },
+    greenstaff: { n: 'Verdant Staff', fam: 'staff',  dm: 0.75, cd: 0.34, range: 52, arc: 0.95, knock: 0.9 },
+    bow:        { n: 'Bow',           fam: 'bow',    dm: 0.8,  cd: 0.5,  range: 60, arc: 0.9,  knock: 0.6 },
+    longbow:    { n: 'Longbow',       fam: 'bow',    dm: 1.05, cd: 0.62, range: 60, arc: 0.9,  knock: 0.7 },
   };
   const WTYPE_KEYS = Object.keys(WTYPES);
+  const wfam = w => (WTYPES[w] && WTYPES[w].fam) || 'sword';
 
   // ---- items and rarity --------------------------------------------------
   const RARITIES = [
@@ -466,6 +513,183 @@
     }
     return 0;
   }
+  // armor and shield bodies: one slot, wildly different trade-offs
+  const ARMORS = [
+    { n: 'Robe',          ic: [448, 224], mul: 0.55, mods: { manaMax: 20, manaRegen: 1, spellMult: 1.1 } },
+    { n: 'Tunic',         ic: [288, 224], mul: 0.7,  mods: { spdMult: 1.06 } },
+    { n: 'Gambeson',      ic: [256, 224], mul: 0.85, mods: { regen: 0.5 } },
+    { n: 'Leather Armor', ic: [192, 224], mul: 1,    mods: { dodge: 0.04 } },
+    { n: 'Chainmail',     ic: [160, 224], mul: 1.25, mods: {} },
+    { n: 'Scale Mail',    ic: [128, 224], mul: 1.45, mods: { spdMult: 0.96 } },
+    { n: 'Plate Armor',   ic: [224, 224], mul: 1.7,  mods: { spdMult: 0.9, thorns: 2 } },
+  ];
+  const SHIELDS = [
+    { n: 'Buckler',      ic: [0, 192],  mul: 0.7, mods: { spdMult: 1.05, atkMult: 0.95 } },
+    { n: 'Kite Shield',  ic: [32, 192], mul: 1.1, mods: {} },
+    { n: 'Tower Shield', ic: [64, 192], mul: 1.6, mods: { spdMult: 0.92, def: 2 } },
+  ];
+  // trinkets fill a fourth slot — small, permanent, always a little strange
+  const TRINKETS = [
+    { n: 'Signet Ring',      ic: [128, 256], mods: { dmg: 2 } },
+    { n: 'Gemmed Ring',      ic: [160, 256], mods: { manaMax: 15, manaRegen: 1 } },
+    { n: 'Sun Amulet',       ic: [192, 256], mods: { light: 45 } },
+    { n: 'Prayer Beads',     ic: [224, 256], mods: { regen: 1 } },
+    { n: 'Claw Necklace',    ic: [256, 256], mods: { crit: 0.06 } },
+    { n: 'Wanderer Boots',   ic: [64, 256],  mods: { spdMult: 1.08 } },
+    { n: 'Iron Gauntlet',    ic: [32, 256],  mods: { def: 2, knockMult: 1.2 } },
+    { n: 'Cutpurse Pouch',   ic: [0, 320],   mods: { goldMult: 1.2 } },
+    { n: 'Scrying Orb',      ic: [256, 320], mods: { spellMult: 1.15 } },
+    { n: 'Warding Lantern',  ic: [288, 320], mods: { light: 30, def: 1 } },
+    { n: 'Hourglass Charm',  ic: [480, 320], mods: { atkMult: 0.92 } },
+    { n: 'Thorn Band',       ic: [448, 320], mods: { thorns: 3 } },
+    { n: 'Ruby Pendant',     ic: [480, 384], mods: { maxHp: 15 } },
+    { n: 'Sapphire Shard',   ic: [448, 384], mods: { manaKill: 2 } },
+    { n: 'Ivory Whistle',    ic: [224, 352], mods: { xpMult: 1.15 } },
+    { n: 'Silver Mirror',    ic: [32, 352],  mods: { dodge: 0.06 } },
+    { n: 'Ring of Keys',     ic: [320, 352], mods: { shopMult: 0.9 } },
+    { n: 'Sprig of Bloodroot', ic: [416, 352], mods: { lifesteal: 1 } },
+    { n: 'Duelist Glove',    ic: [0, 256],   mods: { first: 4 } },
+    { n: 'Bone Lyre',        ic: [96, 352],  mods: { execute: 5 } },
+    { n: 'Honeycomb Charm',  ic: [416, 320], mods: { potionMult: 1.3 } },
+    { n: 'Loaded Dice',      ic: [416, 416], mods: { crit: 0.04, goldMult: 1.12 } },
+  ];
+  // consumables: everything that lives on the hotbar
+  const CONSUMABLES = [
+    { id: 'potion',   kind: 'potion', name: 'Health Potion',    ic: [0, 288],   w: 10, heal: 25 },
+    { id: 'potion_g', kind: 'potion', name: 'Crimson Draught',  ic: [128, 288], w: 5,  heal: 42 },
+    { id: 'salve',    kind: 'potion', name: 'Healing Salve',    ic: [384, 288], w: 6,  heal: 18 },
+    { id: 'tonic',    kind: 'potion', name: 'Restorative Tonic', ic: [64, 288], w: 5,  heal: 20, mana: 20 },
+    { id: 'mana',     kind: 'mana',   name: 'Mana Draught',     ic: [32, 288],  w: 8,  mana: 35 },
+    { id: 'mana_g',   kind: 'mana',   name: 'Deep Blue Flask',  ic: [160, 288], w: 4,  mana: 60 },
+    { id: 'ether',    kind: 'mana',   name: 'Vial of Ether',    ic: [448, 288], w: 4,  mana: 25,
+      buff: { name: 'Clarity', dur: 18, manaRegen: 4 } },
+    { id: 'might',    kind: 'elixir', name: 'Elixir of Might',  ic: [416, 288], w: 4,
+      buff: { name: 'Might', dur: 25, dmg: 5 } },
+    { id: 'swift',    kind: 'elixir', name: 'Elixir of Swiftness', ic: [96, 288], w: 4,
+      buff: { name: 'Swiftness', dur: 25, spdMult: 1.3 } },
+    { id: 'stone',    kind: 'elixir', name: 'Elixir of Stone',  ic: [224, 288], w: 4,
+      buff: { name: 'Stoneskin', dur: 25, def: 5, blkAdd: 3 } },
+    { id: 'fury',     kind: 'elixir', name: 'Draught of Fury',  ic: [256, 288], w: 3,
+      buff: { name: 'Fury', dur: 20, atkMult: 0.7, crit: 0.1 } },
+    { id: 'arcane',   kind: 'elixir', name: 'Arcane Elixir',    ic: [288, 288], w: 3,
+      buff: { name: 'Arcane', dur: 25, spellMult: 1.6, manaRegen: 3 } },
+    { id: 'bread',    kind: 'food',   name: 'Loaf of Bread',    ic: [416, 448], w: 7, heal: 10,
+      buff: { name: 'Well Fed', dur: 20, regen: 2 } },
+    { id: 'meat',     kind: 'food',   name: 'Roast Fowl',       ic: [480, 448], w: 6, heal: 15,
+      buff: { name: 'Hearty', dur: 20, regen: 3 } },
+    { id: 'cheese',   kind: 'food',   name: 'Wedge of Cheese',  ic: [224, 480], w: 6, heal: 8,
+      buff: { name: 'Fed', dur: 15, regen: 1.5 } },
+    { id: 'apple',    kind: 'food',   name: 'Crisp Apple',      ic: [0, 448],   w: 7, heal: 6,
+      buff: { name: 'Refreshed', dur: 12, regen: 1.5 } },
+    { id: 'stew',     kind: 'food',   name: 'Mushroom Stew',    ic: [384, 448], w: 4, heal: 12,
+      buff: { name: 'Warmed', dur: 18, regen: 2, maxHp: 10 } },
+    { id: 'jerky',    kind: 'food',   name: 'Strip of Jerky',   ic: [32, 480],  w: 5, heal: 9,
+      buff: { name: 'Sated', dur: 16, regen: 1.5, dmg: 2 } },
+    { id: 'scr_fire', kind: 'scroll', name: 'Scroll of Cinders', ic: [352, 416], w: 4,
+      aoe: { dmg: 30, r: 150, col: '#e8763d', label: 'CINDERS' } },
+    { id: 'scr_rime', kind: 'scroll', name: 'Scroll of Rime',   ic: [320, 416], w: 4,
+      aoe: { dmg: 16, r: 185, chill: 3, col: '#5aa2e8', label: 'RIME' } },
+    { id: 'scr_ward', kind: 'scroll', name: 'Scroll of Warding', ic: [288, 416], w: 3,
+      buff: { name: 'Warded', dur: 15, def: 8, blkAdd: 6 } },
+    { id: 'grimoire', kind: 'scroll', name: 'Torn Grimoire',    ic: [192, 416], w: 2,
+      buff: { name: 'Insight', dur: 30, spellMult: 1.8, manaMax: 25 } },
+  ];
+  // affixes: the reason two Steel Kite Shields are never quite the same
+  const PREFIXES = [
+    { name: 'Vicious',     mods: { dmg: 2 } },
+    { name: 'Keen',        mods: { crit: 0.05 } },
+    { name: 'Swift',       mods: { atkMult: 0.92 } },
+    { name: 'Heavy',       mods: { knockMult: 1.3 } },
+    { name: 'Sturdy',      mods: { def: 1 } },
+    { name: 'Glimmering',  mods: { light: 30 } },
+    { name: 'Vampiric',    mods: { lifesteal: 1 } },
+    { name: 'Runed',       mods: { spellMult: 1.12 } },
+    { name: 'Nimble',      mods: { spdMult: 1.06 } },
+    { name: 'Thorned',     mods: { thorns: 2 } },
+    { name: 'Blessed',     mods: { regen: 0.6 } },
+    { name: 'Frostbitten', mods: { chill: 0.1 } },
+    { name: 'Reaching',    mods: { rangeAdd: 8 } },
+    { name: 'Broad',       mods: { arcAdd: 0.15 } },
+    { name: 'Bulwark',     mods: { blkAdd: 2 } },
+    { name: 'Gilded',      mods: { goldMult: 1.15 } },
+  ];
+  const SUFFIXES = [
+    { name: 'of the Bear',   mods: { maxHp: 15 } },
+    { name: 'of the Fox',    mods: { spdMult: 1.08 } },
+    { name: 'of Embers',     mods: { spellMult: 1.15 } },
+    { name: 'of Leeching',   mods: { lifesteal: 1 } },
+    { name: 'of Warding',    mods: { def: 2 } },
+    { name: 'of Fortune',    mods: { goldMult: 1.2 } },
+    { name: 'of the Owl',    mods: { xpMult: 1.15 } },
+    { name: 'of Wrath',      mods: { dmg: 3 } },
+    { name: 'of Shadows',    mods: { dodge: 0.05 } },
+    { name: 'of the Deep',   mods: { manaMax: 20, manaRegen: 1 } },
+    { name: 'of Ruin',       mods: { execute: 5 } },
+    { name: 'of the Ambush', mods: { first: 4 } },
+    { name: 'of Souls',      mods: { manaKill: 2 } },
+    { name: 'of the Vulture', mods: { critHeal: 3 } },
+    { name: 'of Haste',      mods: { atkMult: 0.9 } },
+    { name: 'of the Turtle', mods: { blkAdd: 3, spdMult: 0.97 } },
+  ];
+  // mods that scale multiplicatively need their distance from 1 scaled, not the value
+  const MULT_MODS = ['spdMult', 'atkMult', 'spellMult', 'goldMult', 'xpMult',
+    'knockMult', 'shopMult', 'potionMult'];
+  const round2 = v => Math.round(v * 100) / 100;
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  function pickW(list) {
+    let total = 0;
+    for (const e of list) total += e.w || 1;
+    let roll = Math.random() * total;
+    for (const e of list) {
+      roll -= e.w || 1;
+      if (roll <= 0) return e;
+    }
+    return list[0];
+  }
+  function scaleMods(mods, mult) {
+    const out = {};
+    for (const k in mods) {
+      const v = mods[k];
+      if (MULT_MODS.includes(k)) out[k] = round2(1 + (v - 1) * mult);
+      else if (Number.isInteger(v) && Math.abs(v) >= 1) out[k] = Math.round(v * mult) || v;
+      else out[k] = round2(v * mult);
+    }
+    return out;
+  }
+  function mergeMods(a, b) {
+    const out = Object.assign({}, a);
+    for (const k in b) {
+      if (MULT_MODS.includes(k)) out[k] = round2((out[k] || 1) * b[k]);
+      else out[k] = round2((out[k] || 0) + b[k]);
+    }
+    return out;
+  }
+  const plus = v => (v >= 0 ? '+' : '') + v;
+  const pct = v => (v >= 1 ? '+' + Math.round((v - 1) * 100) : Math.round((v - 1) * 100)) + '%';
+  const MOD_LABEL = {
+    dmg: v => plus(v) + ' dmg', def: v => plus(v) + ' armor', maxHp: v => plus(v) + ' hp',
+    blkAdd: v => plus(v) + ' block', thorns: v => 'thorns ' + v,
+    lifesteal: v => 'heal ' + v + ' on kill', manaKill: v => plus(v) + ' mana on kill',
+    manaMax: v => plus(v) + ' mana', manaRegen: v => plus(v) + ' mana/s',
+    regen: v => plus(v) + ' hp/s', light: v => (v >= 0 ? 'wider' : 'dimmer') + ' light',
+    rangeAdd: v => plus(v) + ' reach', arcAdd: () => 'wider swing',
+    execute: v => plus(v) + ' vs wounded', first: v => plus(v) + ' vs unharmed',
+    critHeal: v => 'crits heal ' + v,
+    crit: v => plus(Math.round(v * 100)) + '% crit', dodge: v => plus(Math.round(v * 100)) + '% dodge',
+    chill: v => Math.round(v * 100) + '% chill',
+    spdMult: v => pct(v) + ' speed', atkMult: v => pct(1 / v) + ' atk speed',
+    spellMult: v => pct(v) + ' spell power', goldMult: v => pct(v) + ' gold',
+    xpMult: v => pct(v) + ' xp', knockMult: v => pct(v) + ' knockback',
+    shopMult: v => pct(1 / v) + ' off shops', potionMult: v => pct(v) + ' potion heal',
+  };
+  function modsText(mods) {
+    const out = [];
+    for (const k in mods) {
+      if (!mods[k] || !MOD_LABEL[k]) continue;
+      out.push(MOD_LABEL[k](mods[k]));
+    }
+    return out;
+  }
   function statFor(kind, ri, floor) {
     const m = RARITIES[ri].mult;
     if (kind === 'sword') return Math.round((4 + floor * 1.3) * m);
@@ -473,30 +697,120 @@
     if (kind === 'shield') return Math.round((3 + floor * 0.9) * m);
     return Math.round(25 * m);
   }
+  function matFor(ri, floor) {
+    return MATS[Math.min(MATS.length - 1, Math.floor((floor - 1) / 2) + (ri >= 3 ? 1 : 0))];
+  }
+  // rarity decides how many affixes roll; a prefix stands in for the material
+  function affix(it, ri, floor) {
+    let n;
+    if (ri <= 0) n = Math.random() < 0.22 ? 1 : 0;
+    else if (ri === 1) n = 1;
+    else if (ri === 2) n = Math.random() < 0.4 ? 2 : 1;
+    else n = 2;
+    if (!n) return it;
+    const mult = 0.5 + RARITIES[ri].mult * 0.5 + floor * 0.06;
+    const usePrefix = n === 2 || Math.random() < 0.5;
+    if (usePrefix) {
+      const p = pick(PREFIXES);
+      it.mods = mergeMods(it.mods, scaleMods(p.mods, mult));
+      it.name = p.name + ' ' + it.base;
+    }
+    if (n === 2 || !usePrefix) {
+      const s = pick(SUFFIXES);
+      it.mods = mergeMods(it.mods, scaleMods(s.mods, mult));
+      it.name += ' ' + s.name;
+    }
+    return it;
+  }
+  function makeWeapon(wtype, floor, ri) {
+    const wt = WTYPES[wtype];
+    const v = statFor('sword', ri, floor);
+    return {
+      kind: 'sword', wtype, ri,
+      dmg: Math.max(1, Math.round(v * wt.dm)),
+      cd: wt.cd, range: wt.range, arc: wt.arc, knock: wt.knock,
+      base: wt.n, mods: {}, name: matFor(ri, floor) + ' ' + wt.n,
+    };
+  }
+  function scaleBuff(buff, m) {
+    const rest = Object.assign({}, buff);
+    delete rest.name; delete rest.dur;
+    return Object.assign({ name: buff.name, dur: Math.round(buff.dur * (1 + (m - 1) * 0.4)) },
+      scaleMods(rest, m));
+  }
+  const CONSUME_TIER = ['', 'Fine ', 'Greater ', 'Superb ', 'Fabled '];
+  function makeConsumable(floor, ri, kindFilter) {
+    const pool = kindFilter ? CONSUMABLES.filter(c => c.kind === kindFilter) : CONSUMABLES;
+    const c = pickW(pool.length ? pool : CONSUMABLES);
+    const m = RARITIES[ri].mult;
+    const it = { kind: c.kind, ri, ic: c.ic, use: c.id, name: CONSUME_TIER[ri] + c.name };
+    if (c.heal) it.heal = Math.round(c.heal * m * (1 + floor * 0.12));
+    if (c.mana) it.mana = Math.round(c.mana * m * (1 + floor * 0.1));
+    if (c.buff) it.buff = scaleBuff(c.buff, m);
+    if (c.aoe) {
+      it.aoe = Object.assign({}, c.aoe, { dmg: Math.round(c.aoe.dmg * m * (1 + floor * 0.2)) });
+    }
+    return it;
+  }
+  function makeTrinket(floor, ri) {
+    const t = pick(TRINKETS);
+    const it = {
+      kind: 'trinket', ri, ic: t.ic, base: t.n, name: t.n,
+      mods: scaleMods(t.mods, RARITIES[ri].mult * (1 + floor * 0.06)),
+    };
+    return affix(it, ri, floor);
+  }
   function makeItem(kind, floor, forceRi) {
     const ri = forceRi !== undefined ? forceRi : rollRarity(floor);
-    const mat = MATS[Math.min(MATS.length - 1, Math.floor((floor - 1) / 2) + (ri >= 3 ? 1 : 0))];
+    if (kind === 'trinket') return makeTrinket(floor, ri);
+    if (kind === 'sword') return affix(makeWeapon(pick(WTYPE_KEYS), floor, ri), ri, floor);
     const v = statFor(kind, ri, floor);
-    if (kind === 'sword') {
-      const wtype = WTYPE_KEYS[Math.floor(Math.random() * WTYPE_KEYS.length)];
-      const wt = WTYPES[wtype];
-      return {
-        kind, wtype, ri,
-        dmg: Math.max(1, Math.round(v * wt.dm)),
-        cd: wt.cd, range: wt.range, arc: wt.arc, knock: wt.knock,
-        name: mat + ' ' + wt.n,
+    if (kind === 'armor') {
+      const a = pick(ARMORS);
+      const it = {
+        kind, ri, ic: a.ic, base: a.n, def: Math.max(1, Math.round(v * a.mul)),
+        mods: Object.assign({}, a.mods), name: matFor(ri, floor) + ' ' + a.n,
       };
+      return affix(it, ri, floor);
     }
-    if (kind === 'armor') return { kind, ri, def: v, name: mat + ' Armor' };
-    if (kind === 'shield') return { kind, ri, blk: v, name: mat + ' Shield' };
-    return { kind: 'potion', ri, heal: v, name: RARITIES[ri].name + ' Potion' };
+    if (kind === 'shield') {
+      const s = pick(SHIELDS);
+      const it = {
+        kind, ri, ic: s.ic, base: s.n, blk: Math.max(1, Math.round(v * s.mul)),
+        mods: Object.assign({}, s.mods), name: matFor(ri, floor) + ' ' + s.n,
+      };
+      return affix(it, ri, floor);
+    }
+    // anything else routes through the consumable table ('potion', 'mana', ...)
+    return makeConsumable(floor, ri, kind === 'consumable' ? null : kind);
+  }
+  const EQ_KEYS = ['sword', 'shield', 'armor', 'trinket'];
+  // what chests, bosses and shelves can cough up, and how often
+  const LOOT_KINDS = [
+    { k: 'potion', w: 14 }, { k: 'food', w: 8 }, { k: 'mana', w: 6 },
+    { k: 'elixir', w: 5 }, { k: 'scroll', w: 4 },
+    { k: 'sword', w: 12 }, { k: 'armor', w: 9 }, { k: 'shield', w: 9 },
+    { k: 'trinket', w: 8 },
+  ];
+  const rollLootKind = () => pickW(LOOT_KINDS).k;
+  const GEAR_KINDS = ['sword', 'armor', 'shield', 'trinket'];
+  function buffText(b) {
+    const rest = Object.assign({}, b);
+    delete rest.name; delete rest.dur;
+    return modsText(rest).join(', ');
   }
   function itemStat(it) {
     if (!it) return '';
-    if (it.kind === 'sword') return it.dmg + ' dmg · ' + (1 / it.cd).toFixed(1) + ' swings/s';
-    if (it.kind === 'armor') return it.def + ' armor';
-    if (it.kind === 'shield') return it.blk + ' block';
-    return '+' + it.heal + ' hp';
+    const parts = [];
+    if (it.kind === 'sword') parts.push(it.dmg + ' dmg', (1 / it.cd).toFixed(1) + ' swings/s');
+    else if (it.kind === 'armor') parts.push(it.def + ' armor');
+    else if (it.kind === 'shield') parts.push(it.blk + ' block');
+    if (it.heal) parts.push('+' + it.heal + ' hp');
+    if (it.mana) parts.push('+' + it.mana + ' mana');
+    if (it.aoe) parts.push(it.aoe.dmg + ' burst damage');
+    if (it.buff) parts.push(buffText(it.buff) + ' for ' + it.buff.dur + 's');
+    if (it.mods) parts.push.apply(parts, modsText(it.mods));
+    return parts.join(' · ');
   }
 
   // ---- relics: stacking pickups, Isaac-style -----------------------------
@@ -642,11 +956,11 @@
     stairs: { x: 0, y: 0 },
     hero: { x: 0, y: 0, face: 1, moving: false, hp: 100, maxHp: 100, gold: 0 },
     mana: 50,
-    relics: [], perks: [],
+    relics: [], perks: [], buffs: [],
     level: 1, xp: 0, xpNext: 50, pendingLvls: 0, lvlChoices: null, lvlBtns: [],
     st: null, // derived stats, recalc()'d
     aim: 0, block: false,
-    equip: { sword: null, shield: null, armor: null },
+    equip: { sword: null, shield: null, armor: null, trinket: null },
     bag: new Array(16).fill(null),
     hotbar: new Array(4).fill(null),
     inv: false, invMx: 0, invMy: 0,
@@ -718,7 +1032,13 @@
       execute: 0, first: 0, critHeal: 0, killHaste: 0,
       blkAdd: 0, thrallCap: 0, thrallTtl: 0, addBolts: 0,
     };
-    for (const r of D.relics.concat(D.perks)) {
+    // equipment affixes and drinkable buffs stack exactly like relics do
+    const gear = [];
+    for (const k of EQ_KEYS) {
+      const e = D.equip[k];
+      if (e && e.mods) gear.push(e.mods);
+    }
+    for (const r of D.relics.concat(D.perks, gear, D.buffs)) {
       if (r.dmg) st.dmg += r.dmg;
       if (r.def) st.def += r.def;
       if (r.maxHp) st.maxHp += r.maxHp;
@@ -786,6 +1106,28 @@
       say(relic.name + ' — ' + relic.desc, relic.cursed ? '#a4372e' : relic.color);
       A.sweep(300, 900, 0.5, 'sine', 0.05);
     }
+  }
+  // temporary buffs fold into the same stat pass, then tick themselves out
+  function addBuff(b) {
+    const same = D.buffs.find(x => x.name === b.name);
+    if (same) D.buffs.splice(D.buffs.indexOf(same), 1);
+    const nb = Object.assign({}, b, { t: b.dur });
+    D.buffs.push(nb);
+    recalc();
+    if (nb.maxHp > 0) D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + nb.maxHp);
+    floatText(D.hero.x, D.hero.y - 30, nb.name.toUpperCase(), '#b06ae0');
+  }
+  function tickBuffs(dt) {
+    let dirty = false;
+    for (let i = D.buffs.length - 1; i >= 0; i--) {
+      D.buffs[i].t -= dt;
+      if (D.buffs[i].t <= 0) {
+        say(D.buffs[i].name + ' fades', '#8a8f80');
+        D.buffs.splice(i, 1);
+        dirty = true;
+      }
+    }
+    if (dirty) recalc();
   }
   // raise dead lives on its own key [E]; F cycles to the newest other spell
   const knowsRaise = () => D.st.spells.includes('raise');
@@ -1072,22 +1414,30 @@
       cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1, fa: Math.PI / 2, hurt: 0, aggro: false,
       broodT: 5,
     });
-    // treasure room holds a pedestal relic
-    D.pedestals.push({
-      x: treasureRoom.cx, y: treasureRoom.cy,
-      relic: randomRelic(), taken: false,
-    });
+    // treasure room holds a relic, or now and then a standout piece of gear
+    if (Math.random() < 0.3) {
+      D.pedestals.push({
+        x: treasureRoom.cx, y: treasureRoom.cy, taken: false,
+        it: makeItem(pick(GEAR_KINDS), D.floor + 1, 3 + (Math.random() < 0.25 ? 1 : 0)),
+      });
+    } else {
+      D.pedestals.push({
+        x: treasureRoom.cx, y: treasureRoom.cy,
+        relic: randomRelic(), taken: false,
+      });
+    }
     // the shop stocks a potion, a piece of gear, and a relic — for a price
     const shopRoom = D.rooms.find(r => r.type === 'shop');
     if (shopRoom) {
       const potion = makeItem('potion', D.floor);
-      const gearKinds = ['sword', 'armor', 'shield'];
-      const gear = makeItem(gearKinds[Math.floor(Math.random() * gearKinds.length)], D.floor + 1);
+      const supply = makeItem(pick(['food', 'mana', 'elixir', 'scroll']), D.floor);
+      const gear = makeItem(pick(GEAR_KINDS), D.floor + 1);
       const relic = randomRelic();
       D.wares.push(
-        { x: shopRoom.cx - 2, y: shopRoom.cy, it: potion, price: 12 + D.floor * 3, sold: false, msgT: 0 },
-        { x: shopRoom.cx, y: shopRoom.cy, it: gear, price: Math.round((18 + D.floor * 5) * RARITIES[gear.ri].mult), sold: false, msgT: 0 },
-        { x: shopRoom.cx + 2, y: shopRoom.cy, relic, price: relic.cursed ? 45 + D.floor * 8 : 65 + D.floor * 12, sold: false, msgT: 0 },
+        { x: shopRoom.cx - 3, y: shopRoom.cy, it: potion, price: 12 + D.floor * 3, sold: false, msgT: 0 },
+        { x: shopRoom.cx - 1, y: shopRoom.cy, it: supply, price: Math.round((14 + D.floor * 4) * RARITIES[supply.ri].mult), sold: false, msgT: 0 },
+        { x: shopRoom.cx + 1, y: shopRoom.cy, it: gear, price: Math.round((18 + D.floor * 5) * RARITIES[gear.ri].mult), sold: false, msgT: 0 },
+        { x: shopRoom.cx + 3, y: shopRoom.cy, relic, price: relic.cursed ? 45 + D.floor * 8 : 65 + D.floor * 12, sold: false, msgT: 0 },
       );
       shopRoom.merchant = { x: shopRoom.cx, y: shopRoom.cy - 2 };
     }
@@ -1095,12 +1445,7 @@
     if (D.floor === 1) {
       const picks = WTYPE_KEYS.slice().sort(() => Math.random() - 0.5).slice(0, 3);
       picks.forEach((wt, i) => {
-        const it = makeItem('sword', 1, 0);
-        const prof = WTYPES[wt];
-        it.wtype = wt;
-        it.dmg = Math.max(1, Math.round(statFor('sword', 0, 1) * prof.dm));
-        it.cd = prof.cd; it.range = prof.range; it.arc = prof.arc; it.knock = prof.knock;
-        it.name = MATS[0] + ' ' + prof.n;
+        const it = makeWeapon(wt, 1, 0);
         D.pedestals.push({
           x: startRoom.cx - 2 + i * 2, y: startRoom.cy - 2,
           it, taken: false, group: 'startWeapon',
@@ -1119,10 +1464,8 @@
       const ri = rollRarity(D.floor);
       const items = new Array(4).fill(null);
       const nItems = 2 + Math.floor(Math.random() * 3);
-      const kinds = ['potion', 'potion', 'sword', 'armor', 'shield'];
       for (let j = 0; j < nItems; j++) {
-        items[j] = makeItem(kinds[Math.floor(Math.random() * kinds.length)], D.floor,
-          Math.max(rollRarity(D.floor), ri));
+        items[j] = makeItem(rollLootKind(), D.floor, Math.max(rollRarity(D.floor), ri));
       }
       D.chests.push({
         x: cx2, y: cy2, ri, opened: false, cool: 0, items,
@@ -1275,11 +1618,12 @@
   function prime() {
     D.floor = 1; D.t = 0;
     D.hero.hp = 100; D.hero.gold = 0;
-    D.relics = []; D.perks = [];
+    D.relics = []; D.perks = []; D.buffs = [];
     D.level = 1; D.xp = 0; D.xpNext = 50; D.pendingLvls = 0; D.lvlChoices = null;
-    D.equip.sword = null; D.equip.shield = null; D.equip.armor = null;
+    for (const k of EQ_KEYS) D.equip[k] = null;
     D.bag.fill(null); D.hotbar.fill(null);
-    D.hotbar[0] = { kind: 'potion', ri: 0, heal: 25, name: 'Common Potion' };
+    D.hotbar[0] = makeConsumable(1, 0, 'potion');
+    D.hotbar[1] = makeConsumable(1, 0, 'food');
     D.inv = false; D.over = false; D.block = false;
     D.lootChest = null; D.drag = null;
     D.msgs.length = 0;
@@ -1531,10 +1875,10 @@
     if (D.atkT > 0 || D.block) return;
     const dir = D.aim;
     D.atkT = D.st.atkCd;
-    D.atkDur = SWING_DUR[heldWtype()] || 0.16;
+    D.atkDur = SWING_DUR[wfam(heldWtype())] || 0.16;
     D.atkAnim = D.atkDur;
     D.atkDir = dir;
-    if (heldWtype() === 'bow') {
+    if (wfam(heldWtype()) === 'bow') {
       // bows loose an arrow instead of sweeping
       const crit = D.st.crit && Math.random() < D.st.crit;
       D.bolts.push({
@@ -1572,7 +1916,9 @@
       D.tiles[idx(bz.x, bz.y)] = 1;
       D.braziers.splice(i, 1);
       floatText(bx3, by3 - 12, 'smash', '#e8a33d');
-      if (Math.random() < 0.15) D.drops.push({ x: bx3, y: by3, it: makeItem('potion', D.floor) });
+      if (Math.random() < 0.15) {
+        D.drops.push({ x: bx3, y: by3, it: makeItem(pick(['potion', 'food', 'mana']), D.floor) });
+      }
       A.bleep(150, 0.1, 'square', 0.05);
     }
   }
@@ -1604,6 +1950,7 @@
       D.castT = 0.25; D.castCol = '#e8763d';
       A.bleep(700, 0.07, 'square', 0.045);
     } else if (sp === 'nova') {
+      D.novaR = 130; D.novaCol = '#5aa2e8';
       if (D.mana < 22) { say('Not enough mana', '#5aa2e8'); return; }
       D.mana -= 22;
       const R2 = 130;
@@ -1637,10 +1984,9 @@
   }
   function bossLoot(en) {
     const nItems = 3 + Math.floor(Math.random() * 3);
-    const kinds = ['sword', 'shield', 'armor', 'potion'];
     for (let i = 0; i < nItems; i++) {
       const a = (i / nItems) * Math.PI * 2 + Math.random();
-      const it = makeItem(kinds[Math.floor(Math.random() * kinds.length)], D.floor, rollBossRarity());
+      const it = makeItem(rollLootKind(), D.floor, rollBossRarity());
       D.drops.push({
         x: en.x + Math.cos(a) * (24 + Math.random() * 26),
         y: en.y + Math.sin(a) * (24 + Math.random() * 26),
@@ -1671,8 +2017,15 @@
       bossLoot(en);
       openSeal(true);
     } else {
-      if (Math.random() < 0.06) {
-        D.drops.push({ x: en.x, y: en.y, it: makeItem('potion', D.floor) });
+      const roll = Math.random();
+      if (roll < 0.07) {
+        // scraps: whatever the thing was carrying
+        D.drops.push({
+          x: en.x, y: en.y,
+          it: makeItem(pick(['potion', 'potion', 'food', 'food', 'mana', 'elixir', 'scroll']), D.floor),
+        });
+      } else if (roll < 0.10) {
+        D.drops.push({ x: en.x, y: en.y, it: makeItem(pick(GEAR_KINDS), D.floor) });
       }
       // room cleared? the doors release
       if (D.sealedRoom && en.homeRoom === D.sealedRoom &&
@@ -1769,15 +2122,40 @@
   }
   function useHotbar(i) {
     const it = D.hotbar[i];
-    if (!it) return;
-    if (it.kind === 'potion') {
-      if (D.hero.hp >= D.hero.maxHp) { say('Already at full health'); return; }
+    if (!it || !it.use) return;
+    // a plain healing draught is wasted at full health — everything else isn't
+    const onlyHeals = it.heal && !it.mana && !it.buff && !it.aoe;
+    if (onlyHeals && D.hero.hp >= D.hero.maxHp) { say('Already at full health'); return; }
+    if (it.mana && !it.heal && !it.buff && D.mana >= D.st.manaMax) {
+      say('Already at full mana', '#5aa2e8');
+      return;
+    }
+    if (it.heal) {
       const heal = Math.round(it.heal * D.st.potionMult);
       D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + heal);
-      D.hotbar[i] = null;
       floatText(D.hero.x, D.hero.y - 24, '+' + heal, '#7ec96f');
-      A.bleep(620, 0.08, 'triangle', 0.045);
     }
+    if (it.mana) {
+      const mp = Math.round(it.mana);
+      D.mana = Math.min(D.st.manaMax, D.mana + mp);
+      floatText(D.hero.x, D.hero.y - 40, '+' + mp + 'mp', '#5aa2e8');
+    }
+    if (it.aoe) {
+      const a = it.aoe;
+      for (const en of D.enemies.slice()) {
+        const d = Math.hypot(en.x - D.hero.x, en.y - D.hero.y);
+        if (d > a.r + ETYPES[en.type].r) continue;
+        if (a.chill) en.slow = Math.max(en.slow || 0, a.chill);
+        damageEnemy(en, Math.max(1, a.dmg - (ETYPES[en.type].dr || 0)), false);
+      }
+      D.novaT = 0.3; D.novaR = a.r; D.novaCol = a.col;
+      D.shake = Math.max(D.shake, 5);
+      floatText(D.hero.x, D.hero.y - 34, a.label, a.col);
+      A.sweep(900, 90, 0.4, 'sine', 0.07);
+    }
+    if (it.buff) addBuff(it.buff);
+    D.hotbar[i] = null;
+    A.bleep(620, 0.08, 'triangle', 0.045);
   }
 
   // ---- inventory UI ------------------------------------------------------
@@ -1793,11 +2171,8 @@
         y: py + 74 + Math.floor(i / 4) * (SLOT + GAP),
       });
     }
-    const eq = {
-      sword: { x: px + 32, y: py + 96 },
-      shield: { x: px + 96, y: py + 96 },
-      armor: { x: px + 160, y: py + 96 },
-    };
+    const eq = {};
+    EQ_KEYS.forEach((k, i) => { eq[k] = { x: px + 20 + i * 56, y: py + 96 }; });
     const hot = [];
     for (let i = 0; i < 4; i++) {
       hot.push({ x: px + 250 + i * (SLOT + GAP), y: py + ph - 86 });
@@ -1814,7 +2189,7 @@
     const L = invLayout();
     for (let i = 0; i < 16; i++) if (inSlot(mx, my, L.bag[i])) return { type: 'bag', key: i };
     for (let i = 0; i < 4; i++) if (inSlot(mx, my, L.hot[i])) return { type: 'hot', key: i };
-    for (const kind of ['sword', 'shield', 'armor']) {
+    for (const kind of EQ_KEYS) {
       if (inSlot(mx, my, L.eq[kind])) return { type: 'eq', key: kind };
     }
     if (D.lootChest) {
@@ -1840,7 +2215,7 @@
   function accepts(s, it) {
     if (!it) return true;
     if (s.type === 'bag') return true;
-    if (s.type === 'hot') return it.kind === 'potion';
+    if (s.type === 'hot') return !!it.use;
     if (s.type === 'eq') return it.kind === s.key;
     if (s.type === 'chest') return true;
     return false;
@@ -1880,12 +2255,12 @@
       return;
     }
     if (s.type === 'bag') {
-      if (it.kind === 'potion') {
+      if (it.use) {
         const slot = D.hotbar.indexOf(null);
         if (slot < 0) { say('Hotbar full'); return; }
         D.hotbar[slot] = it;
         D.bag[s.key] = null;
-      } else {
+      } else if (EQ_KEYS.includes(it.kind)) {
         const old = D.equip[it.kind];
         D.equip[it.kind] = it;
         D.bag[s.key] = old;
@@ -1970,6 +2345,7 @@
     const m = Math.hypot(ax, ay) || 1;
     D.hero.moving = !!(ax || ay);
     D.hasteT = Math.max(0, (D.hasteT || 0) - dt);
+    tickBuffs(dt);
     if (D.st.regen) D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + D.st.regen * dt);
     D.rollT = Math.max(0, D.rollT - dt);
     D.rollCd = Math.max(0, D.rollCd - dt);
@@ -2054,10 +2430,16 @@
         if (p.relic) {
           gainRelic(p.relic);
         } else if (p.it) {
-          const old = D.equip.sword;
-          D.equip.sword = p.it;
-          if (old) addToBag(old);
-          recalc();
+          const slot = EQ_KEYS.includes(p.it.kind) ? p.it.kind : null;
+          if (slot) {
+            const old = D.equip[slot];
+            D.equip[slot] = p.it;
+            if (old) addToBag(old);
+            recalc();
+          } else if (!addToBag(p.it)) {
+            p.taken = false;
+            continue;
+          }
           say('Took the ' + p.it.name, RARITIES[p.it.ri].color);
           A.bleep(560, 0.06, 'triangle', 0.04);
           // choosing one dismisses its siblings
@@ -2336,6 +2718,16 @@
     ctx.strokeRect(s.x + 0.5, s.y + 0.5, SLOT - 1, SLOT - 1);
     if (it) drawItemIcon(it, s.x + SLOT / 2, s.y + SLOT / 2, 38);
   }
+  // long affixed names outgrow the panel — step the size down until they fit
+  function fitText(text, x, y, maxW, size) {
+    let s = size;
+    ctx.font = '600 ' + s + 'px ' + MONO;
+    while (s > 8 && ctx.measureText(text).width > maxW) {
+      s -= 1;
+      ctx.font = '600 ' + s + 'px ' + MONO;
+    }
+    ctx.fillText(text, x, y);
+  }
   function drawRelicGlyph(x, y, r, size) {
     ctx.fillStyle = r.color;
     ctx.beginPath();
@@ -2423,14 +2815,14 @@
         if (hov && it) hoverItem = it;
       }
     }
-    for (const kind of ['sword', 'shield', 'armor']) {
+    for (const kind of EQ_KEYS) {
       const s = L.eq[kind];
       const hov = inSlot(MP.x, MP.y, s);
       drawSlot(s, showItem({ type: 'eq', key: kind }, D.equip[kind]), hov);
       if (hov && D.equip[kind]) hoverItem = D.equip[kind];
       ctx.fillStyle = '#8a8f80';
       ctx.font = '600 9px ' + MONO;
-      ctx.fillText(kind.toUpperCase(), s.x + 2, s.y + SLOT + 13);
+      ctx.fillText(kind === 'trinket' ? 'CHARM' : kind.toUpperCase(), s.x + 2, s.y + SLOT + 13);
     }
     for (let i = 0; i < 16; i++) {
       const hov = inSlot(MP.x, MP.y, L.bag[i]);
@@ -2466,9 +2858,12 @@
       ctx.font = '600 13px ' + MONO;
       ctx.fillText(hoverRelic.name + ' — ' + hoverRelic.desc, L.px + 26, L.py + L.ph - 18);
     } else if (hoverItem) {
+      // name on one line, everything it does on the next — both shrink to fit
+      const maxW = L.pw - 52;
       ctx.fillStyle = RARITIES[hoverItem.ri].color;
-      ctx.font = '600 13px ' + MONO;
-      ctx.fillText(RARITIES[hoverItem.ri].name + ' ' + hoverItem.name + '  ·  ' + itemStat(hoverItem), L.px + 26, L.py + L.ph - 18);
+      fitText(RARITIES[hoverItem.ri].name + ' ' + hoverItem.name, L.px + 26, L.py + L.ph - 36, maxW, 13);
+      ctx.fillStyle = '#c8cdd7';
+      fitText(itemStat(hoverItem), L.px + 26, L.py + L.ph - 18, maxW, 12);
     } else {
       ctx.fillStyle = '#8a8f80';
       ctx.font = '600 13px ' + MONO;
@@ -2874,10 +3269,10 @@
     if (D.novaT > 0) {
       const p = 1 - D.novaT / 0.3;
       ctx.globalAlpha = (1 - p) * 0.7;
-      ctx.strokeStyle = '#5aa2e8';
+      ctx.strokeStyle = D.novaCol || '#5aa2e8';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(ox + D.hero.x, oy + D.hero.y, 130 * p, 0, Math.PI * 2);
+      ctx.arc(ox + D.hero.x, oy + D.hero.y, (D.novaR || 130) * p, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
@@ -3003,15 +3398,16 @@
       ctx.save();
       ctx.translate(hx, hy);
       const hw = heldWtype();
+      const hf = wfam(hw);
       const dur = D.atkDur || 0.16;
       const ap = D.atkAnim > 0 ? 1 - D.atkAnim / dur : -1;
       const cp = D.castT > 0 ? 1 - D.castT / 0.25 : -1;
       const sgn = Math.cos(D.aim) >= 0 ? 1 : -1;
-      if (hw === 'bow') {
+      if (hf === 'bow') {
         // bows sit upright in the hand and just kick back on release
         const kick = ap >= 0 ? Math.sin(ap * Math.PI) * 4 : 0;
         if (atlasReady) {
-          const wr = AT.wpn.bow;
+          const wr = AT.wpn[hw] || AT.wpn.bow;
           const dh2 = 26, dw2 = wr[2] * (dh2 / wr[3]);
           drawA(wr, D.hero.face * (9 - kick) - dw2 / 2, -dh2 / 2 - 2, dw2, dh2);
         } else {
@@ -3020,16 +3416,16 @@
         }
       } else {
       let wAng = D.aim + sgn * 0.85, wRad = 8; // rest: held off to the side
-      if (cp >= 0 && hw === 'staff') {
+      if (cp >= 0 && hf === 'staff') {
         wAng = D.aim; wRad = 8 + Math.sin(Math.min(1, cp) * Math.PI) * 16;
       } else if (ap >= 0) {
         const dir = D.atkDir;
         const ease = 1 - (1 - ap) * (1 - ap); // fast start, soft landing
-        if (hw === 'spear') {
+        if (hf === 'spear') {
           wAng = dir; wRad = 6 + Math.sin(ap * Math.PI) * 26; // straight poke
-        } else if (hw === 'axe' || hw === 'hammer') {
+        } else if (hf === 'axe' || hf === 'hammer') {
           wAng = dir + sgn * (-2.0 + ease * 2.5); wRad = 12; // overhead chop
-        } else if (hw === 'staff') {
+        } else if (hf === 'staff') {
           wAng = dir; wRad = 8 + Math.sin(ap * Math.PI) * 18; // forward shove
         } else {
           wAng = dir + sgn * (-1.15 + ease * 2.3); wRad = 12; // diagonal slash
@@ -3038,8 +3434,8 @@
       ctx.rotate(wAng + Math.PI / 2);
       if (atlasReady) {
         const wr = AT.wpn[hw] || AT.wpn.sword;
-        const dh2 = hw === 'staff' ? 30 : 26, dw2 = wr[2] * (dh2 / wr[3]);
-        if (cp >= 0 && hw === 'staff') {
+        const dh2 = hf === 'staff' ? 30 : 26, dw2 = wr[2] * (dh2 / wr[3]);
+        if (cp >= 0 && hf === 'staff') {
           // the spell's color halos the staff as the charge leaves it
           ctx.fillStyle = D.castCol || '#8fb8e8';
           ctx.globalAlpha = (1 - cp) * 0.5;
@@ -3049,7 +3445,7 @@
           ctx.globalAlpha = 1;
         }
         drawA(wr, -dw2 / 2, -wRad - dh2, dw2, dh2);
-        if (cp >= 0 && hw === 'staff') {
+        if (cp >= 0 && hf === 'staff') {
           ctx.fillStyle = D.castCol || '#8fb8e8';
           ctx.globalAlpha = (1 - cp) * 0.9;
           ctx.beginPath();
@@ -3077,7 +3473,7 @@
         ctx.globalAlpha = 1;
       }
     }
-    if (D.atkAnim > 0 && heldWtype() !== 'bow') {
+    if (D.atkAnim > 0 && wfam(heldWtype()) !== 'bow') {
       const p = 1 - D.atkAnim / (D.atkDur || 0.16);
       ctx.save();
       ctx.translate(ox + D.hero.x, oy + D.hero.y);
@@ -3179,6 +3575,16 @@
       const spInfo = { bolt: ['#e8763d', 'FIREBOLT 12mp'], nova: ['#5aa2e8', 'FROST NOVA 22mp'] }[sp];
       ctx.fillStyle = spInfo[0];
       ctx.fillText('[F] ' + spInfo[1], 26, spellY);
+      spellY += 20;
+    }
+    // whatever you drank, and how long it has left
+    if (D.buffs.length) {
+      ctx.font = '600 12px ' + MONO;
+      for (const b of D.buffs) {
+        ctx.fillStyle = b.t < 4 ? '#8a8f80' : '#b06ae0';
+        ctx.fillText(b.name.toUpperCase() + '  ' + Math.ceil(b.t) + 's', 26, spellY + 8);
+        spellY += 17;
+      }
     }
     // minimap: discovered rooms in the corner, Isaac-style
     if (D.running) {
