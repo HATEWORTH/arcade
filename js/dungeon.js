@@ -371,11 +371,55 @@
     { id: 'swift_hilt',  name: 'Swift Hilt',      desc: '+30% attack speed',    color: '#c8cdd7', atkMult: 0.72 },
     { id: 'iron_skin',   name: 'Iron Skin',       desc: '+3 armor',             color: '#8a8f80', def: 3 },
     { id: 'wind_sigil',  name: 'Wind Sigil',      desc: '+4 mana regen',        color: '#5aa2e8', manaRegen: 4 },
+    // reach, swing, and impact
+    { id: 'long_arm',    name: 'Long Arm',        desc: '+14 weapon reach',     color: '#c8cdd7', rangeAdd: 14 },
+    { id: 'wide_swing',  name: 'Wide Swing',      desc: 'wider swing arc',      color: '#c8cdd7', arcAdd: 0.25 },
+    { id: 'ram_charm',   name: 'Ram Charm',       desc: '+60% knockback',       color: '#8a8f80', knockMult: 1.6 },
+    { id: 'war_drum',    name: 'War Drum',        desc: '+2 dmg, +5% atk speed', color: '#a4372e', dmg: 2, atkMult: 0.95 },
+    { id: 'fencer_gloves', name: 'Fencer Gloves', desc: '+20% attack speed',    color: '#c8cdd7', atkMult: 0.8 },
+    { id: 'wolf_totem',  name: 'Wolf Totem',      desc: '+4 damage',            color: '#a4372e', dmg: 4 },
+    { id: 'falcon_eye',  name: 'Falcon Eye',      desc: '+10% crit',            color: '#b06ae0', crit: 0.10 },
+    // combat tricks
+    { id: 'frost_brand', name: 'Frost Brand',     desc: '18% chill on hit',     color: '#5aa2e8', chill: 0.18 },
+    { id: 'headsman',    name: 'Headsman',        desc: '+8 dmg to wounded foes', color: '#a4372e', execute: 8 },
+    { id: 'ambush_fang', name: 'Ambush Fang',     desc: '+6 dmg to unharmed foes', color: '#7ec96f', first: 6 },
+    { id: 'red_feast',   name: 'Red Feast',       desc: 'crits heal 4',         color: '#a4372e', critHeal: 4 },
+    { id: 'hunter_rush', name: 'Hunter Rush',     desc: 'kills grant 2s of speed', color: '#7ec96f', killHaste: 1 },
+    { id: 'ghost_cloak', name: 'Ghost Cloak',     desc: '12% dodge',            color: '#9db8e8', dodge: 0.12 },
+    { id: 'tower_grip',  name: 'Tower Grip',      desc: '+4 block',             color: '#8fa2b8', blkAdd: 4 },
+    // body and blood
+    { id: 'troll_blood', name: 'Troll Blood',     desc: 'regenerate 1.5 hp/s',  color: '#7ec96f', regen: 1.5 },
+    { id: 'ox_heart',    name: 'Ox Heart',        desc: '+35 max health',       color: '#7ec96f', maxHp: 35 },
+    { id: 'second_skin', name: 'Second Skin',     desc: '+2 armor',             color: '#8a8f80', def: 2 },
+    { id: 'leech_cap',   name: 'Leech Cap',       desc: 'heal 1 on kill',       color: '#a4372e', lifesteal: 1 },
+    { id: 'storm_anklet', name: 'Storm Anklet',   desc: '+12% move speed',      color: '#7ec96f', spdMult: 1.12 },
+    // mind and mana
+    { id: 'ember_ring',  name: 'Ember Ring',      desc: '+1 firebolt per cast', color: '#e8763d', addBolts: 1 },
+    { id: 'moon_prism',  name: 'Moon Prism',      desc: '+25% spell power',     color: '#b06ae0', spellMult: 1.25 },
+    { id: 'pilgrim_flask', name: 'Pilgrim Flask', desc: '+15 mana, +1 regen',   color: '#5aa2e8', manaMax: 15, manaRegen: 1 },
+    { id: 'toll_of_souls', name: 'Toll of Souls', desc: '+2 mana on kill',      color: '#5aa2e8', manaKill: 2 },
+    { id: 'bone_charm',  name: 'Bone Charm',      desc: '+1 max thrall',        color: '#9fd8a8', thrallCap: 1 },
+    { id: 'grave_oil',   name: 'Grave Oil',       desc: 'thralls last +15s',    color: '#9fd8a8', thrallTtl: 15 },
+    // fortune and knowledge
+    { id: 'scholar_stone', name: 'Scholar Stone', desc: '+30% xp',              color: '#e8a33d', xpMult: 1.3 },
+    { id: 'herbalist_kit', name: 'Herbalist Kit', desc: 'potions heal +60%',    color: '#7ec96f', potionMult: 1.6 },
+    { id: 'guild_seal',  name: 'Guild Seal',      desc: 'shops 25% off',        color: '#d9a94e', shopMult: 0.75 },
+    { id: 'gold_tooth',  name: 'Gold Tooth',      desc: '+25% gold',            color: '#d9a94e', goldMult: 1.25 },
+    { id: 'sun_core',    name: 'Sun Core',        desc: 'much wider light',     color: '#e8a33d', light: 90 },
     // curses trade something away
     { id: 'cursed_idol', name: 'Cursed Idol',     desc: '+6 damage, -20 max health', color: '#a4372e', dmg: 6, maxHp: -20, cursed: true },
     { id: 'heavy_crown', name: 'Heavy Crown',     desc: '+100% gold, -15% speed',    color: '#d9a94e', goldMult: 2, spdMult: 0.85, cursed: true },
     { id: 'dim_shard',   name: 'Dim Shard',       desc: '+5 armor, dimmer light',    color: '#8a8f80', def: 5, light: -50, cursed: true },
     { id: 'berserk_ring', name: 'Berserk Ring',   desc: '+1 dmg per 12 missing hp',  color: '#a4372e', berserk: true, cursed: true },
+    { id: 'glass_blade', name: 'Glass Blade',     desc: '+10 dmg, -25 max health',   color: '#a4372e', dmg: 10, maxHp: -25, cursed: true },
+    { id: 'leaden_coin', name: 'Leaden Coin',     desc: '+80% gold, -10% atk speed', color: '#d9a94e', goldMult: 1.8, atkMult: 1.1, cursed: true },
+    { id: 'night_shard', name: 'Night Shard',     desc: '+20% crit, dim light',      color: '#b06ae0', crit: 0.2, light: -60, cursed: true },
+    { id: 'rusty_crown', name: 'Rusty Crown',     desc: '+40% xp, -2 armor',         color: '#e8a33d', xpMult: 1.4, def: -2, cursed: true },
+    { id: 'feral_mask',  name: 'Feral Mask',      desc: '+15% spd & atk, -20 health', color: '#a4372e', spdMult: 1.15, atkMult: 0.85, maxHp: -20, cursed: true },
+    { id: 'hollow_idol', name: 'Hollow Idol',     desc: '+50% spell power, -20 mana', color: '#b06ae0', spellMult: 1.5, manaMax: -20, cursed: true },
+    { id: 'cracked_aegis', name: 'Cracked Aegis', desc: '+6 block, -10% speed',      color: '#8fa2b8', blkAdd: 6, spdMult: 0.9, cursed: true },
+    { id: 'thorn_crown', name: 'Thorn Crown',     desc: 'thorns 6, -15 health',      color: '#7ec96f', thorns: 6, maxHp: -15, cursed: true },
+    { id: 'slow_meat',   name: 'Slow Meat',       desc: '+45 health, -12% speed',    color: '#7ec96f', maxHp: 45, spdMult: 0.88, cursed: true },
   ];
   function randomRelic() {
     return RELICS[Math.floor(Math.random() * RELICS.length)];
@@ -520,6 +564,10 @@
       light: 205, goldMult: 1, crit: 0,
       lifesteal: 0, thorns: 0, manaKill: 0,
       spells: cls.spell ? [cls.spell] : [], berserk: 0,
+      regen: 0, dodge: 0, xpMult: 1, potionMult: 1, shopMult: 1,
+      rangeAdd: 0, arcAdd: 0, knockMult: 1, chill: 0,
+      execute: 0, first: 0, critHeal: 0, killHaste: 0,
+      blkAdd: 0, thrallCap: 0, thrallTtl: 0, addBolts: 0,
     };
     for (const r of D.relics.concat(D.perks)) {
       if (r.dmg) st.dmg += r.dmg;
@@ -537,11 +585,35 @@
       if (r.thorns) st.thorns += r.thorns;
       if (r.manaKill) st.manaKill += r.manaKill;
       if (r.berserk) st.berserk += 1;
+      if (r.regen) st.regen += r.regen;
+      if (r.dodge) st.dodge += r.dodge;
+      if (r.xpMult) st.xpMult *= r.xpMult;
+      if (r.potionMult) st.potionMult *= r.potionMult;
+      if (r.shopMult) st.shopMult *= r.shopMult;
+      if (r.rangeAdd) st.rangeAdd += r.rangeAdd;
+      if (r.arcAdd) st.arcAdd += r.arcAdd;
+      if (r.knockMult) st.knockMult *= r.knockMult;
+      if (r.chill) st.chill += r.chill;
+      if (r.execute) st.execute += r.execute;
+      if (r.first) st.first += r.first;
+      if (r.critHeal) st.critHeal += r.critHeal;
+      if (r.killHaste) st.killHaste += r.killHaste;
+      if (r.blkAdd) st.blkAdd += r.blkAdd;
+      if (r.thrallCap) st.thrallCap += r.thrallCap;
+      if (r.thrallTtl) st.thrallTtl += r.thrallTtl;
+      if (r.addBolts) st.addBolts += r.addBolts;
       if (r.spell && !st.spells.includes(r.spell)) st.spells.push(r.spell);
     }
     st.maxHp = Math.max(20, st.maxHp);
     st.light = Math.max(110, st.light);
-    st.bolts = 1 + D.relics.filter(r => r.spell === 'bolt').length - (st.spells.includes('bolt') ? 1 : 0);
+    st.manaMax = Math.max(10, st.manaMax);
+    st.dodge = Math.min(0.6, st.dodge);
+    st.range += st.rangeAdd;
+    st.arc = Math.min(3, st.arc + st.arcAdd);
+    st.knock *= st.knockMult;
+    st.blk += st.blkAdd;
+    st.bolts = 1 + st.addBolts +
+      D.relics.filter(r => r.spell === 'bolt').length - (st.spells.includes('bolt') ? 1 : 0);
     D.st = st;
     D.hero.maxHp = st.maxHp;
     D.hero.hp = Math.min(D.hero.hp, st.maxHp);
@@ -569,7 +641,7 @@
   // raise dead lives on its own key [E]; F cycles to the newest other spell
   const knowsRaise = () => D.st.spells.includes('raise');
   function gainXp(n) {
-    D.xp += n;
+    D.xp += Math.round(n * (D.st ? D.st.xpMult : 1));
     while (D.xp >= D.xpNext) {
       D.xp -= D.xpNext;
       D.xpNext = Math.round(D.xpNext * 1.45);
@@ -1274,7 +1346,11 @@
       if (d > D.st.range + ETYPES[en.type].r) continue;
       if (Math.abs(angDiff(Math.atan2(dy, dx), dir)) > D.st.arc) continue;
       const crit = Math.random() < D.st.crit;
-      const dmg = Math.max(1, Math.round((heroDmg() + Math.floor(Math.random() * 3)) * (crit ? 2 : 1)) - (ETYPES[en.type].dr || 0));
+      let base = heroDmg() + Math.floor(Math.random() * 3);
+      if (en.hp >= en.maxHp) base += D.st.first;          // ambush bonus
+      if (en.hp / en.maxHp < 0.35) base += D.st.execute;  // finisher bonus
+      const dmg = Math.max(1, Math.round(base * (crit ? 2 : 1)) - (ETYPES[en.type].dr || 0));
+      if (crit && D.st.critHeal) D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + D.st.critHeal);
       damageEnemy(en, dmg, crit);
       const nd = d || 1;
       nudge(en, (dx / nd) * 16 * D.st.knock, (dy / nd) * 16 * D.st.knock, ETYPES[en.type].r);
@@ -1298,6 +1374,7 @@
     en.hp -= dmg;
     en.hurt = 0.18;
     en.aggro = true;
+    if (D.st.chill && Math.random() < D.st.chill) en.slow = Math.max(en.slow || 0, 1.2);
     floatText(en.x, en.y - 20, '' + dmg + (crit ? '!' : ''), crit ? '#e8a33d' : '#e8e0c8');
     A.bleep(220 + Math.random() * 120, 0.06, 'sawtooth', 0.035);
     if (en.hp <= 0) killEnemy(en);
@@ -1335,7 +1412,7 @@
   }
   function castRaise() {
     if (!knowsRaise()) return;
-    if (D.allies.length >= 4) { say('Your host is full', '#9fd8a8'); return; }
+    if (D.allies.length >= 4 + D.st.thrallCap) { say('Your host is full', '#9fd8a8'); return; }
     if (D.mana < 20) { say('Not enough mana', '#5aa2e8'); return; }
     let best = -1, bd = 150;
     for (let i = 0; i < D.corpses.length; i++) {
@@ -1345,7 +1422,7 @@
     if (best < 0) { say('No corpse near enough to raise', '#9fd8a8'); return; }
     D.mana -= 20;
     const c = D.corpses.splice(best, 1)[0];
-    D.allies.push({ x: c.x, y: c.y, ttl: 30, cd: 0, face: c.face || 1, type: c.type });
+    D.allies.push({ x: c.x, y: c.y, ttl: 30 + D.st.thrallTtl, cd: 0, face: c.face || 1, type: c.type });
     floatText(c.x, c.y - 18, 'RISE', '#9fd8a8');
     A.sweep(100, 400, 0.5, 'sine', 0.06);
   }
@@ -1375,6 +1452,10 @@
     A.bleep(160, 0.1, 'sawtooth', 0.045);
     if (D.st.lifesteal) D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + D.st.lifesteal);
     if (D.st.manaKill) D.mana = Math.min(D.st.manaMax, D.mana + D.st.manaKill);
+    if (D.st.killHaste) D.hasteT = 2;
+    if (!en.isBoss && Math.random() < 0.02) {
+      D.drops.push({ x: en.x, y: en.y, relic: randomRelic() }); // rare field find
+    }
     if (en.isBoss) {
       say('BOSS SLAIN', '#e8a33d');
       A.sweep(600, 40, 0.7, 'sawtooth', 0.09);
@@ -1394,6 +1475,12 @@
   }
   function hurtHeroFrom(en, raw) {
     if (D.hurtT > 0) return;
+    if (D.st.dodge && Math.random() < D.st.dodge) {
+      D.hurtT = 0.25;
+      floatText(D.hero.x, D.hero.y - 24, 'DODGE', '#7ec96f');
+      A.bleep(700, 0.04, 'triangle', 0.03);
+      return;
+    }
     const toEn = Math.atan2(en.y - D.hero.y, en.x - D.hero.x);
     const frontal = Math.abs(angDiff(toEn, D.aim)) < 1.15;
     let dmg;
@@ -1430,9 +1517,10 @@
     if (!it) return;
     if (it.kind === 'potion') {
       if (D.hero.hp >= D.hero.maxHp) { say('Already at full health'); return; }
-      D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + it.heal);
+      const heal = Math.round(it.heal * D.st.potionMult);
+      D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + heal);
       D.hotbar[i] = null;
-      floatText(D.hero.x, D.hero.y - 24, '+' + it.heal, '#7ec96f');
+      floatText(D.hero.x, D.hero.y - 24, '+' + heal, '#7ec96f');
       A.bleep(620, 0.08, 'triangle', 0.045);
     }
   }
@@ -1625,7 +1713,10 @@
     if (keys['s'] || keys['arrowdown']) ay += 1;
     const m = Math.hypot(ax, ay) || 1;
     D.hero.moving = !!(ax || ay);
-    const spd = D.block ? D.st.spd * 0.45 : D.st.spd;
+    D.hasteT = Math.max(0, (D.hasteT || 0) - dt);
+    if (D.st.regen) D.hero.hp = Math.min(D.hero.maxHp, D.hero.hp + D.st.regen * dt);
+    let spd = D.block ? D.st.spd * 0.45 : D.st.spd;
+    if (D.hasteT > 0) spd *= 1.35;
     moveWith(D.hero, (ax / m) * spd, (ay / m) * spd, dt, HERO_R);
     // crossing a doorway loads the next room
     const htx2 = Math.floor(D.hero.x / TILE), hty2 = Math.floor(D.hero.y / TILE);
@@ -1666,10 +1757,11 @@
       w.msgT = Math.max(0, w.msgT - dt);
       if (w.sold) continue;
       if (Math.hypot(D.hero.x - (w.x + 0.5) * TILE, D.hero.y - (w.y + 0.5) * TILE) < 24) {
-        if (D.hero.gold < w.price) {
+        const eff = Math.max(1, Math.round(w.price * D.st.shopMult));
+        if (D.hero.gold < eff) {
           if (w.msgT <= 0) {
             w.msgT = 2;
-            say('Costs ' + w.price + 'g — you have ' + D.hero.gold, '#d9a94e');
+            say('Costs ' + eff + 'g — you have ' + D.hero.gold, '#d9a94e');
             A.bleep(160, 0.07, 'square', 0.03);
           }
           continue;
@@ -1678,7 +1770,7 @@
           if (w.msgT <= 0) { w.msgT = 2; say('Bag full!', '#a4372e'); }
           continue;
         }
-        D.hero.gold -= w.price;
+        D.hero.gold -= eff;
         w.sold = true;
         if (w.relic) {
           gainRelic(w.relic);
@@ -2286,10 +2378,11 @@
         const ic = iconFor(w.it);
         ctx.drawImage(ic, sx - ic.width, sy - 12 - ic.height, ic.width * 2, ic.height * 2);
       }
-      ctx.fillStyle = D.hero.gold >= w.price ? '#d9a94e' : '#a4372e';
+      const effP = Math.max(1, Math.round(w.price * D.st.shopMult));
+      ctx.fillStyle = D.hero.gold >= effP ? '#d9a94e' : '#a4372e';
       ctx.font = '600 9px ' + MONO;
       ctx.textAlign = 'center';
-      ctx.fillText(w.price + 'g', sx, sy + 16);
+      ctx.fillText(effP + 'g', sx, sy + 16);
       ctx.textAlign = 'left';
     }
     // pedestals
