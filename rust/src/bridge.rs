@@ -48,6 +48,47 @@ extern "C" {
     /// One packet to the connected peer, via the shell's data channel.
     #[wasm_bindgen(js_namespace = ARCADE_WASM_HOST, js_name = netSend)]
     fn js_net_send(data: &[u8]);
+
+    /// Player graphics settings as [glow, shake, particles].
+    ///
+    /// Caught rather than plain: this is an optional shim, and an older cached
+    /// shell that predates it would otherwise throw on every single frame and
+    /// take the whole game down instead of just losing the settings.
+    #[wasm_bindgen(js_namespace = ARCADE_WASM_HOST, js_name = gfx, catch)]
+    fn js_gfx() -> Result<Vec<f64>, JsValue>;
+}
+
+/// Graphics knobs from the settings panel.
+#[derive(Clone, Copy)]
+pub struct GfxSettings {
+    pub glow: f64,
+    pub shake: f64,
+    pub particles: f64,
+}
+
+impl Default for GfxSettings {
+    fn default() -> Self {
+        GfxSettings {
+            glow: 1.0,
+            shake: 1.0,
+            particles: 1.0,
+        }
+    }
+}
+
+pub fn gfx_settings() -> GfxSettings {
+    let v = match js_gfx() {
+        Ok(v) => v,
+        Err(_) => return GfxSettings::default(),
+    };
+    if v.len() < 3 {
+        return GfxSettings::default();
+    }
+    GfxSettings {
+        glow: v[0].clamp(0.0, 1.0),
+        shake: v[1].clamp(0.0, 2.0),
+        particles: v[2].clamp(0.0, 2.0),
+    }
 }
 
 pub fn bleep(freq: f64, dur: f64, wave: &str, gain: f64) {

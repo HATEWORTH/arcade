@@ -19,6 +19,12 @@ pub struct Gfx {
     pub w: f64,
     pub h: f64,
     pub dpr: f64,
+    /// Player graphics settings, refreshed once per frame from the shell.
+    /// `glow` is the expensive one — canvas shadowBlur is fill-rate murder on
+    /// weak machines, and zeroing it here turns it off everywhere at once.
+    pub glow: f64,
+    pub shake_scale: f64,
+    pub particle_scale: f64,
 }
 
 impl Gfx {
@@ -36,6 +42,9 @@ impl Gfx {
             w: 0.0,
             h: 0.0,
             dpr: 1.0,
+            glow: 1.0,
+            shake_scale: 1.0,
+            particle_scale: 1.0,
         };
         g.resize();
         Some(g)
@@ -63,6 +72,10 @@ impl Gfx {
             .ok()
             .and_then(|v| v.as_f64())
             .unwrap_or(600.0);
+        let g = crate::bridge::gfx_settings();
+        self.glow = g.glow;
+        self.shake_scale = g.shake;
+        self.particle_scale = g.particles;
     }
 
     // ---- state ----------------------------------------------------------
@@ -77,7 +90,7 @@ impl Gfx {
     }
     pub fn shadow(&self, c: &str, blur: f64) {
         self.ctx.set_shadow_color(c);
-        self.ctx.set_shadow_blur(blur);
+        self.ctx.set_shadow_blur(blur * self.glow);
     }
     pub fn no_shadow(&self) {
         self.ctx.set_shadow_blur(0.0);

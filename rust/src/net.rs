@@ -17,10 +17,17 @@ use crate::bridge;
 use serde::{Deserialize, Serialize};
 
 /// What the guest sends upstream every frame.
+///
+/// `x`/`y` is the stick: a paddle position in Pong, a movement axis in Geo.
+/// `aim` is where the guest is pointing, in screen pixels — Geo needs it and
+/// Pong ignores it. Without it the host had nothing to steer or fire player
+/// two with, so their ship kept the heading it spawned with forever.
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Debug)]
 pub struct Input {
     pub x: f32,
     pub y: f32,
+    pub aim_x: f32,
+    pub aim_y: f32,
     /// bit 0: primary held, bit 1: secondary pressed this frame
     pub buttons: u8,
 }

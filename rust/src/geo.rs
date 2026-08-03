@@ -226,6 +226,9 @@ pub struct Geo {
     blobs: Vec<Blob>,
     t: f64,
     reduced: bool,
+    /// Where this player is pointing, in screen pixels. Kept apart from the
+    /// ship slots because on the guest the snapshot owns those every frame.
+    local_aim: (f64, f64),
     pub net: Net,
 }
 
@@ -274,6 +277,7 @@ impl Geo {
             blobs: Vec::new(),
             t: 0.0,
             reduced: bridge::reduced_motion(),
+            local_aim: (0.0, 0.0),
             net: Net::new(),
         };
         geo.init_atmos();
@@ -332,7 +336,11 @@ impl Geo {
     }
 
     pub fn pointer(&mut self, x: f64, y: f64) {
-        if let Some(s) = self.ships.first_mut() {
+        self.local_aim = (x, y);
+        // the guest flies ship 1; ship 0 belongs to the host and is overwritten
+        // by every snapshot, so pointing it here would just fight the wire
+        let idx = if self.net.is_guest() { 1 } else { 0 };
+        if let Some(s) = self.ships.get_mut(idx) {
             s.aim_x = x;
             s.aim_y = y;
         }
@@ -342,7 +350,8 @@ impl Geo {
         if button != 0 {
             return;
         }
-        if let Some(s) = self.ships.first_mut() {
+        let idx = if self.net.is_guest() { 1 } else { 0 };
+        if let Some(s) = self.ships.get_mut(idx) {
             s.firing = down && self.running;
         }
     }
@@ -559,9 +568,15 @@ impl Geo {
         }
     }
 
+    /// Particle counts scale with the graphics setting; always leave at least
+    /// one so an effect never silently vanishes.
+    fn scaled(&self, n: usize) -> usize {
+        (((n as f64) * self.g.particle_scale).round() as usize).max(1)
+    }
+
     // ---- effects --------------------------------------------------------
     fn burst(&mut self, x: f64, y: f64, color: &str, n: usize, power: f64) {
-        for _ in 0..n {
+        for _ in 0..self.scaled(n) {
             let a = self.rng.angle();
             let sp = (30.0 + self.rng.f().powi(2) * 380.0) * power;
             let white = self.rng.f() < 0.22;
@@ -582,7 +597,7 @@ impl Geo {
     fn enemy_burst(&mut self, x: f64, y: f64) {
         let h1 = self.rng.f() * 360.0;
         let h2 = h1 + self.rng.f() * 120.0;
-        for _ in 0..40 {
+        for _ in 0..self.scaled(40) {
             let a = self.rng.angle();
             let sp = 1080.0 * (1.0 - 1.0 / (1.0 + self.rng.f() * 9.0));
             let hue = ((h1 + (h2 - h1) * self.rng.f()) % 360.0).floor();
@@ -601,7 +616,7 @@ impl Geo {
     }
 
     fn player_burst(&mut self, x: f64, y: f64) {
-        for _ in 0..300 {
+        for _ in 0..self.scaled(300) {
             let a = self.rng.angle();
             let sp = 1080.0 * (1.0 - 1.0 / (1.0 + self.rng.f() * 9.0));
             let white = self.rng.f() < 0.5;
@@ -620,11 +635,13 @@ impl Geo {
     }
 
     fn ring_burst(&mut self, x: f64, y: f64) {
-        const N: usize = 150;
-        let off = self.rng.f() * (TAU / N as f64);
+        // this one has to keep reading as a ring, so thin the spokes rather
+        // than let the count drop far enough to break the circle
+        let n = self.scaled(150).max(24);
+        let off = self.rng.f() * (TAU / n as f64);
         let hue = ((self.t * 180.0) % 360.0).floor();
-        for k in 0..N {
-            let a = (TAU * k as f64) / N as f64 + off;
+        for k in 0..n {
+            let a = (TAU * k as f64) / n as f64 + off;
             let spd = 480.0 + self.rng.f() * 480.0;
             self.parts.push(Particle {
                 x: x + a.cos() * 4.0,
@@ -868,6 +885,12 @@ impl Geo {
             };
             if i == 1 {
                 self.ships[1].firing = firing;
+                // without this the guest's ship keeps its spawn heading, so it
+                // drifts toward one fixed point and fires the same way forever
+                if guest.aim_x != 0.0 || guest.aim_y != 0.0 {
+                    self.ships[1].aim_x = guest.aim_x as f64;
+                    self.ships[1].aim_y = guest.aim_y as f64;
+                }
             }
             let m = sax.hypot(say).max(1.0);
             let k = (dt * 14.0).min(1.0);
@@ -1004,7 +1027,7 @@ impl Geo {
             self.grid_explosive(3.5, x, y, 70.0);
         }
         for (x, y) in wall_hits {
-            for _ in 0..12 {
+            for _ in 0..self.scaled(12) {
                 let a = self.rng.angle();
                 let sp = self.rng.f() * 540.0;
                 let len = 3.0 + self.rng.f() * 6.0;
@@ -1406,7 +1429,7 @@ impl Geo {
         self.g.resize();
 
         if self.net.is_guest() {
-            let s = self.ships[0];
+            let s = *self.ships.get(1).unwrap_or(&self.ships[0]);
             let mut ax = 0.0;
             let mut ay = 0.0;
             if self.keys_left {
@@ -1424,6 +1447,8 @@ impl Geo {
             self.net.send_input(&Input {
                 x: ax as f32,
                 y: ay as f32,
+                aim_x: self.local_aim.0 as f32,
+                aim_y: self.local_aim.1 as f32,
                 buttons: s.firing as u8,
             });
             if let Some(snap) = self.net.take_snapshot::<Snapshot>() {
@@ -1501,14 +1526,26 @@ impl Geo {
         while self.ships.len() < s.ships.len() {
             self.ships.push(Ship::default());
         }
+        let local = self.local_aim;
         for (i, (x, y, ax, ay, alive)) in s.ships.iter().enumerate() {
             let sh = &mut self.ships[i];
             // ease toward the authoritative position so packet loss does not jolt
             sh.x += (*x as f64 - sh.x) * 0.4;
             sh.y += (*y as f64 - sh.y) * 0.4;
-            if i != 1 {
+            if i == 1 {
+                // our own hull: point it at our reticle right now rather than
+                // waiting a round trip, or turning feels like it is on a rope
+                sh.aim_x = local.0;
+                sh.aim_y = local.1;
+            } else {
                 sh.aim_x = *ax as f64;
                 sh.aim_y = *ay as f64;
+            }
+            // the guest never runs update(), so nothing else refreshes the
+            // drawn heading — every ship would keep the angle it spawned with
+            let d = (sh.aim_x - sh.x).hypot(sh.aim_y - sh.y);
+            if d > AIM_DEADZONE {
+                sh.aim_a = (sh.aim_y - sh.y).atan2(sh.aim_x - sh.x);
             }
             sh.alive = *alive;
         }
@@ -1600,8 +1637,8 @@ impl Geo {
         self.g.save();
         if self.shake > 0.0 && !self.reduced {
             let (sx, sy) = (
-                self.rng.signed() * self.shake,
-                self.rng.signed() * self.shake,
+                self.rng.signed() * self.shake * self.g.shake_scale,
+                self.rng.signed() * self.shake * self.g.shake_scale,
             );
             self.g.translate(sx, sy);
         }

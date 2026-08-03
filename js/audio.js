@@ -8,9 +8,23 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   // ---- audio -------------------------------------------------------------
   let AC = null;
+  let sfxBus = null;
+  const S = window.ARCADE_SETTINGS;
+  // every one-shot lands here instead of on the destination directly, so the
+  // game-volume slider has a single node to move
+  function sfxOut() {
+    if (!AC) return null;
+    if (!sfxBus) {
+      sfxBus = AC.createGain();
+      sfxBus.gain.value = S ? S.get('sfx') : 1;
+      sfxBus.connect(AC.destination);
+    }
+    return sfxBus;
+  }
   function audio() {
     if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
     if (AC && AC.state === 'suspended') AC.resume();
+    sfxOut();
   }
   function bleep(freq, dur, type, vol) {
     if (!AC) return;
@@ -21,7 +35,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     o.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.6), t + dur);
     g.gain.setValueAtTime(vol || 0.08, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(AC.destination);
+    o.connect(g).connect(sfxOut() || AC.destination);
     o.start(t); o.stop(t + dur + 0.02);
   }
   // "drowning" synth: detuned saw pair sweeping down into the depths
@@ -35,7 +49,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
       o.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t0 + dur);
       g.gain.setValueAtTime((vol || 0.06) / 2, t0);
       g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      o.connect(g).connect(AC.destination);
+      o.connect(g).connect(sfxOut() || AC.destination);
       o.start(t0); o.stop(t0 + dur + 0.05);
     }
   }
@@ -53,7 +67,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     const g = AC.createGain();
     g.gain.setValueAtTime(vol || 0.06, t0);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + (dur || 0.06));
-    src.connect(f).connect(g).connect(AC.destination);
+    src.connect(f).connect(g).connect(sfxOut() || AC.destination);
     src.start(t0); src.stop(t0 + (dur || 0.06) + 0.02);
   }
 
@@ -542,7 +556,7 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   function musicBus() {
     if (music.bus) return;
     music.bus = AC.createGain();
-    music.bus.gain.value = 0.5;
+    music.bus.gain.value = S ? S.get('music') : 0.5;
     // spacey feedback delay (dotted-eighth, retimed per song)
     const delay = AC.createDelay(2);
     music.delayNode = delay;
@@ -648,7 +662,8 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
   }
   function toggleMusic() {
     music.on = !music.on;
-    if (music.bus) music.bus.gain.setTargetAtTime(music.on ? 0.5 : 0.0001, AC.currentTime, 0.05);
+    const lvl = S ? S.get('music') : 0.5;
+    if (music.bus) music.bus.gain.setTargetAtTime(music.on ? Math.max(0.0001, lvl) : 0.0001, AC.currentTime, 0.05);
   }
   addEventListener('keydown', e => { if (e.key === 'm' || e.key === 'M') toggleMusic(); });
 
@@ -687,6 +702,16 @@ window.MODE = 'menu';   // 'menu' | 'pong' | 'tetris' | 'snake' | 'geo' | 'cards
     beat.bass = song.bass[barIdx % song.bass.length][s16] >= 0 ? Math.max(0, 1 - frac * 1.3) : 0;
     beat.arp  = song.arp[barIdx % song.arp.length][s16] >= 0 ? Math.max(0, 1 - frac * 2) : 0;
   }
+  if (S) {
+    S.onChange((k, v) => {
+      if (!AC) return;
+      if (k === 'sfx' && sfxBus) sfxBus.gain.setTargetAtTime(v, AC.currentTime, 0.03);
+      if (k === 'music' && music.bus && music.on) {
+        music.bus.gain.setTargetAtTime(Math.max(0.0001, v), AC.currentTime, 0.03);
+      }
+    });
+  }
+
   // shared services for every game in the cabinet
   window.ARCADE = {
     audio, startMusic, toggleMusic, setStyle, bleep, sweep, hat, beat,

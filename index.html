@@ -15,7 +15,12 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + window.__V + '"
 
 <div id="stage"><canvas id="c"></canvas></div>
 
-<script>document.write('<script src="js/shared.js?v=' + window.__V + '"><\/script>');</script>
+<script>
+// settings first: shared.js reads the sensitivity and audio.js the volumes
+for (const f of ['settings', 'shared']) {
+  document.write('<script src="js/' + f + '.js?v=' + window.__V + '"><\/script>');
+}
+</script>
 
 <div class="hud hidden" id="pongHud">
   <div class="score you"><div class="bar" id="hpYou"></div><span class="tag">You</span></div>
@@ -36,10 +41,55 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + window.__V + '"
       <button class="gamecard magenta" id="pickCards"><b>CARDS</b><span>poker &middot; blackjack &middot; solitaire</span></button>
       <button class="gamecard lime" id="pickDungeon"><b>DUNGEON</b><span>delve the depths</span></button>
     </div>
-    <button class="hostbtn" id="hostToggle">host a 2p game</button>
+    <div class="menubtns">
+      <button class="hostbtn" id="hostToggle">host a 2p game</button>
+      <button class="hostbtn" id="settingsToggle">settings</button>
+    </div>
   </div>
   <pre class="lcdgame" id="lcdDemo" aria-hidden="true"></pre>
   <span class="vertag">V1.0</span>
+</div>
+
+<div class="overlay nes hidden" id="settingsOverlay">
+  <div class="menublock settingsblock">
+    <p class="menulabel">SETTINGS</p>
+    <div class="setrow">
+      <label for="setSens">Mouse sensitivity</label>
+      <input type="range" id="setSens" min="0.25" max="3" step="0.05">
+      <output id="outSens"></output>
+    </div>
+    <div class="setrow">
+      <label for="setMusic">Music volume</label>
+      <input type="range" id="setMusic" min="0" max="1" step="0.02">
+      <output id="outMusic"></output>
+    </div>
+    <div class="setrow">
+      <label for="setSfx">Game volume</label>
+      <input type="range" id="setSfx" min="0" max="1" step="0.02">
+      <output id="outSfx"></output>
+    </div>
+    <p class="menulabel setgroup">GRAPHICS</p>
+    <div class="setrow">
+      <label for="setGlow">Glow</label>
+      <input type="range" id="setGlow" min="0" max="1" step="1">
+      <output id="outGlow"></output>
+    </div>
+    <div class="setrow">
+      <label for="setShake">Screen shake</label>
+      <input type="range" id="setShake" min="0" max="1.5" step="0.05">
+      <output id="outShake"></output>
+    </div>
+    <div class="setrow">
+      <label for="setParticles">Particles</label>
+      <input type="range" id="setParticles" min="0.25" max="1.5" step="0.05">
+      <output id="outParticles"></output>
+    </div>
+    <div class="menubtns">
+      <button class="hostbtn" id="settingsReset">reset</button>
+      <button class="hostbtn" id="settingsClose">back</button>
+    </div>
+    <p class="sub lcdsub">Graphics settings apply to Pong 3D and Geo Wars</p>
+  </div>
 </div>
 
 <div class="overlay hidden" id="startOverlay">

@@ -248,6 +248,13 @@ function __wbg_get_imports() {
             const ret = arg0.getElementById(getStringFromWasm0(arg1, arg2));
             return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
         },
+        __wbg_gfx_9de8bec6b4a4b7b6: function() { return handleError(function (arg0) {
+            const ret = ARCADE_WASM_HOST.gfx();
+            const ptr1 = passArrayF64ToWasm0(ret, wasm.__wbindgen_malloc);
+            const len1 = WASM_VECTOR_LEN;
+            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+        }, arguments); },
         __wbg_hat_0b43523d6e76cd04: function(arg0, arg1) {
             ARCADE_WASM_HOST.hat(arg0, arg1);
         },

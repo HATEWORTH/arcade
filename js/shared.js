@@ -46,8 +46,10 @@ window.ARCADE_LOCK = (() => {
   addEventListener('pointermove', e => {
     if (locked()) {
       // per-game locked-cursor sensitivity: twin-stick aiming wants a much
-      // quicker hand than a pong paddle, which is tracking a slow target
-      const SENS = window.MODE === 'geo' ? 1.7 : 0.6;
+      // quicker hand than a pong paddle, which is tracking a slow target.
+      // The settings slider scales both rather than replacing them.
+      const base = window.MODE === 'geo' ? 1.7 : 0.6;
+      const SENS = base * (window.ARCADE_SETTINGS ? ARCADE_SETTINGS.get('sens') : 1);
       // A high-polling-rate mouse fires many moves per frame and the browser
       // delivers them as one event with the rest folded into getCoalescedEvents.
       // Reading only the top-level movementX loses the shape of a fast flick;

@@ -27,6 +27,12 @@
     netSend: bytes => {
       if (net && net.chan && net.chan.readyState === 'open') net.chan.send(bytes);
     },
+    // [glow, shake, particles] — read once per frame by the Rust renderer
+    gfx: () => {
+      const S = window.ARCADE_SETTINGS;
+      if (!S) return [1, 1, 1];
+      return [S.get('glow'), S.get('shake'), S.get('particles')];
+    },
   };
 
   // ---- DOM --------------------------------------------------------------

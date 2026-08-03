@@ -345,6 +345,7 @@ impl Pong {
     }
 
     fn burst(&mut self, x: f64, y: f64, z: f64, color: &str, count: usize, power: f64) {
+        let count = (((count as f64) * self.g.particle_scale).round() as usize).max(1);
         for _ in 0..count {
             let a = self.rng.angle();
             let sp = (0.6 + self.rng.f() * 1.6) * power;
@@ -774,6 +775,9 @@ impl Pong {
             let input = Input {
                 x: self.pointer_x.clamp(-1.0, 1.0) as f32,
                 y: self.pointer_y.clamp(-1.0, 1.0) as f32,
+                // pong steers with x/y alone; the aim fields are Geo's
+                aim_x: 0.0,
+                aim_y: 0.0,
                 buttons: (self.player.charging as u8) | ((self.secondary_edge as u8) << 1),
             };
             self.net.send_input(&input);
@@ -855,8 +859,8 @@ impl Pong {
         g.save();
         if self.shake > 0.0 && !self.reduced {
             let (sx, sy) = (
-                self.rng.signed() * self.shake,
-                self.rng.signed() * self.shake,
+                self.rng.signed() * self.shake * self.g.shake_scale,
+                self.rng.signed() * self.shake * self.g.shake_scale,
             );
             g.translate(sx, sy);
         }
