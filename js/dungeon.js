@@ -93,7 +93,48 @@
     '...kkk..kkk...',
   ];
   const BRUTE = sprite(BRUTE_ROWS);
-  const BOSS = sprite(BRUTE_ROWS, { B: '#9a4030' });
+  const GOLEM = sprite(BRUTE_ROWS, { B: '#8a8f80' });
+  const BAT = sprite([
+    '.k......k.',
+    'kdk....kdk',
+    'kddk..kddk',
+    'kdddkkdddk',
+    '.kdbbbbdk.',
+    '..kbEEbk..',
+    '...kbbk...',
+    '....kk....',
+  ]);
+  const SPIDER_ROWS = [
+    '.k..k....k..k.',
+    '..k.k.kk.k.k..',
+    '...kkkkkkkk...',
+    '..kkbbbbbbkk..',
+    '.k.kbEbbEbk.k.',
+    '...kbbbbbbk...',
+    '..k.kbbbbk.k..',
+    '..k..kkkk..k..',
+    '.k..........k.',
+  ];
+  const SPIDER = sprite(SPIDER_ROWS);
+  // bosses: recolored kin, twice the menace
+  const BOSS_GUARDIAN = sprite(BRUTE_ROWS, { B: '#9a4030' });
+  const BOSS_BROOD = sprite(SPIDER_ROWS, { b: '#5a3a7a', E: '#e8a33d' });
+  const BOSS_BONEKING = sprite(SKEL_ROWS, { W: '#e8d48a' });
+  // side profile for when the hero faces left or right
+  const HERO_SIDE_TOP = [
+    '....kkkk....',
+    '...kssssk...',
+    '...ksdddk...',
+    '...kssssk...',
+    '....kddk....',
+    '...kcsddk...',
+    '..kccsdddk..',
+    '..kccsdddk..',
+    '...kgdddk...',
+    '...kdssdk...',
+  ];
+  const HERO_S1 = sprite(HERO_SIDE_TOP.concat(['....kdkdk...', '....kbkbk...', '...kbbkbbk..']));
+  const HERO_S2 = sprite(HERO_SIDE_TOP.concat(['...kdk.kdk..', '...kb...bk..', '..kbb..kbb..']));
   const CHEST_CLOSED = sprite([
     '.kkkkkkkkkk.',
     'kwwwwwwwwwwk',
@@ -205,19 +246,32 @@
   }
 
   // ---- enemy catalogue ---------------------------------------------------
+  // move styles: chase (straight hunt), erratic (weaving flyer),
+  // lunge (stalk, wind up, dash). dr = flat damage reduction (armored).
   const ETYPES = {
-    slime:    { spr: SLIME,    w: 26, h: 18, r: 11, spd: 52,  hp: f => 9 + f * 2,  dmg: f => 3 + f,      gold: f => 3 + f },
-    skeleton: { spr: SKELETON, w: 24, h: 26, r: 10, spd: 88,  hp: f => 15 + f * 3, dmg: f => 6 + f * 2,  gold: f => 6 + f * 2 },
-    wraith:   { spr: WRAITH,   w: 24, h: 26, r: 9,  spd: 132, hp: f => 10 + f * 2, dmg: f => 5 + f * 2,  gold: f => 8 + f * 2 },
-    brute:    { spr: BRUTE,    w: 34, h: 30, r: 15, spd: 50,  hp: f => 34 + f * 7, dmg: f => 12 + f * 3, gold: f => 16 + f * 4 },
-    boss:     { spr: BOSS,     w: 56, h: 50, r: 24, spd: 72,  hp: f => 0, dmg: f => 0, gold: f => 60 + f * 20 },
+    slime:      { spr: SLIME,    w: 26, h: 18, r: 11, spd: 52,  move: 'chase',   hp: f => 9 + f * 2,  dmg: f => 3 + f,      gold: f => 3 + f },
+    skeleton:   { spr: SKELETON, w: 24, h: 26, r: 10, spd: 88,  move: 'chase',   hp: f => 15 + f * 3, dmg: f => 6 + f * 2,  gold: f => 6 + f * 2 },
+    wraith:     { spr: WRAITH,   w: 24, h: 26, r: 9,  spd: 132, move: 'chase',   hp: f => 10 + f * 2, dmg: f => 5 + f * 2,  gold: f => 8 + f * 2 },
+    brute:      { spr: BRUTE,    w: 34, h: 30, r: 15, spd: 50,  move: 'chase',   hp: f => 34 + f * 7, dmg: f => 12 + f * 3, gold: f => 16 + f * 4 },
+    bat:        { spr: BAT,      w: 20, h: 16, r: 8,  spd: 150, move: 'erratic', hp: f => 6 + f,      dmg: f => 3 + f,      gold: f => 4 + f },
+    spider:     { spr: SPIDER,   w: 28, h: 18, r: 10, spd: 68,  move: 'lunge',   dash: 265, hp: f => 12 + f * 2, dmg: f => 5 + f * 2, gold: f => 9 + f * 2 },
+    golem:      { spr: GOLEM,    w: 34, h: 30, r: 15, spd: 42,  move: 'chase',   dr: 3, hp: f => 42 + f * 8, dmg: f => 10 + f * 2, gold: f => 20 + f * 4 },
+    spiderling: { spr: SPIDER,   w: 16, h: 11, r: 6,  spd: 125, move: 'chase',   hp: f => 5 + f,      dmg: f => 3 + f,      gold: f => 2 + f },
+    guardian:   { spr: BOSS_GUARDIAN, w: 56, h: 50, r: 24, spd: 72,  move: 'chase', gold: f => 60 + f * 20 },
+    brood:      { spr: BOSS_BROOD,    w: 60, h: 40, r: 24, spd: 58,  move: 'chase', gold: f => 60 + f * 20 },
+    boneking:   { spr: BOSS_BONEKING, w: 44, h: 50, r: 20, spd: 96,  move: 'lunge', dash: 300, gold: f => 60 + f * 20 },
   };
+  const BOSS_KINDS = ['guardian', 'brood', 'boneking'];
+  const BOSS_NAMES = { guardian: 'GUARDIAN', brood: 'BROODMOTHER', boneking: 'BONE KING' };
   function pickEnemyType(floor) {
     const pool = [
       ['slime', Math.max(8, 40 - floor * 6)],
       ['skeleton', 24 + floor * 4],
+      ['bat', 12 + floor * 2],
+      ['spider', 10 + floor * 3],
       ['wraith', floor >= 2 ? 10 + floor * 4 : 0],
       ['brute', floor >= 2 ? 6 + floor * 3 : 0],
+      ['golem', floor >= 3 ? 5 + floor * 2 : 0],
     ];
     let total = 0;
     for (const [, w] of pool) total += w;
@@ -334,11 +388,13 @@
     // the boss holds the stairs room and never leaves it
     const bossHp = Math.round(D.hero.maxHp * 2 * (1 + 0.15 * (D.floor - 1)));
     D.enemies.push({
-      type: 'boss', isBoss: true, room: far,
+      type: BOSS_KINDS[Math.floor(Math.random() * BOSS_KINDS.length)],
+      isBoss: true, room: far,
       x: (far.cx + 0.5) * TILE, y: (far.y + 1.2) * TILE,
       hp: bossHp, maxHp: bossHp,
       dmgv: Math.max(12, heroDmg() * 2),
       cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1, fa: Math.PI / 2, hurt: 0, aggro: false,
+      broodT: 5,
     });
     const nChests = 3 + Math.floor(Math.random() * 2);
     for (let i = 0; i < nChests && D.rooms.length > 1; i++) {
@@ -514,7 +570,22 @@
     const drag = D.drag;
     D.drag = null;
     if (!drag.moved) { clickSlot(drag.from); return; }
-    dropItem(drag.from, slotAt(e.clientX, e.clientY));
+    const target = slotAt(e.clientX, e.clientY);
+    if (target) { dropItem(drag.from, target); return; }
+    // released outside every slot: inside the panel it snaps back,
+    // out in the world it drops at the hero's feet
+    const L = invLayout();
+    const inPanel = e.clientX >= L.px && e.clientX <= L.px + L.pw &&
+      e.clientY >= (D.lootChest ? L.py - 108 : L.py) && e.clientY <= L.py + L.ph;
+    if (inPanel) return;
+    const it = getSlot(drag.from);
+    if (!it) return;
+    setSlot(drag.from, null);
+    let dx2 = D.hero.x + Math.cos(D.aim) * 34, dy2 = D.hero.y + Math.sin(D.aim) * 34;
+    if (collide(dx2, dy2, 6)) { dx2 = D.hero.x; dy2 = D.hero.y; }
+    D.drops.push({ x: dx2, y: dy2, it, cool: 1.4 });
+    say('Dropped ' + it.name);
+    A.bleep(300, 0.05, 'triangle', 0.03);
   });
   addEventListener('arcadecursorunlock', () => {
     if (window.MODE === 'dungeon' && D.running && !D.paused && !D.inv) togglePause();
@@ -544,7 +615,7 @@
       const d = Math.hypot(dx, dy);
       if (d > RANGE + ETYPES[en.type].r) continue;
       if (Math.abs(angDiff(Math.atan2(dy, dx), dir)) > 1.05) continue;
-      const dmg = heroDmg() + Math.floor(Math.random() * 3);
+      const dmg = Math.max(1, heroDmg() + Math.floor(Math.random() * 3) - (ETYPES[en.type].dr || 0));
       en.hp -= dmg;
       en.hurt = 0.18;
       en.aggro = true; // getting stabbed is very informative
@@ -835,9 +906,11 @@
         A.bleep(760, 0.08, 'triangle', 0.04);
       }
     }
-    // ground loot pickup
+    // ground loot pickup (fresh drops wait a beat so they aren't regrabbed)
     for (let i = D.drops.length - 1; i >= 0; i--) {
       const dr = D.drops[i];
+      dr.cool = Math.max(0, (dr.cool || 0) - dt);
+      if (dr.cool > 0) continue;
       if (Math.hypot(D.hero.x - dr.x, D.hero.y - dr.y) < 26) {
         if (addToBag(dr.it)) {
           say('Picked up ' + dr.it.name + ' (' + RARITIES[dr.it.ri].name + ')', RARITIES[dr.it.ri].color);
@@ -893,14 +966,65 @@
         continue;
       }
 
-      // aggro: hunt the hero
+      // aggro: hunt the hero, each type in its own style
       const nd = d || 1;
-      moveWith(en, (dx / nd) * et.spd, (dy / nd) * et.spd, dt, et.r);
+      if (et.move === 'erratic') {
+        // flyers weave hard on their way in
+        const wob = Math.sin(D.t * 6 + en.x * 0.013) * 0.85;
+        let vx = dx / nd - (dy / nd) * wob, vy = dy / nd + (dx / nd) * wob;
+        const vn = Math.hypot(vx, vy) || 1;
+        moveWith(en, (vx / vn) * et.spd, (vy / vn) * et.spd, dt, et.r);
+      } else if (et.move === 'lunge') {
+        // stalk close, wind up, then dash in a locked line
+        en.lt = (en.lt || 0) - dt;
+        en.lcool = Math.max(0, (en.lcool || 0) - dt);
+        if (en.lphase === 'wind') {
+          if (en.lt <= 0) {
+            en.lphase = 'dash';
+            en.lt = 0.42;
+            en.ldx = dx / nd; en.ldy = dy / nd;
+            A.bleep(200, 0.08, 'sawtooth', 0.04);
+          }
+        } else if (en.lphase === 'dash') {
+          moveWith(en, en.ldx * et.dash, en.ldy * et.dash, dt, et.r);
+          if (en.lt <= 0) { en.lphase = 'stalk'; en.lcool = 1.3; }
+        } else {
+          moveWith(en, (dx / nd) * et.spd, (dy / nd) * et.spd, dt, et.r);
+          if (d < TILE * 3.4 && en.lcool <= 0) {
+            en.lphase = 'wind';
+            en.lt = 0.35;
+            A.bleep(640, 0.05, 'square', 0.03);
+          }
+        }
+      } else {
+        moveWith(en, (dx / nd) * et.spd, (dy / nd) * et.spd, dt, et.r);
+      }
       if (en.isBoss) {
         // never leaves its room
         const r = en.room;
         en.x = Math.max(r.x * TILE + et.r, Math.min((r.x + r.w) * TILE - et.r, en.x));
         en.y = Math.max(r.y * TILE + et.r, Math.min((r.y + r.h) * TILE - et.r, en.y));
+        // the broodmother keeps birthing spiderlings
+        if (en.type === 'brood') {
+          en.broodT -= dt;
+          if (en.broodT <= 0) {
+            en.broodT = 6;
+            const lings = D.enemies.filter(x => x.type === 'spiderling').length;
+            for (let s = 0; s < 2 && lings + s < 6; s++) {
+              const a = Math.random() * Math.PI * 2;
+              const sp = {
+                type: 'spiderling',
+                x: en.x + Math.cos(a) * 30, y: en.y + Math.sin(a) * 30,
+                hp: ETYPES.spiderling.hp(D.floor), maxHp: ETYPES.spiderling.hp(D.floor),
+                cd: 0, wanderT: 0, wx: 0, wy: 0, face: 1, fa: a, hurt: 0, aggro: true,
+              };
+              unstick(sp, ETYPES.spiderling.r);
+              D.enemies.push(sp);
+            }
+            floatText(en.x, en.y - 30, 'brood!', '#b06ae0');
+            A.bleep(300, 0.1, 'square', 0.04);
+          }
+        }
       }
       if (dx) en.face = dx > 0 ? 1 : -1;
       en.fa = Math.atan2(dy, dx);
@@ -1156,6 +1280,16 @@
       ctx.drawImage(et.spr, -et.w / 2, -et.h / 2, et.w, et.h);
       ctx.restore();
       ctx.globalAlpha = 1;
+      // lunge wind-up telegraph: a tightening ring, get out of the lane
+      if (en.lphase === 'wind') {
+        ctx.globalAlpha = 0.6;
+        ctx.strokeStyle = '#a4372e';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, et.r + 6 + (en.lt / 0.35) * 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       if (en.hp < en.maxHp || en.isBoss) {
         const bw = en.isBoss ? 44 : 26;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
@@ -1166,14 +1300,17 @@
           ctx.fillStyle = '#e8a33d';
           ctx.font = '600 10px ' + MONO;
           ctx.textAlign = 'center';
-          ctx.fillText('GUARDIAN', sx, sy - et.h / 2 - 14);
+          ctx.fillText(BOSS_NAMES[en.type] || 'BOSS', sx, sy - et.h / 2 - 14);
           ctx.textAlign = 'left';
         }
       }
     }
     // hero + held gear pointing at the mouse
     if (!(D.hurtT > 0 && Math.floor(D.t * 14) % 2)) {
-      const frame = D.hero.moving && Math.floor(D.t * 8) % 2 ? HERO_F2 : HERO_F1;
+      // profile sprite when aiming sideways, front view otherwise
+      const side = Math.abs(Math.cos(D.aim)) > 0.45;
+      const step = D.hero.moving && Math.floor(D.t * 8) % 2;
+      const frame = side ? (step ? HERO_S2 : HERO_S1) : (step ? HERO_F2 : HERO_F1);
       const hx = ox + D.hero.x, hy = oy + D.hero.y;
       ctx.save();
       ctx.translate(hx, hy + 2);
