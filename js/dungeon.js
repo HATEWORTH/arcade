@@ -55,7 +55,9 @@
       axe: [324, 168, 12, 23],
       spear: [309, 161, 6, 30],
       hammer: [291, 26, 10, 37],
-      staff: [310, 186, 8, 30],
+      staff: [324, 129, 8, 30],
+      bow: [289, 195, 14, 26],
+      arrow: [324, 202, 7, 21],
     },
   };
   const FLOORS = [[16, 64], [32, 64], [48, 64], [16, 80], [32, 80], [48, 80], [16, 96], [32, 96]];
@@ -371,6 +373,7 @@
     spear:  { n: 'Spear',  dm: 1.1, cd: 0.38, range: 76, arc: 0.55, knock: 1 },
     hammer: { n: 'Hammer', dm: 1.9, cd: 0.62, range: 52, arc: 1.2,  knock: 2.2 },
     staff:  { n: 'Staff',  dm: 0.7, cd: 0.36, range: 50, arc: 0.9,  knock: 0.9 },
+    bow:    { n: 'Bow',    dm: 0.8, cd: 0.5,  range: 60, arc: 0.9,  knock: 0.6 },
   };
   const WTYPE_KEYS = Object.keys(WTYPES);
 
@@ -1466,7 +1469,7 @@
     return (D.cls === 'wizard' || D.cls === 'necro') ? 'staff' : 'dagger';
   }
   // heavier arms take visibly longer to swing
-  const SWING_DUR = { dagger: 0.12, sword: 0.18, axe: 0.26, spear: 0.16, hammer: 0.32, staff: 0.2 };
+  const SWING_DUR = { dagger: 0.12, sword: 0.18, axe: 0.26, spear: 0.16, hammer: 0.32, staff: 0.2, bow: 0.18 };
   function attack() {
     if (D.atkT > 0 || D.block) return;
     const dir = D.aim;
@@ -1474,6 +1477,17 @@
     D.atkDur = SWING_DUR[heldWtype()] || 0.16;
     D.atkAnim = D.atkDur;
     D.atkDir = dir;
+    if (heldWtype() === 'bow') {
+      // bows loose an arrow instead of sweeping
+      const crit = D.st.crit && Math.random() < D.st.crit;
+      D.bolts.push({
+        x: D.hero.x + Math.cos(dir) * 12, y: D.hero.y + Math.sin(dir) * 12,
+        vx: Math.cos(dir) * 470, vy: Math.sin(dir) * 470,
+        dmg: Math.max(1, Math.round(D.st.dmg * (crit ? 2 : 1))), t: 1.4, arrow: true,
+      });
+      A.bleep(520, 0.05, 'triangle', 0.04);
+      return;
+    }
     A.bleep(340, 0.05, 'square', 0.03);
     for (const en of D.enemies) {
       const dx = en.x - D.hero.x, dy = en.y - D.hero.y;
@@ -2747,7 +2761,15 @@
     }
     // spell bolts
     for (const b of D.bolts) {
-      ctx.strokeStyle = '#e8763d';
+      if (b.arrow && atlasReady) {
+        ctx.save();
+        ctx.translate(ox + b.x, oy + b.y);
+        ctx.rotate(Math.atan2(b.vy, b.vx) + Math.PI / 2);
+        drawA(AT.wpn.arrow, -4, -12, 8, 24);
+        ctx.restore();
+        continue;
+      }
+      ctx.strokeStyle = b.arrow ? '#a8814e' : '#e8763d';
       ctx.lineWidth = 3;
       ctx.globalAlpha = 0.9;
       ctx.beginPath();
@@ -2881,6 +2903,18 @@
       const ap = D.atkAnim > 0 ? 1 - D.atkAnim / dur : -1;
       const cp = D.castT > 0 ? 1 - D.castT / 0.25 : -1;
       const sgn = Math.cos(D.aim) >= 0 ? 1 : -1;
+      if (hw === 'bow') {
+        // bows sit upright in the hand and just kick back on release
+        const kick = ap >= 0 ? Math.sin(ap * Math.PI) * 4 : 0;
+        if (atlasReady) {
+          const wr = AT.wpn.bow;
+          const dh2 = 26, dw2 = wr[2] * (dh2 / wr[3]);
+          drawA(wr, D.hero.face * (9 - kick) - dw2 / 2, -dh2 / 2 - 2, dw2, dh2);
+        } else {
+          ctx.fillStyle = '#a8814e';
+          ctx.fillRect(D.hero.face * 9 - 1, -14, 2, 26);
+        }
+      } else {
       let wAng = D.aim + sgn * 0.85, wRad = 8; // rest: held off to the side
       if (cp >= 0 && hw === 'staff') {
         wAng = D.aim; wRad = 8 + Math.sin(Math.min(1, cp) * Math.PI) * 16;
@@ -2923,6 +2957,7 @@
         const held = D.equip.sword ? iconFor(D.equip.sword) : ICON_SWORD;
         ctx.drawImage(held, -5, -wRad - 22, 10, 14);
       }
+      }
       ctx.restore();
       if (D.block && D.equip.shield) {
         ctx.save();
@@ -2938,7 +2973,7 @@
         ctx.globalAlpha = 1;
       }
     }
-    if (D.atkAnim > 0) {
+    if (D.atkAnim > 0 && heldWtype() !== 'bow') {
       const p = 1 - D.atkAnim / (D.atkDur || 0.16);
       ctx.save();
       ctx.translate(ox + D.hero.x, oy + D.hero.y);
