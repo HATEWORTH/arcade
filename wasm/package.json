@@ -1,0 +1,15 @@
+{
+  "name": "arcade",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "arcade_bg.wasm",
+    "arcade.js",
+    "arcade.d.ts"
+  ],
+  "main": "arcade.js",
+  "types": "arcade.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

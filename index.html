@@ -106,9 +106,13 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + window.__V + '"
 </div>
 
 <script>
-for (const f of ['pong', 'tetris', 'snake', 'geo', 'cards', 'dungeon', 'splash']) {
+// audio.js first: it owns window.ARCADE, which every game below expects.
+// Pong and Geo Wars live in rust/ now and are driven by wasmhost.js, which
+// must load as a module so it can import the wasm glue.
+for (const f of ['audio', 'tetris', 'snake', 'cards', 'dungeon', 'splash']) {
   document.write('<script src="js/' + f + '.js?v=' + window.__V + '"><\/script>');
 }
+document.write('<script type="module" src="js/wasmhost.js?v=' + window.__V + '"><\/script>');
 </script>
 
 </body></html>
