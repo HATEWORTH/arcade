@@ -182,8 +182,16 @@
   // ---- boot -------------------------------------------------------------
   async function boot() {
     try {
-      const mod = await import('../wasm/arcade.js?v=' + (window.__V || ''));
-      await mod.default();
+      const v = window.__V || '';
+      const mod = await import('../wasm/arcade.js?v=' + v);
+      // The generated loader resolves the binary as
+      // `new URL('arcade_bg.wasm', import.meta.url)`, and resolving a relative
+      // path drops the query — so the loader would come back fresh while the
+      // binary, which is the entire game, came back from cache. Point it at an
+      // explicitly versioned URL so the two can never drift apart.
+      await mod.default({
+        module_or_path: new URL('../wasm/arcade_bg.wasm?v=' + v, import.meta.url),
+      });
       wasm = mod;
       ready = true;
     } catch (e) {

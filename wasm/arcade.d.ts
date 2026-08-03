@@ -71,23 +71,24 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly boot: () => void;
-    readonly init: (a: number, b: number, c: number, d: number, e: number) => void;
-    readonly tick: (a: number, b: number, c: number) => void;
-    readonly start: (a: number, b: number) => void;
-    readonly running: (a: number, b: number) => number;
-    readonly pointer: (a: number, b: number, c: number, d: number) => void;
     readonly button: (a: number, b: number, c: number, d: number) => void;
+    readonly hud: (a: number, b: number) => [number, number];
+    readonly init: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly key: (a: number, b: number, c: number, d: number, e: number) => void;
-    readonly hud: (a: number, b: number, c: number) => void;
-    readonly net_open: (a: number, b: number, c: number, d: number) => void;
-    readonly net_peer: (a: number, b: number, c: number) => void;
-    readonly net_packet: (a: number, b: number, c: number, d: number) => void;
     readonly net_close: (a: number, b: number) => void;
-    readonly net_status: (a: number, b: number, c: number) => void;
+    readonly net_open: (a: number, b: number, c: number, d: number) => void;
+    readonly net_packet: (a: number, b: number, c: number, d: number) => void;
+    readonly net_peer: (a: number, b: number, c: number) => void;
+    readonly net_status: (a: number, b: number) => [number, number];
+    readonly pointer: (a: number, b: number, c: number, d: number) => void;
+    readonly running: (a: number, b: number) => number;
+    readonly start: (a: number, b: number) => void;
+    readonly tick: (a: number, b: number, c: number) => void;
     readonly __wbindgen_exn_store: (a: number) => void;
+    readonly __externref_table_alloc: () => number;
+    readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
-    readonly __wbindgen_add_to_stack_pointer: (a: number) => number;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_start: () => void;
 }

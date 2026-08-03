@@ -16,7 +16,6 @@ pub const WHITE: &str = "#ffffff";
 
 pub struct Gfx {
     pub ctx: CanvasRenderingContext2d,
-    pub canvas: HtmlCanvasElement,
     pub w: f64,
     pub h: f64,
     pub dpr: f64,
@@ -34,7 +33,6 @@ impl Gfx {
             .ok()?;
         let mut g = Gfx {
             ctx,
-            canvas,
             w: 0.0,
             h: 0.0,
             dpr: 1.0,
@@ -43,24 +41,28 @@ impl Gfx {
         Some(g)
     }
 
-    /// Match the backing store to the window, exactly as the JS `resize()` did.
+    /// Pick up the current viewport size.
+    ///
+    /// The shell (`ARCADE_VIEW` in shared.js) owns the backing store and the
+    /// device-pixel transform for every game on the canvas, ported or not.
+    /// Setting `canvas.width` here would clear that transform out from under
+    /// the JS games, so this only reads — it never resizes.
     pub fn resize(&mut self) {
         let win = match web_sys::window() {
             Some(w) => w,
             None => return,
         };
-        let dpr = win.device_pixel_ratio().min(2.0).max(1.0);
-        let w = win.inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(800.0);
-        let h = win.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(600.0);
-        if (w - self.w).abs() < 0.5 && (h - self.h).abs() < 0.5 && (dpr - self.dpr).abs() < 0.01 {
-            return;
-        }
-        self.w = w;
-        self.h = h;
-        self.dpr = dpr;
-        self.canvas.set_width((w * dpr) as u32);
-        self.canvas.set_height((h * dpr) as u32);
-        let _ = self.ctx.set_transform(dpr, 0.0, 0.0, dpr, 0.0, 0.0);
+        self.dpr = win.device_pixel_ratio().min(2.0);
+        self.w = win
+            .inner_width()
+            .ok()
+            .and_then(|v| v.as_f64())
+            .unwrap_or(800.0);
+        self.h = win
+            .inner_height()
+            .ok()
+            .and_then(|v| v.as_f64())
+            .unwrap_or(600.0);
     }
 
     // ---- state ----------------------------------------------------------

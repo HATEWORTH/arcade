@@ -1,4 +1,27 @@
 'use strict';
+// ---- canvas sizing: one owner for the whole cabinet ---------------------
+// Every game draws into the same #c in CSS pixels and assumes the backing
+// store has been scaled for the display. This used to live inside pong.js,
+// which meant deleting pong.js silently un-sized Tetris, Snake, Cards and the
+// dungeon. It belongs here, where it runs before any game loads.
+window.ARCADE_VIEW = (() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const view = { w: 0, h: 0, dpr: 1 };
+  function resize() {
+    view.dpr = Math.min(devicePixelRatio || 1, 2);
+    view.w = innerWidth;
+    view.h = innerHeight;
+    canvas.width = view.w * view.dpr;
+    canvas.height = view.h * view.dpr;
+    // resetting width/height clears the transform, so re-apply it
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  }
+  addEventListener('resize', resize);
+  resize();
+  return view;
+})();
+
 // ---- shared cursor lock: games capture the pointer, Esc releases it -----
 // While locked, the OS cursor is hidden and events only carry movement
 // deltas, so a virtual cursor position is tracked here for games to read.
