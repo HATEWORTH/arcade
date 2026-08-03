@@ -418,7 +418,7 @@
     tiles: null, seen: null, rooms: [], torches: [], chests: [], enemies: [],
     drops: [], pedestals: [], bolts: [], corpses: [], allies: [],
     spikes: [], spikeSet: new Set(), braziers: [],
-    cls: null, clsBtns: [], sealedRoom: null,
+    cls: null, clsBtns: [], sealedRoom: null, curRoom: null,
     stairs: { x: 0, y: 0 },
     hero: { x: 0, y: 0, face: 1, moving: false, hp: 100, maxHp: 100, gold: 0 },
     mana: 50,
@@ -816,7 +816,10 @@
     }
     const n = 5 + D.floor * 2;
     for (let i = 0; i < n; i++) spawnEnemy(true);
-    reveal();
+    D.curRoom = startRoom;
+    revealRoom(startRoom);
+    D.cam.x = (startRoom.x + startRoom.w / 2) * TILE;
+    D.cam.y = (startRoom.y + startRoom.h / 2) * TILE;
   }
   function heroDmgSafe() {
     return D.st ? heroDmg() : 3;
@@ -895,12 +898,38 @@
     A.sweep(80, 300, 0.7, 'sine', 0.06);
   }
 
-  function reveal() {
-    const hx = D.hero.x / TILE, hy = D.hero.y / TILE;
-    const R = 5 * (D.st ? D.st.light / 205 : 1);
-    for (let y = Math.max(0, Math.floor(hy - R)); y <= Math.min(MH - 1, Math.ceil(hy + R)); y++) {
-      for (let x = Math.max(0, Math.floor(hx - R)); x <= Math.min(MW - 1, Math.ceil(hx + R)); x++) {
-        if (Math.hypot(x + 0.5 - hx, y + 0.5 - hy) <= R) D.seen[idx(x, y)] = 1;
+  // one room at a time: entering reveals the whole room, Isaac-style
+  function roomAt(tx, ty) {
+    for (const r of D.rooms) {
+      if (tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h) return r;
+    }
+    return null;
+  }
+  function revealRoom(r) {
+    for (let y = Math.max(0, r.y - 1); y <= Math.min(MH - 1, r.y + r.h); y++) {
+      for (let x = Math.max(0, r.x - 1); x <= Math.min(MW - 1, r.x + r.w); x++) {
+        D.seen[idx(x, y)] = 1;
+      }
+    }
+  }
+  function enterRoom(nr) {
+    D.curRoom = nr;
+    revealRoom(nr);
+    // thralls squeeze through the doorway with you
+    for (const al of D.allies) {
+      al.x = D.hero.x + (Math.random() - 0.5) * 30;
+      al.y = D.hero.y + (Math.random() - 0.5) * 30;
+      unstick(al, 8);
+    }
+    if (!nr.cleared && nr.type !== 'start' && nr.type !== 'treasure') {
+      if (D.enemies.some(en => en.homeRoom === nr)) {
+        sealRoom(nr);
+        if (nr.type === 'boss') {
+          say('The floor guardian stirs…', '#a4372e');
+          A.sweep(120, 45, 0.6, 'sawtooth', 0.08);
+        }
+      } else {
+        nr.cleared = true;
       }
     }
   }
@@ -919,7 +948,6 @@
     recalc();
     D.mana = D.st.manaMax;
     generate();
-    D.cam.x = D.hero.x; D.cam.y = D.hero.y;
   }
   function start() {
     prime();
@@ -976,7 +1004,6 @@
     say('FLOOR ' + D.floor, '#d9a94e');
     A.sweep(400, 60, 0.5, 'sine', 0.06);
     generate();
-    D.cam.x = D.hero.x; D.cam.y = D.hero.y;
   }
 
   document.getElementById('pickDungeon').addEventListener('click', () => {
@@ -1462,8 +1489,16 @@
     D.hero.moving = !!(ax || ay);
     const spd = D.block ? D.st.spd * 0.45 : D.st.spd;
     moveWith(D.hero, (ax / m) * spd, (ay / m) * spd, dt, HERO_R);
-    if (D.hero.moving) reveal();
-    D.cam.x = D.hero.x; D.cam.y = D.hero.y;
+    // crossing a doorway loads the next room
+    const htx2 = Math.floor(D.hero.x / TILE), hty2 = Math.floor(D.hero.y / TILE);
+    const nr = roomAt(htx2, hty2);
+    if (nr && nr !== D.curRoom) enterRoom(nr);
+    // fixed Isaac camera: glides to the room's center
+    const cr = D.curRoom;
+    const tcx = (cr.x + cr.w / 2) * TILE, tcy = (cr.y + cr.h / 2) * TILE;
+    const ck = Math.min(1, dt * 9);
+    D.cam.x += (tcx - D.cam.x) * ck;
+    D.cam.y += (tcy - D.cam.y) * ck;
 
     // hazards underfoot
     const htx = Math.floor(D.hero.x / TILE), hty = Math.floor(D.hero.y / TILE);
@@ -1472,26 +1507,6 @@
       if (Math.hypot((bz.x + 0.5) * TILE - D.hero.x, (bz.y + 0.5) * TILE - D.hero.y) < TILE * 0.7 + 8) {
         hurtHeroEnv(6 + D.floor);
         break;
-      }
-    }
-
-    // stepping fully into an uncleared room slams its doors shut
-    if (!D.sealedRoom) {
-      const hx = D.hero.x / TILE, hy = D.hero.y / TILE;
-      for (const r of D.rooms) {
-        if (r.cleared || r.type === 'start' || r.type === 'treasure') continue;
-        if (hx > r.x + 0.2 && hx < r.x + r.w - 0.2 && hy > r.y + 0.2 && hy < r.y + r.h - 0.2) {
-          if (D.enemies.some(en => en.homeRoom === r)) {
-            sealRoom(r);
-            if (r.type === 'boss') {
-              say('The floor guardian stirs…', '#a4372e');
-              A.sweep(120, 45, 0.6, 'sawtooth', 0.08);
-            }
-          } else {
-            r.cleared = true;
-          }
-          break;
-        }
       }
     }
 
@@ -1583,6 +1598,7 @@
 
     // ---- enemies ---------------------------------------------------------
     for (const en of D.enemies) {
+      if (en.homeRoom !== D.curRoom) continue; // other rooms sleep
       const et = ETYPES[en.type];
       unstick(en, et.r);
       en.cd = Math.max(0, en.cd - dt);
@@ -1721,7 +1737,6 @@
   }
 
   // ---- rendering ---------------------------------------------------------
-  const ZOOM = 3.1; // Isaac-close camera
   let lightCv = null, lightCtx = null;
   function ensureLight(w, h) {
     const cw = Math.ceil(w), chh = Math.ceil(h);
@@ -1898,18 +1913,21 @@
     const W = innerWidth, H = innerHeight;
     ARCADE_FX.screen(ctx);
     ctx.imageSmoothingEnabled = false;
-    // everything world-space renders through the zoom; the effective
-    // viewport is the screen divided by it
-    const VW = W / ZOOM, VH = H / ZOOM;
+    // one room fills the screen: zoom fits the room plus its wall ring
+    const Z = Math.min(W / ((CW + 1) * TILE), H / ((CH + 1) * TILE)) * 0.95;
+    const VW = W / Z, VH = H / Z;
     ctx.save();
-    ctx.scale(ZOOM, ZOOM);
+    ctx.scale(Z, Z);
     let ox = Math.round(VW / 2 - D.cam.x), oy = Math.round(VH / 2 - D.cam.y);
     if (D.shake > 0 && !reducedMotion) {
       ox += Math.round((Math.random() - 0.5) * D.shake);
       oy += Math.round((Math.random() - 0.5) * D.shake);
     }
-    const tx0 = Math.max(0, Math.floor(-ox / TILE)), tx1 = Math.min(MW - 1, Math.ceil((VW - ox) / TILE));
-    const ty0 = Math.max(0, Math.floor(-oy / TILE)), ty1 = Math.min(MH - 1, Math.ceil((VH - oy) / TILE));
+    // render only the current room and its surrounding walls
+    const cr = D.curRoom || D.rooms[0];
+    const tx0 = Math.max(0, cr.x - 1), tx1 = Math.min(MW - 1, cr.x + cr.w);
+    const ty0 = Math.max(0, cr.y - 1), ty1 = Math.min(MH - 1, cr.y + cr.h);
+    const inV = (tx, ty) => tx >= tx0 && tx <= tx1 && ty >= ty0 && ty <= ty1;
 
     for (let y = ty0; y <= ty1; y++) {
       for (let x = tx0; x <= tx1; x++) {
@@ -1917,15 +1935,23 @@
         const sx = ox + x * TILE, sy = oy + y * TILE;
         const hv = hash(x, y);
         if (D.tiles[idx(x, y)] === 1) {
-          ctx.fillStyle = hv % 3 === 0 ? '#343a2e' : '#3a4033';
-          ctx.fillRect(sx, sy, TILE, TILE);
-          if (hv % 11 === 0) {
-            ctx.fillStyle = '#2e3428';
-            ctx.fillRect(sx + (hv % 5) * 5 + 4, sy + (hv % 7) * 3 + 4, 6, 2);
-          }
-          if (solid(x, y - 1)) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-            ctx.fillRect(sx, sy, TILE, 7);
+          if (x % CW === 0 || y % CH === 0) {
+            // open doorway: a black passage out of the room
+            ctx.fillStyle = '#060704';
+            ctx.fillRect(sx, sy, TILE, TILE);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.fillRect(sx, sy, TILE, 2);
+          } else {
+            ctx.fillStyle = hv % 3 === 0 ? '#343a2e' : '#3a4033';
+            ctx.fillRect(sx, sy, TILE, TILE);
+            if (hv % 11 === 0) {
+              ctx.fillStyle = '#2e3428';
+              ctx.fillRect(sx + (hv % 5) * 5 + 4, sy + (hv % 7) * 3 + 4, 6, 2);
+            }
+            if (solid(x, y - 1)) {
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+              ctx.fillRect(sx, sy, TILE, 7);
+            }
           }
         } else if (D.tiles[idx(x, y)] === 3 || D.tiles[idx(x, y)] === 4) {
           // rock or brazier base sits on visible floor
@@ -1978,7 +2004,7 @@
       }
     }
 
-    if (D.seen[idx(D.stairs.x, D.stairs.y)]) {
+    if (inV(D.stairs.x, D.stairs.y)) {
       const sx = ox + D.stairs.x * TILE, sy = oy + D.stairs.y * TILE;
       for (let i = 0; i < 4; i++) {
         ctx.fillStyle = 'rgba(0, 0, 0, ' + (0.35 + i * 0.13) + ')';
@@ -1992,7 +2018,7 @@
     }
     // spikes: rows of points on the floor tile
     for (const sp2 of D.spikes) {
-      if (!D.seen[idx(sp2.x, sp2.y)]) continue;
+      if (!inV(sp2.x, sp2.y)) continue;
       const sx = ox + sp2.x * TILE, sy = oy + sp2.y * TILE;
       ctx.fillStyle = '#8a8f80';
       for (let i = 0; i < 3; i++) {
@@ -2009,7 +2035,7 @@
     }
     // brazier flames
     for (const bz of D.braziers) {
-      if (!D.seen[idx(bz.x, bz.y)]) continue;
+      if (!inV(bz.x, bz.y)) continue;
       const sx = ox + bz.x * TILE + TILE / 2, sy = oy + bz.y * TILE + 10;
       const fl = reducedMotion ? 1 : 0.8 + 0.2 * Math.sin(D.t * 8 + bz.x * 2);
       ctx.globalAlpha = 0.75 * fl;
@@ -2027,7 +2053,7 @@
     // the fallen: splatted where they died, laid sideways over a dark stain
     for (const c of D.corpses) {
       const tx2 = Math.floor(c.x / TILE), ty2 = Math.floor(c.y / TILE);
-      if (!D.seen[idx(tx2, ty2)]) continue;
+      if (!inV(tx2, ty2)) continue;
       const et = ETYPES[c.type];
       const sx = ox + c.x, sy = oy + c.y;
       ctx.globalAlpha = 0.45;
@@ -2060,7 +2086,7 @@
     }
     // pedestals
     for (const p of D.pedestals) {
-      if (!D.seen[idx(p.x, p.y)]) continue;
+      if (!inV(p.x, p.y)) continue;
       const sx = ox + p.x * TILE + TILE / 2, sy = oy + p.y * TILE + TILE / 2;
       ctx.fillStyle = '#565b48';
       ctx.fillRect(sx - 8, sy - 4, 16, 10);
@@ -2084,7 +2110,7 @@
       }
     }
     for (const c of D.chests) {
-      if (!D.seen[idx(c.x, c.y)]) continue;
+      if (!inV(c.x, c.y)) continue;
       const sx = ox + c.x * TILE + TILE / 2, sy = oy + c.y * TILE + TILE / 2;
       if (!c.opened) {
         ctx.globalAlpha = 0.28 + (reducedMotion ? 0 : 0.1 * Math.sin(D.t * 3 + c.x));
@@ -2099,7 +2125,7 @@
     }
     for (const dr of D.drops) {
       const tx2 = Math.floor(dr.x / TILE), ty2 = Math.floor(dr.y / TILE);
-      if (!D.seen[idx(tx2, ty2)]) continue;
+      if (!inV(tx2, ty2)) continue;
       const sx = ox + dr.x, sy = oy + dr.y;
       const col = dr.relic ? dr.relic.color : RARITIES[dr.it.ri].color;
       ctx.globalAlpha = 0.35 + (reducedMotion ? 0 : 0.15 * Math.sin(D.t * 4 + dr.x));
@@ -2116,7 +2142,7 @@
       }
     }
     for (const tc of D.torches) {
-      if (!D.seen[idx(tc.x, tc.y)]) continue;
+      if (!inV(tc.x, tc.y)) continue;
       const sx = ox + tc.x * TILE, sy = oy + tc.y * TILE;
       ctx.drawImage(TORCH, sx + TILE / 2 - 6, sy + TILE - 14, 12, 12);
       const fl = reducedMotion ? 1 : 0.8 + 0.2 * Math.sin(D.t * 9 + tc.ph);
@@ -2149,7 +2175,7 @@
       ctx.globalAlpha = 1;
     }
     for (const en of D.enemies) {
-      if (!D.seen[idx(Math.floor(en.x / TILE), Math.floor(en.y / TILE))]) continue;
+      if (en.homeRoom !== D.curRoom) continue;
       const et = ETYPES[en.type];
       const sx = ox + en.x, sy = oy + en.y;
       if (!en.aggro && !en.isBoss) {
@@ -2286,14 +2312,14 @@
     const breathe = reducedMotion ? 1 : 1 + 0.03 * Math.sin(D.t * 3);
     punch(ox + D.hero.x, oy + D.hero.y, D.st.light * breathe, 1);
     for (const tc of D.torches) {
-      if (!D.seen[idx(tc.x, tc.y)]) continue;
+      if (!inV(tc.x, tc.y)) continue;
       const sx = ox + tc.x * TILE + TILE / 2, sy = oy + tc.y * TILE + TILE - 11;
       if (sx < -160 || sx > VW + 160 || sy < -160 || sy > VH + 160) continue;
       const fl = reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(D.t * 9 + tc.ph);
       punch(sx, sy, 120 * fl, 0.85);
     }
     for (const bz of D.braziers) {
-      if (!D.seen[idx(bz.x, bz.y)]) continue;
+      if (!inV(bz.x, bz.y)) continue;
       const sx = ox + bz.x * TILE + TILE / 2, sy = oy + bz.y * TILE + 12;
       if (sx < -140 || sx > VW + 140 || sy < -140 || sy > VH + 140) continue;
       const fl = reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(D.t * 8 + bz.x * 2);
