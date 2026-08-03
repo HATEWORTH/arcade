@@ -715,10 +715,18 @@
     launchEl.classList.remove('hidden');
     window.MODE = 'menu';
   }
+  // one source of truth for the menu pointer: if the pointer lock is
+  // somehow still held, use the delta-tracked virtual cursor; otherwise
+  // the real mouse position
+  function invPos() {
+    if (ARCADE_LOCK.locked()) return { x: ARCADE_LOCK.cur.x, y: ARCADE_LOCK.cur.y };
+    return { x: D.invMx, y: D.invMy };
+  }
   function toggleInv() {
     if (!D.running) return;
     D.inv = !D.inv;
     D.drag = null;
+    if (D.inv) { D.invMx = ARCADE_LOCK.cur.x; D.invMy = ARCADE_LOCK.cur.y; }
     if (!D.inv && D.lootChest) {
       D.lootChest.cool = 1.1;
       D.lootChest = null;
@@ -769,8 +777,9 @@
   addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
   addEventListener('pointermove', e => {
     if (window.MODE === 'dungeon' && D.inv) {
-      D.invMx = e.clientX; D.invMy = e.clientY;
-      if (D.drag && Math.hypot(e.clientX - D.drag.sx, e.clientY - D.drag.sy) > 6) D.drag.moved = true;
+      if (!ARCADE_LOCK.locked()) { D.invMx = e.clientX; D.invMy = e.clientY; }
+      const p = invPos();
+      if (D.drag && Math.hypot(p.x - D.drag.sx, p.y - D.drag.sy) > 6) D.drag.moved = true;
     }
   });
   addEventListener('pointerdown', e => {
@@ -778,10 +787,11 @@
     if (D.paused) { togglePause(); return; }
     if (D.inv) {
       if (e.button !== 0) return;
-      D.invMx = e.clientX; D.invMy = e.clientY;
-      const s = slotAt(e.clientX, e.clientY);
+      if (!ARCADE_LOCK.locked()) { D.invMx = e.clientX; D.invMy = e.clientY; }
+      const p = invPos();
+      const s = slotAt(p.x, p.y);
       if (s && s.type !== 'takeall' && getSlot(s)) {
-        D.drag = { from: s, sx: e.clientX, sy: e.clientY, moved: false };
+        D.drag = { from: s, sx: p.x, sy: p.y, moved: false };
       } else if (s) {
         clickSlot(s);
       }
@@ -797,11 +807,12 @@
     const drag = D.drag;
     D.drag = null;
     if (!drag.moved) { clickSlot(drag.from); return; }
-    const target = slotAt(e.clientX, e.clientY);
+    const p = invPos();
+    const target = slotAt(p.x, p.y);
     if (target) { dropItem(drag.from, target); return; }
     const L = invLayout();
-    const inPanel = e.clientX >= L.px && e.clientX <= L.px + L.pw &&
-      e.clientY >= (D.lootChest ? L.py - 108 : L.py) && e.clientY <= L.py + L.ph;
+    const inPanel = p.x >= L.px && p.x <= L.px + L.pw &&
+      p.y >= (D.lootChest ? L.py - 108 : L.py) && p.y <= L.py + L.ph;
     if (inPanel) return;
     const it = getSlot(drag.from);
     if (!it) return;
@@ -1174,6 +1185,7 @@
         }
         D.lootChest = c;
         D.inv = true;
+        D.invMx = ARCADE_LOCK.cur.x; D.invMy = ARCADE_LOCK.cur.y;
         ARCADE_LOCK.unlock();
         A.bleep(760, 0.08, 'triangle', 0.04);
       }
@@ -1384,6 +1396,7 @@
   function drawInventory() {
     const W = innerWidth, H = innerHeight;
     const L = invLayout();
+    const MP = invPos();
     ctx.globalAlpha = 0.78;
     ctx.fillStyle = '#0c0e08';
     ctx.fillRect(0, 0, W, H);
@@ -1416,7 +1429,7 @@
       ctx.font = '600 13px ' + MONO;
       ctx.fillText(RARITIES[D.lootChest.ri].name.toUpperCase() + ' CHEST', L.px + 26, L.py - 88);
       const ta = L.takeAll;
-      const taHov = D.invMx >= ta.x && D.invMx <= ta.x + ta.w && D.invMy >= ta.y && D.invMy <= ta.y + ta.h;
+      const taHov = MP.x >= ta.x && MP.x <= ta.x + ta.w && MP.y >= ta.y && MP.y <= ta.y + ta.h;
       ctx.fillStyle = taHov ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.06)';
       ctx.fillRect(ta.x, ta.y, ta.w, ta.h);
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
@@ -1427,14 +1440,14 @@
       for (let i = 0; i < 4; i++) {
         const s = { type: 'chest', key: i };
         const it = D.lootChest.items[i];
-        const hov = inSlot(D.invMx, D.invMy, L.chest[i]);
+        const hov = inSlot(MP.x, MP.y, L.chest[i]);
         drawSlot(L.chest[i], showItem(s, it), hov);
         if (hov && it) hoverItem = it;
       }
     }
     for (const kind of ['sword', 'shield', 'armor']) {
       const s = L.eq[kind];
-      const hov = inSlot(D.invMx, D.invMy, s);
+      const hov = inSlot(MP.x, MP.y, s);
       drawSlot(s, showItem({ type: 'eq', key: kind }, D.equip[kind]), hov);
       if (hov && D.equip[kind]) hoverItem = D.equip[kind];
       ctx.fillStyle = '#8a8f80';
@@ -1442,12 +1455,12 @@
       ctx.fillText(kind.toUpperCase(), s.x + 2, s.y + SLOT + 13);
     }
     for (let i = 0; i < 16; i++) {
-      const hov = inSlot(D.invMx, D.invMy, L.bag[i]);
+      const hov = inSlot(MP.x, MP.y, L.bag[i]);
       drawSlot(L.bag[i], showItem({ type: 'bag', key: i }, D.bag[i]), hov);
       if (hov && D.bag[i]) hoverItem = D.bag[i];
     }
     for (let i = 0; i < 4; i++) {
-      const hov = inSlot(D.invMx, D.invMy, L.hot[i]);
+      const hov = inSlot(MP.x, MP.y, L.hot[i]);
       drawSlot(L.hot[i], showItem({ type: 'hot', key: i }, D.hotbar[i]), hov);
       if (hov && D.hotbar[i]) hoverItem = D.hotbar[i];
       ctx.fillStyle = '#8a8f80';
@@ -1468,7 +1481,7 @@
       const rx = L.px + 40 + (i % 8) * 24;
       const ry = L.py + 324 + Math.floor(i / 8) * 24;
       drawRelicGlyph(rx, ry, D.relics[i], 8);
-      if (Math.abs(D.invMx - rx) < 10 && Math.abs(D.invMy - ry) < 10) hoverRelic = D.relics[i];
+      if (Math.abs(MP.x - rx) < 10 && Math.abs(MP.y - ry) < 10) hoverRelic = D.relics[i];
     }
     if (hoverRelic) {
       ctx.fillStyle = hoverRelic.cursed ? '#a4372e' : hoverRelic.color;
@@ -1483,7 +1496,7 @@
       ctx.font = '600 13px ' + MONO;
       ctx.fillText('click for quick-move · drag to arrange · Tab closes', L.px + 26, L.py + L.ph - 18);
     }
-    drawPointer(D.invMx, D.invMy);
+    drawPointer(MP.x, MP.y);
   }
   function draw() {
     const W = innerWidth, H = innerHeight;
