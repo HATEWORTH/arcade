@@ -38,7 +38,10 @@ sfx/*.ogg
   Kenney — Sci-Fi Sounds, Impact Sounds, Interface Sounds
   https://kenney.nl/assets/category:Audio
   CC0 1.0 Universal (public domain). Attribution not required.
-  Nine clips selected from the three packs and renamed by role.
+  Nine clips selected from the three packs and renamed by role, then peak
+  normalized to 0.8 — several shipped above full scale and clipped.
+  kill.ogg is impactSoft_medium; the metallic one it replaced rang like a
+  bell (~1500Hz against ~60Hz) and was the hottest file in the set.
 
 fx/glow.png
   Brackeys' VFX Bundle — particles/opague/light_01.png
