@@ -146,6 +146,17 @@ struct Particle {
     grav: bool,
 }
 
+/// A bomb waiting to be collected. Rare on purpose: it is a get-out-of-jail
+/// card, and it stops being one if the floor is covered in them.
+#[derive(Clone, Copy)]
+struct Pickup {
+    x: f64,
+    y: f64,
+    /// seconds before it gives up and fades
+    t: f64,
+    ph: f64,
+}
+
 /// A soft light stamped on a detonation. The line shards read as debris;
 /// this is the heat they came off.
 struct Flash {
@@ -232,6 +243,8 @@ struct Snapshot {
     ebullets: Vec<(f32, f32, f32, f32)>,
     holes: Vec<(f32, f32, f32, f32)>,
     shocks: Vec<(f32, f32, f32, f32)>,
+    pickups: Vec<(f32, f32, f32)>,
+    bombs: i8,
     score: u32,
     mult: u8,
     lives: i8,
@@ -252,9 +265,15 @@ pub struct Geo {
     parts: Vec<Particle>,
     spray: Vec<Spray>,
     flashes: Vec<Flash>,
+    pickups: Vec<Pickup>,
     holes: Vec<Hole>,
     shocks: Vec<Shock>,
     hole_t: f64,
+    pickup_t: f64,
+    /// bombs in hand, shared by both players in co-op
+    bombs: i32,
+    /// a right-click seen this frame, waiting to be sent or spent
+    bomb_edge: bool,
     score: u32,
     kills: u32,
     lives: i32,
@@ -307,9 +326,13 @@ impl Geo {
             parts: Vec::new(),
             spray: Vec::new(),
             flashes: Vec::new(),
+            pickups: Vec::new(),
             holes: Vec::new(),
             shocks: Vec::new(),
             hole_t: 12.0,
+            pickup_t: 26.0,
+            bombs: 0,
+            bomb_edge: false,
             score: 0,
             kills: 0,
             lives: 4,
@@ -427,6 +450,14 @@ impl Geo {
     }
 
     pub fn button(&mut self, button: i32, down: bool) {
+        if button == 2 {
+            // the guest cannot detonate anything itself — it flags the press
+            // and the host, which owns the board, spends the charge
+            if down && self.running {
+                self.bomb_edge = true;
+            }
+            return;
+        }
         if button != 0 {
             return;
         }
@@ -479,9 +510,13 @@ impl Geo {
         self.parts.clear();
         self.spray.clear();
         self.flashes.clear();
+        self.pickups.clear();
         self.holes.clear();
         self.shocks.clear();
         self.hole_t = 12.0;
+        self.pickup_t = 26.0;
+        self.bombs = 0;
+        self.bomb_edge = false;
         self.score = 0;
         self.kills = 0;
         self.lives = 4;
@@ -878,6 +913,91 @@ impl Geo {
         self.enemies.push(Enemy { x, y, fade: 1.0, ..e });
     }
 
+    /// Sparse and random: one every 30-50 seconds, never on top of you and
+    /// never inside a well, and it expires if you leave it too long.
+    fn update_pickups(&mut self, dt: f64) {
+        let (w, h) = (self.g.w, self.g.h);
+        self.pickup_t -= dt;
+        if self.pickup_t <= 0.0 && self.pickups.len() < 2 {
+            self.pickup_t = 30.0 + self.rng.f() * 20.0;
+            for _ in 0..20 {
+                let x = 70.0 + self.rng.f() * (w - 140.0);
+                let y = 70.0 + self.rng.f() * (h - 140.0);
+                let near_ship = self
+                    .ships
+                    .iter()
+                    .any(|s| (s.x - x).hypot(s.y - y) < 160.0);
+                let near_hole = self.holes.iter().any(|o| (o.x - x).hypot(o.y - y) < 220.0);
+                if !near_ship && !near_hole {
+                    let ph = self.rng.angle();
+                    self.pickups.push(Pickup { x, y, t: 22.0, ph });
+                    break;
+                }
+            }
+        }
+
+        let mut taken: Vec<(f64, f64)> = Vec::new();
+        let ships: Vec<(f64, f64)> = self.ships.iter().map(|s| (s.x, s.y)).collect();
+        let mut i = self.pickups.len();
+        while i > 0 {
+            i -= 1;
+            self.pickups[i].t -= dt;
+            let p = self.pickups[i];
+            if p.t <= 0.0 {
+                self.pickups.remove(i);
+                continue;
+            }
+            if ships.iter().any(|(sx, sy)| (sx - p.x).hypot(sy - p.y) < 26.0) {
+                self.pickups.remove(i);
+                taken.push((p.x, p.y));
+            }
+        }
+        for (x, y) in taken {
+            self.bombs = (self.bombs + 1).min(3);
+            self.flash(x, y, 120.0, 2.2);
+            self.burst(x, y, WHITE, 26, 1.2);
+            bridge::sample("life", 0.18);
+        }
+    }
+
+    /// Spend a charge: everything on screen takes the wave.
+    fn detonate_bomb(&mut self, cx: f64, cy: f64) {
+        if self.bombs <= 0 {
+            return;
+        }
+        self.bombs -= 1;
+        self.shocks.push(Shock {
+            x: cx,
+            y: cy,
+            rad: 20.0,
+            speed: 1500.0,
+            max_rad: 1600.0,
+        });
+        self.grid_explosive(220.0, cx, cy, 900.0);
+        self.flash(cx, cy, 520.0, 0.9);
+        self.ring_burst(cx, cy);
+        self.shake = 20.0;
+        bridge::sample("blast", 0.4);
+        bridge::hat(0.12, 0.2);
+        self.ebullets.clear();
+
+        // clears the board out to arm's reach and then some, scoring as it goes
+        const R: f64 = 620.0;
+        let mut i = self.enemies.len();
+        while i > 0 {
+            i -= 1;
+            let e = self.enemies[i];
+            if e.fade > 0.0 || (e.x - cx).hypot(e.y - cy) > R {
+                continue;
+            }
+            self.enemies.remove(i);
+            self.kills += 1;
+            self.add_points((e.pv.max(1) as u32) * 10);
+            self.enemy_burst(e.x, e.y);
+        }
+        self.bump_mult();
+    }
+
     fn spawn_hole(&mut self) {
         let (w, h) = (self.g.w, self.g.h);
         let (mut x, mut y) = (0.0, 0.0);
@@ -1089,6 +1209,20 @@ impl Geo {
         self.update_enemies(dt, w, h);
         self.update_ebullets(dt, w, h);
         self.separate_enemies(dt);
+        self.update_pickups(dt);
+        // one charge per press, spent where the player who pressed is standing
+        if self.bomb_edge {
+            self.bomb_edge = false;
+            let s = self.ships[0];
+            self.detonate_bomb(s.x, s.y);
+        }
+        if self.net.is_host() && self.net.last_input.secondary() && self.ships.len() > 1 {
+            // consume the press: the wire repeats the last input until a new
+            // packet lands, and a lost packet would fire the bomb twice
+            self.net.last_input.buttons &= !2;
+            let s = self.ships[1];
+            self.detonate_bomb(s.x, s.y);
+        }
         self.update_holes(dt);
         self.update_shocks(dt);
         self.collide(dt);
@@ -1678,12 +1812,14 @@ impl Geo {
             if self.keys_down {
                 ay += 1.0;
             }
+            let bomb = self.bomb_edge;
+            self.bomb_edge = false;
             self.net.send_input(&Input {
                 x: ax as f32,
                 y: ay as f32,
                 aim_x: self.local_aim.0 as f32,
                 aim_y: self.local_aim.1 as f32,
-                buttons: s.firing as u8,
+                buttons: (s.firing as u8) | ((bomb as u8) << 1),
             });
             if let Some(snap) = self.net.take_snapshot::<Snapshot>() {
                 self.apply_snapshot(snap);
@@ -1751,6 +1887,12 @@ impl Geo {
                 .iter()
                 .map(|s| (s.x as f32, s.y as f32, s.rad as f32, s.max_rad as f32))
                 .collect(),
+            pickups: self
+                .pickups
+                .iter()
+                .map(|p| (p.x as f32, p.y as f32, p.t as f32))
+                .collect(),
+            bombs: self.bombs.clamp(-128, 127) as i8,
             score: self.score,
             mult: self.mult.min(255) as u8,
             lives: self.lives.clamp(-128, 127) as i8,
@@ -1763,6 +1905,17 @@ impl Geo {
     fn apply_snapshot(&mut self, s: Snapshot) {
         self.running = s.running;
         self.score = s.score;
+        self.bombs = s.bombs as i32;
+        self.pickups = s
+            .pickups
+            .iter()
+            .map(|(x, y, t)| Pickup {
+                x: *x as f64,
+                y: *y as f64,
+                t: *t as f64,
+                ph: 0.0,
+            })
+            .collect();
         self.mult = s.mult as u32;
         self.lives = s.lives as i32;
         self.kills = s.kills;
@@ -1907,6 +2060,7 @@ impl Geo {
         for i in 0..self.enemies.len() {
             self.draw_enemy(i);
         }
+        self.draw_pickups();
         self.draw_flashes();
         self.draw_reticle();
         self.draw_ships();
@@ -2025,6 +2179,50 @@ impl Geo {
         }
         g.stroke();
         g.no_shadow();
+    }
+
+    /// The bomb pickup: a slowly turning diamond inside a ring, sitting in its
+    /// own halo so it reads as loot rather than as one more thing to shoot.
+    fn draw_pickups(&self) {
+        if self.pickups.is_empty() {
+            return;
+        }
+        let g = &self.g;
+        for p in &self.pickups {
+            // blinks out over its last three seconds
+            let fade = (p.t / 3.0).min(1.0);
+            let pulse = 0.75 + 0.25 * (self.t * 4.0 + p.ph).sin();
+            if self.g.glow_ready() {
+                g.composite("lighter");
+                g.alpha(0.32 * fade * pulse);
+                g.draw_glow(p.x, p.y, 92.0);
+                g.composite("source-over");
+            }
+            g.stroke_color(WHITE);
+            g.shadow(WHITE, 12.0);
+            g.line_width(2.0);
+            g.alpha(0.95 * fade);
+            let a = self.t * 1.1 + p.ph;
+            let r = 11.0 * pulse;
+            g.begin();
+            for k in 0..4 {
+                let ang = a + (k as f64 / 4.0) * TAU;
+                let (px, py) = (p.x + ang.cos() * r, p.y + ang.sin() * r);
+                if k == 0 {
+                    g.move_to(px, py);
+                } else {
+                    g.line_to(px, py);
+                }
+            }
+            g.close();
+            g.stroke();
+            g.alpha(0.5 * fade);
+            g.begin();
+            g.arc(p.x, p.y, r + 6.0, 0.0, TAU);
+            g.stroke();
+            g.no_shadow();
+        }
+        g.alpha(1.0);
     }
 
     /// The detonation cores, added on top of the scene rather than over it.
@@ -2246,6 +2444,15 @@ impl Geo {
         g.fill_color("#ececf1");
         g.font("600 13px Consolas, \"Courier New\", monospace");
         g.text(&format!("BEST {}", self.best.max(self.score)), 14.0, 70.0);
+        // bombs, under the best line, with the control spelled out the first
+        // time you are holding one
+        if self.bombs > 0 {
+            g.alpha(0.9);
+            g.fill_color(WHITE);
+            g.font("600 13px Consolas, \"Courier New\", monospace");
+            let pips = "*".repeat(self.bombs.max(0) as usize);
+            g.text(&format!("BOMB {pips}  right click"), 14.0, 90.0);
+        }
         g.font("600 17px Consolas, \"Courier New\", monospace");
         g.alpha(0.85);
         for i in 0..self.lives.max(0) {
