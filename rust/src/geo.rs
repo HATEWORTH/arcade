@@ -749,7 +749,7 @@ impl Geo {
         while self.score >= self.next_life {
             self.next_life += 20000;
             self.lives += 1;
-            bridge::sample("life", 0.45);
+            bridge::sample("life", 0.18);
         }
     }
     fn bump_mult(&mut self) {
@@ -776,7 +776,7 @@ impl Geo {
         self.grid_explosive(120.0, x, y, 300.0);
         self.shake = 16.0;
         self.save_best();
-        bridge::sample("death", 0.55);
+        bridge::sample("death", 0.22);
         bridge::event(
             "geo",
             "over",
@@ -796,7 +796,7 @@ impl Geo {
         self.flash(x, y, 200.0, 1.5);
         self.grid_explosive(100.0, x, y, 280.0);
         self.shake = 14.0;
-        bridge::sample("hit", 0.45);
+        bridge::sample("hit", 0.2);
         bridge::hat(0.09, 0.12);
         let corpses: Vec<(f64, f64, Kind)> =
             self.enemies.iter().map(|e| (e.x, e.y, e.kind)).collect();
@@ -898,7 +898,7 @@ impl Geo {
             flash: 0.0,
             spray_a: a,
         });
-        bridge::sample("hole", 0.35);
+        bridge::sample("hole", 0.16);
     }
 
     fn explode_hole(&mut self, i: usize, with_bits: bool) {
@@ -918,7 +918,7 @@ impl Geo {
         self.flash(h.x, h.y, 300.0, 1.3);
         self.ring_burst(h.x, h.y);
         self.shake = 18.0;
-        bridge::sample("blast", 0.5);
+        bridge::sample("blast", 0.26);
         bridge::hat(0.12, 0.2);
         if with_bits {
             let n = h.eaten.min(14).max(0) as usize;
@@ -1043,7 +1043,7 @@ impl Geo {
                     });
                 }
                 self.ships[i].fire_t = 0.1;
-                bridge::sample("shoot", 0.12);
+                bridge::sample("shoot", 0.045);
             }
         }
 
@@ -1219,7 +1219,7 @@ impl Geo {
                 vy: a.sin() * sp,
                 life: 4.0,
             });
-            bridge::sample("sniper", 0.3);
+            bridge::sample("sniper", 0.1);
         }
         for (x, y) in blasts {
             self.shocks.push(Shock {
@@ -1232,7 +1232,7 @@ impl Geo {
             self.grid_explosive(70.0, x, y, 240.0);
             self.flash(x, y, 150.0, 2.0);
             self.burst(x, y, Kind::Pulsar.color(), 14, 0.9);
-            bridge::sample("pulse", 0.4);
+            bridge::sample("pulse", 0.16);
             // the wave itself is what hurts, and only near the ring
             let s = self.ships[0];
             let d = (s.x - x).hypot(s.y - y);
@@ -1490,7 +1490,7 @@ impl Geo {
                     // visible chip so it is obvious the thing is taking damage
                     self.burst(b.x, b.y, kind.color(), 4, 0.6);
                     self.flash(b.x, b.y, 26.0, 5.0);
-                    bridge::sample("kill", 0.15);
+                    bridge::sample("kill", 0.05);
                     continue;
                 }
                 self.enemies.remove(i);
@@ -1501,7 +1501,7 @@ impl Geo {
                 self.flash(ex, ey, 54.0, 3.4);
                 self.grid_explosive(15.0, ex, ey, 110.0);
                 self.shake = self.shake.max(5.0);
-                bridge::sample("kill", 0.3);
+                bridge::sample("kill", 0.1);
                 if self.kills % 4 == 0 {
                     bridge::hat(0.04, 0.05);
                 }

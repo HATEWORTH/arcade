@@ -74,8 +74,7 @@ window.ARCADE_SETTINGS = (() => {
 addEventListener('DOMContentLoaded', () => {
   const S = window.ARCADE_SETTINGS;
   const overlay = document.getElementById('settingsOverlay');
-  const launch = document.getElementById('launchOverlay');
-  if (!overlay || !launch) return;
+  if (!overlay) return;
 
   // key -> [slider, readout, how to render the value]
   const pct = v => Math.round(v * 100) + '%';
@@ -112,27 +111,50 @@ addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  let open = false;
-  function show(on) {
-    open = on;
-    overlay.classList.toggle('hidden', !on);
-    // the launch menu and the panel share the screen, so swap them
-    launch.classList.toggle('hidden', on || window.MODE !== 'menu');
-    if (on) paint();
+  // Settings live in the pause menu, not on the home screen, so the panel has
+  // to remember what it covered and put it back — and must never resume the
+  // game underneath it.
+  let isOpen = false;
+  let cameFrom = null;
+  const pause = document.getElementById('pauseOverlay');
+
+  function show() {
+    cameFrom = pause && !pause.classList.contains('hidden') ? pause : null;
+    if (cameFrom) cameFrom.classList.add('hidden');
+    overlay.classList.remove('hidden');
+    isOpen = true;
+    paint();
+  }
+  function hide() {
+    overlay.classList.add('hidden');
+    if (cameFrom) cameFrom.classList.remove('hidden');
+    cameFrom = null;
+    isOpen = false;
   }
 
-  document.getElementById('settingsToggle').addEventListener('click', () => show(true));
-  document.getElementById('settingsClose').addEventListener('click', () => show(false));
+  const openBtn = document.getElementById('pauseSettingsBtn');
+  if (openBtn) {
+    // the pause menu's other buttons dispatch through shared.js; this one is
+    // ours, and the click must not fall through to "click resumes"
+    openBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    openBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      show();
+    });
+  }
+  document.getElementById('settingsClose').addEventListener('click', hide);
   document.getElementById('settingsReset').addEventListener('click', () => {
     S.reset();
     paint();
   });
-  // Esc backs out, and clicks inside the panel are the panel's business —
-  // the games listen on window for "click to start"
+  // Esc backs out to the pause menu instead of unpausing, and clicks inside
+  // the panel are the panel's business — the games listen on window for
+  // "click to start" and "click resumes"
   addEventListener('keydown', e => {
-    if (open && e.key === 'Escape') {
+    if (isOpen && e.key === 'Escape') {
       e.stopPropagation();
-      show(false);
+      e.preventDefault();
+      hide();
     }
   }, true);
   for (const ev of ['pointerdown', 'pointerup', 'click']) {
