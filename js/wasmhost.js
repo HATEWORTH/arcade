@@ -407,6 +407,10 @@
   }
   requestAnimationFrame(frame);
 
+  // tells the shell's dead-button fallback in index.html that this module is
+  // alive and the pong/geo buttons are wired
+  window.__WASMHOST = true;
+
   boot().then(() => {
     if (!ready) return;
     const q = new URLSearchParams(location.search);

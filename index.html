@@ -164,6 +164,32 @@ for (const f of ['audio', 'tetris', 'snake', 'cards', 'dungeon', 'splash']) {
   document.write('<script src="js/' + f + '.js?v=' + window.__V + '"><\/script>');
 }
 document.write('<script type="module" src="js/wasmhost.js?v=' + window.__V + '"><\/script>');
+
+// wasmhost.js owns the Pong 3D and Geo Wars buttons. If the module never ran
+// (file:// blocks modules outright; a flaky network or an ancient browser can
+// too), those two buttons would sit dead with no explanation — so answer the
+// click ourselves with the reason. Capture phase, so this wins even though
+// the module's own listeners never attached.
+for (const id of ['pickPong', 'pickGeo']) {
+  document.getElementById(id).addEventListener('click', e => {
+    if (window.__WASMHOST) return;
+    e.stopImmediatePropagation();
+    let msg = document.getElementById('wasmDeadMsg');
+    if (!msg) {
+      msg = document.createElement('div');
+      msg.id = 'wasmDeadMsg';
+      msg.style.cssText =
+        'position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:99;' +
+        'font:600 13px Consolas,monospace;color:#e0459b;background:#12140d;' +
+        'padding:10px 16px;border:1px solid #e0459b;max-width:90vw;text-align:center';
+      document.body.appendChild(msg);
+    }
+    msg.textContent = location.protocol === 'file:'
+      ? 'this game needs the site served over http — opening index.html from disk ' +
+        'blocks it. play at hateworth.github.io/arcade or run a local server'
+      : 'the game engine failed to load — refresh the page to retry';
+  }, true);
+}
 </script>
 
 </body></html>
