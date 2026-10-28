@@ -48,9 +48,8 @@ impl Gfx {
             glow: 1.0,
             shake_scale: 1.0,
             particle_scale: 1.0,
-            glow_img: HtmlImageElement::new().ok().map(|img| {
+            glow_img: HtmlImageElement::new().ok().inspect(|img| {
                 img.set_src("assets/geo/fx/glow.png");
-                img
             }),
         };
         g.resize();

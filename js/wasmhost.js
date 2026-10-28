@@ -35,6 +35,15 @@
       return [S.get('glow'), S.get('shake'), S.get('particles')];
     },
   };
+  // A JS exception unwinding through wasm leaves the game's RefCell borrowed,
+  // and every later call then aborts — one bad send on a closing channel used
+  // to kill the game for good. Nothing the shim does is worth that.
+  for (const [name, fn] of Object.entries(window.ARCADE_WASM_HOST)) {
+    const fallback = name === 'beat' ? [0, 0, 0, 0, 0] : undefined;
+    window.ARCADE_WASM_HOST[name] = (...args) => {
+      try { return fn(...args); } catch (e) { console.error('wasm shim ' + name, e); return fallback; }
+    };
+  }
 
   // ---- DOM --------------------------------------------------------------
   const startOverlay = document.getElementById('startOverlay');
@@ -44,6 +53,7 @@
   const pongHud = document.getElementById('pongHud');
   const hpYouEl = document.getElementById('hpYou');
   const hpCpuEl = document.getElementById('hpCpu');
+  const rivalTag = document.querySelector('#pongHud .cpu .tag');
   const verdictEl = document.getElementById('verdict');
   const finalScoreEl = document.getElementById('finalScore');
   const geoEnd = document.getElementById('geoEnd');
@@ -93,8 +103,12 @@
     return mintedRoom;
   }
 
+  let netGen = 0; // bumped by every open and close; stale async opens bail
+  const JOIN_TIMEOUT_MS = 20000;
+
   async function netOpen(game, role) {
     if (net) netClose();
+    const gen = ++netGen;
     const code = roomCode();
     if (role === 'guest' && !new URLSearchParams(location.search).get('room')) {
       netPill('no room code in the link — ask the host to share theirs', '#e0459b');
@@ -108,27 +122,46 @@
       netPill('p2p module failed to load', '#e0459b');
       return;
     }
+    // quit (or picked another game) while the module was loading
+    if (gen !== netGen || window.MODE !== game) return;
     // rooms are per-game so two people who picked different games never
     // half-connect; the code stays short because the game rides the appId
     const room = joinRoom({ appId: 'neon-arcade-' + game, password: code }, code);
-    net = { room, chan: null, peer: null, game };
-    room.onPeerJoin = id => {
-      if (!net || net.peer) return; // two players only: first arrival takes the slot
+    net = { room, chan: null, peer: null, game, timer: 0 };
+    const adopt = id => {
       net.peer = id;
       openChannel(game, room.getPeers()[id]);
+    };
+    room.onPeerJoin = id => {
+      if (!net) return;
+      // two players only: first arrival takes the slot — unless that slot's
+      // channel never opened, which is what a reloading guest leaves behind
+      // when its new id shows up before trystero reports the old one gone
+      if (net.peer && net.chan) return;
+      adopt(id);
     };
     room.onPeerLeave = id => {
       if (!net || net.peer !== id) return;
       net.peer = null;
       net.chan = null;
       if (ready) wasm.net_peer(game, false);
-      netPill('player left — waiting for a new one…', '#e0a545');
+      // someone may already be waiting in the room; take them now, since
+      // their join event came and went while the slot was full
+      const other = Object.keys(room.getPeers()).find(p => p !== id);
+      if (other) { adopt(other); return; }
+      netPill(role === 'host' ? 'player left — waiting for a new one…' : 'host left the room', '#e0a545');
     };
     if (role === 'host') {
-      const link = location.href.split('?')[0] + '?join=1&room=' + code + '&game=' + game;
+      const link = location.origin + location.pathname + '?join=1&room=' + code + '&game=' + game;
       netPill('room ' + code + ' — click to copy invite link', '#45e0a5', link);
     } else {
       netPill('joining room ' + code + '…', '#e0a545');
+      net.timer = setTimeout(() => {
+        if (net && !net.chan && gen === netGen) {
+          netPill('no host found — check the room code, and that the host picked ' +
+            (game === 'pong' ? 'PONG 3D' : 'GEO WARS'), '#e0459b');
+        }
+      }, JOIN_TIMEOUT_MS);
     }
   }
 
@@ -149,12 +182,18 @@
       if (ready && net && net.chan === ch) wasm.net_packet(game, new Uint8Array(e.data));
     };
     ch.onclose = () => {
-      if (net && net.chan === ch) net.chan = null;
+      if (!net || net.chan !== ch) return;
+      // the channel can die before trystero notices the peer is gone; tell
+      // the game now rather than leave it simulating a frozen opponent
+      net.chan = null;
+      if (ready) wasm.net_peer(game, false);
     };
   }
 
   function netClose() {
+    netGen++;
     if (!net) return;
+    clearTimeout(net.timer);
     try { net.room.leave(); } catch (e) {}
     net = null;
     netPill(null);
@@ -195,6 +234,7 @@
   }
 
   // ---- boot -------------------------------------------------------------
+  let booted = null; // the boot() promise, for picks that land before it settles
   async function boot() {
     try {
       const v = window.__V || '';
@@ -222,7 +262,12 @@
   }
 
   function initGame(game) {
-    if (!ready) return;
+    if (!ready) {
+      // picked before the module finished loading: finish the job once it
+      // has, if the player is still on this game
+      if (booted) booted.then(() => { if (ready && window.MODE === game) initGame(game); });
+      return;
+    }
     wasm.init(game, 'c', Math.floor(Math.random() * 4294967295));
     const role = lobbyRequest();
     if (role) {
@@ -232,7 +277,45 @@
   }
 
   // ---- events from Rust -------------------------------------------------
+  // The end overlays wait a beat so the final hit reads first. The timer is
+  // cancelled by startGame/quitToMenu and re-checks on firing: a click inside
+  // the delay used to start a rematch that the overlay then covered, and a Q
+  // left it over the launch menu.
+  let endTimer = 0;
+  const endPrompt = endOverlay.querySelector('.prompt');
+  function showEnd(game, el, delay) {
+    clearTimeout(endTimer);
+    endTimer = setTimeout(() => {
+      if (window.MODE === game && ready && !wasm.running(game)) el.classList.remove('hidden');
+    }, delay);
+  }
+
   function onGameEvent(game, name, detail) {
+    if (name === 'rematch') {
+      // the guest asked for another match and the host's sim started it
+      clearTimeout(endTimer);
+      endOverlay.classList.add('hidden');
+      return;
+    }
+    if (name === 'left') {
+      paused[game] = false;
+      pauseOverlay.classList.add('hidden');
+      A.resume();
+      const who = detail === 'host' ? 'the host' : 'player 2';
+      if (game === 'pong') {
+        verdictEl.textContent = 'DISCONNECTED';
+        verdictEl.className = 'verdict lose';
+        finalScoreEl.textContent = who + ' left the match';
+        endPrompt.textContent = 'Click to play the CPU';
+        showEnd(game, endOverlay, 0);
+      } else {
+        geoScoreLine.textContent = who + ' left the game';
+        showEnd(game, geoEnd, 0);
+      }
+      netPill(who + ' left', '#e0a545');
+      ARCADE_LOCK.unlock();
+      return;
+    }
     if (name !== 'over') return;
     const parts = detail.split('|');
     if (game === 'pong') {
@@ -240,12 +323,13 @@
       verdictEl.textContent = won ? 'YOU WIN' : 'GAME OVER';
       verdictEl.className = 'verdict ' + (won ? 'win' : 'lose');
       finalScoreEl.innerHTML = 'Core integrity ' + parts[1] + ' &ndash; ' + parts[2];
-      setTimeout(() => endOverlay.classList.remove('hidden'), 650);
+      endPrompt.textContent = 'Click to rematch';
+      showEnd(game, endOverlay, 650);
     } else if (game === 'geo') {
       geoScoreLine.innerHTML =
         'Score ' + parts[0] + ' &middot; best ' + parts[1] + ' &middot; ' +
         parts[2] + ' kills &middot; ' + parts[3] + 's survived';
-      setTimeout(() => geoEnd.classList.remove('hidden'), 600);
+      showEnd(game, geoEnd, 600);
     }
     ARCADE_LOCK.unlock();
   }
@@ -254,10 +338,12 @@
   let lastHud = '';
   function renderHud() {
     if (window.MODE !== 'pong' || !ready) return;
-    const h = wasm.hud('pong');
+    const st = wasm.net_status('pong');
+    const h = wasm.hud('pong') + '|' + st;
     if (h === lastHud) return;
     lastHud = h;
     const [you, cpu] = h.split('|').map(Number);
+    rivalTag.textContent = st === 'host' ? 'P2' : st === 'guest' ? 'HOST' : 'CPU';
     for (const [el, hp] of [[hpYouEl, you], [hpCpuEl, cpu]]) {
       el.innerHTML = '';
       for (let i = 0; i < MAX_HP; i++) {
@@ -272,6 +358,7 @@
   function startGame() {
     const game = window.MODE;
     if (!ready) return;
+    clearTimeout(endTimer);
     A.audio();
     A.startMusic();
     wasm.start(game);
@@ -292,6 +379,7 @@
 
   function quitToMenu() {
     const game = window.MODE;
+    clearTimeout(endTimer);
     paused[game] = false;
     if (ready) wasm.net_close(game);
     netClose();
@@ -343,8 +431,10 @@
     if (!isWasm() || !ready) return;
     const game = window.MODE;
     wasm.pointer(game, ARCADE_LOCK.cur.x, ARCADE_LOCK.cur.y);
+    // paused first: a right-click here used to serve the ball or queue a
+    // bomb that went off the moment play resumed
+    if (paused[game]) { if (e.button !== 2) togglePause(); return; }
     if (e.button === 2) { wasm.button(game, 2, true); return; }
-    if (paused[game]) { togglePause(); return; }
     if (!wasm.running(game)) { startGame(); return; }
     wasm.button(game, 0, true);
   });
@@ -367,6 +457,7 @@
       return;
     }
     if (e.key === 'Enter' && !wasm.running(game) && !paused[game]) { startGame(); return; }
+    if (paused[game]) return; // key-ups still go through, so nothing sticks
     wasm.key(game, e.key.toLowerCase(), true);
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) e.preventDefault();
   });
@@ -380,6 +471,8 @@
     window.MODE = 'pong';
     A.setStyle('pong');
     launchOverlay.classList.add('hidden');
+    endOverlay.classList.add('hidden');
+    startOverlay.classList.remove('hidden');
     pongHud.classList.remove('hidden');
     initGame('pong');
   });
@@ -396,14 +489,19 @@
   // ---- loop -------------------------------------------------------------
   let last = performance.now();
   function frame(now) {
+    // queued first, so one bad frame can't stop the loop for good
+    requestAnimationFrame(frame);
     let dt = (now - last) / 1000;
     last = now;
     dt = Math.min(dt, 1 / 30);
     if (ready && isWasm() && !paused[window.MODE]) {
-      wasm.tick(window.MODE, dt);
-      renderHud();
+      try {
+        wasm.tick(window.MODE, dt);
+        renderHud();
+      } catch (e) {
+        console.error('wasm tick failed', e);
+      }
     }
-    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 
@@ -411,7 +509,8 @@
   // alive and the pong/geo buttons are wired
   window.__WASMHOST = true;
 
-  boot().then(() => {
+  booted = boot();
+  booted.then(() => {
     if (!ready) return;
     const q = new URLSearchParams(location.search);
     if (q.get('host') === '1') setArmedHost(true);

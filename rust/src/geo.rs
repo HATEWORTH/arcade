@@ -6,7 +6,7 @@
 
 use crate::bridge;
 use crate::gfx::{Gfx, CYAN, LIME, MAGENTA, WHITE};
-use crate::net::{Input, Net};
+use crate::net::{Input, Net, NetEvent};
 use crate::rng::Rng;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::{PI, TAU};
@@ -16,6 +16,10 @@ const GRID_SPACING: f64 = 44.0;
 /// Inside this many pixels of the reticle the ship keeps its last heading
 /// instead of chasing an unstable angle.
 const AIM_DEADZONE: f64 = 26.0;
+/// Extra lives stop accruing here; the HUD row has room for this many.
+const MAX_LIVES: i32 = 9;
+/// Seconds into a run after which enemy speeds stop climbing.
+const SPEED_RAMP_END: f64 = 180.0;
 /// The reticle is carried relative to the ship rather than parked at an
 /// absolute screen point: mouse movement pushes it out, and movement older
 /// than about a second stops counting, so it eases back in when you hold
@@ -274,6 +278,9 @@ pub struct Geo {
     bombs: i32,
     /// a right-click seen this frame, waiting to be sent or spent
     bomb_edge: bool,
+    /// guest: bomb presses so far (wrapping, 4 bits on the wire);
+    /// host: the guest's count last acted on
+    bomb_count: u8,
     score: u32,
     kills: u32,
     lives: i32,
@@ -307,6 +314,18 @@ pub struct Geo {
     pub net: Net,
 }
 
+/// Distance from point (px, py) to the segment (ax, ay)-(bx, by).
+fn seg_dist(ax: f64, ay: f64, bx: f64, by: f64, px: f64, py: f64) -> f64 {
+    let (dx, dy) = (bx - ax, by - ay);
+    let len2 = dx * dx + dy * dy;
+    let t = if len2 > 0.0 {
+        (((px - ax) * dx + (py - ay) * dy) / len2).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    (ax + dx * t - px).hypot(ay + dy * t - py)
+}
+
 impl Geo {
     pub fn new(canvas_id: &str, seed: u64) -> Option<Self> {
         let g = Gfx::new(canvas_id)?;
@@ -333,6 +352,7 @@ impl Geo {
             pickup_t: 26.0,
             bombs: 0,
             bomb_edge: false,
+            bomb_count: 0,
             score: 0,
             kills: 0,
             lives: 4,
@@ -369,7 +389,11 @@ impl Geo {
 
     pub fn net_open(&mut self, host: bool) {
         self.net.open(host);
-        // co-op needs a second hull
+        self.add_second_hull();
+    }
+
+    // co-op needs a second hull
+    fn add_second_hull(&mut self) {
         if self.ships.len() < 2 {
             let mut s = Ship {
                 alive: true,
@@ -394,7 +418,7 @@ impl Geo {
                 vx: self.rng.signed() * 26.0,
                 vy: self.rng.signed() * 26.0,
                 s: 0.6 + self.rng.f() * 1.6,
-                ph: self.rng.f() * 6.28,
+                ph: self.rng.f() * TAU,
                 f: 0.4 + self.rng.f() * 1.6,
             });
         }
@@ -783,8 +807,11 @@ impl Geo {
         self.score += base * self.mult;
         while self.score >= self.next_life {
             self.next_life += 20000;
-            self.lives += 1;
-            bridge::sample("life", 0.18);
+            // capped so the HUD's life icons never run into the score
+            if self.lives < MAX_LIVES {
+                self.lives += 1;
+                bridge::sample("life", 0.18);
+            }
         }
     }
     fn bump_mult(&mut self) {
@@ -822,11 +849,14 @@ impl Geo {
         );
     }
 
-    fn ship_hit(&mut self) {
+    /// Co-op shares one pool of lives, so either ship being hit costs one;
+    /// the effects centre on whichever ship it was.
+    fn ship_hit(&mut self, idx: usize) {
         self.lives -= 1;
         self.mult = 1;
         self.mult_t = 0.0;
-        let (x, y) = (self.ships[0].x, self.ships[0].y);
+        let s = self.ships.get(idx).unwrap_or(&self.ships[0]);
+        let (x, y) = (s.x, s.y);
         self.player_burst(x, y);
         self.flash(x, y, 200.0, 1.5);
         self.grid_explosive(100.0, x, y, 280.0);
@@ -839,6 +869,9 @@ impl Geo {
             self.burst(ex, ey, kind.color(), 6, 1.0);
         }
         self.enemies.clear();
+        // sniper rounds outlive the 2 s of grace, and would otherwise hit
+        // the respawned ship from a board that looks clear
+        self.ebullets.clear();
         for i in (0..self.holes.len()).rev() {
             self.explode_hole(i, false);
         }
@@ -846,6 +879,18 @@ impl Geo {
         if self.lives <= 0 {
             self.die();
         }
+    }
+
+    fn ship_pos(&self) -> Vec<(f64, f64)> {
+        self.ships.iter().map(|s| (s.x, s.y)).collect()
+    }
+
+    /// Distance from a point to the nearest ship.
+    fn ship_dist(&self, x: f64, y: f64) -> f64 {
+        self.ships
+            .iter()
+            .map(|s| (s.x - x).hypot(s.y - y))
+            .fold(f64::INFINITY, f64::min)
     }
 
     fn spawn_enemy(&mut self) {
@@ -857,13 +902,15 @@ impl Geo {
             2 => (10.0, self.rng.f() * h),
             _ => (w - 10.0, self.rng.f() * h),
         };
-        let (sx, sy) = (self.ships[0].x, self.ships[0].y);
-        if (x - sx).hypot(y - sy) < 200.0 {
+        if self.ship_dist(x, y) < 200.0 {
             x = w - x;
             y = h - y;
         }
         // weights ramp in with time so a new run still opens simple
         let t = self.time;
+        // speeds ramp too, but level off: uncapped, a Chaser outruns the
+        // ship's top speed a little past five minutes
+        let st = t.min(SPEED_RAMP_END);
         let pool: [(Kind, f64); 7] = [
             (Kind::Chaser, 30.0),
             (Kind::Drifter, 22.0),
@@ -886,28 +933,28 @@ impl Geo {
         let a = self.rng.angle();
         let e = match kind {
             Kind::Weaver => Enemy {
-                kind, r: 9.0, spd: 200.0 + t, wob: self.rng.f() * 6.28, pv: 3, ..Default::default()
+                kind, r: 9.0, spd: 200.0 + st, wob: self.rng.f() * TAU, pv: 3, ..Default::default()
             },
             Kind::Drifter => Enemy {
                 kind, r: 11.0, vx: a.cos() * 150.0, vy: a.sin() * 150.0, pv: 1, ..Default::default()
             },
             Kind::Splitter => Enemy {
-                kind, r: 14.0, spd: 78.0 + t * 0.7, pv: 3, hp: 2, ..Default::default()
+                kind, r: 14.0, spd: 78.0 + st * 0.7, pv: 3, hp: 2, ..Default::default()
             },
             Kind::Sniper => Enemy {
                 // hangs back at range; the cooldown is staggered so a pair
                 // of them never fires in lockstep
-                kind, r: 10.0, spd: 96.0 + t * 0.5, pv: 4,
+                kind, r: 10.0, spd: 96.0 + st * 0.5, pv: 4,
                 cool: 1.2 + self.rng.f() * 1.4, ..Default::default()
             },
             Kind::Bulwark => Enemy {
-                kind, r: 13.0, spd: 74.0 + t * 0.6, pv: 4, hp: 3, ..Default::default()
+                kind, r: 13.0, spd: 74.0 + st * 0.6, pv: 4, hp: 3, ..Default::default()
             },
             Kind::Pulsar => Enemy {
                 kind, r: 12.0, spd: 0.0, pv: 5, cool: 2.6, hp: 4, ..Default::default()
             },
             _ => Enemy {
-                kind: Kind::Chaser, r: 12.0, spd: 110.0 + t * 1.4, pv: 2, ..Default::default()
+                kind: Kind::Chaser, r: 12.0, spd: 110.0 + st * 1.4, pv: 2, ..Default::default()
             },
         };
         self.enemies.push(Enemy { x, y, fade: 1.0, ..e });
@@ -947,7 +994,8 @@ impl Geo {
                 self.pickups.remove(i);
                 continue;
             }
-            if ships.iter().any(|(sx, sy)| (sx - p.x).hypot(sy - p.y) < 26.0) {
+            // at full charges it stays put for later instead of being wasted
+            if self.bombs < 3 && ships.iter().any(|(sx, sy)| (sx - p.x).hypot(sy - p.y) < 26.0) {
                 self.pickups.remove(i);
                 taken.push((p.x, p.y));
             }
@@ -987,13 +1035,20 @@ impl Geo {
         while i > 0 {
             i -= 1;
             let e = self.enemies[i];
-            if e.fade > 0.0 || (e.x - cx).hypot(e.y - cy) > R {
+            if (e.x - cx).hypot(e.y - cy) > R {
                 continue;
             }
             self.enemies.remove(i);
             self.kills += 1;
             self.add_points((e.pv.max(1) as u32) * 10);
             self.enemy_burst(e.x, e.y);
+        }
+        // wells too — "everything" — without scattering their eaten bits
+        for i in (0..self.holes.len()).rev() {
+            let (hx, hy) = (self.holes[i].x, self.holes[i].y);
+            if (hx - cx).hypot(hy - cy) <= R {
+                self.explode_hole(i, false);
+            }
         }
         self.bump_mult();
     }
@@ -1004,7 +1059,7 @@ impl Geo {
         for _ in 0..20 {
             x = 80.0 + self.rng.f() * (w - 160.0);
             y = 80.0 + self.rng.f() * (h - 160.0);
-            if (x - self.ships[0].x).hypot(y - self.ships[0].y) >= 300.0 {
+            if self.ship_dist(x, y) >= 300.0 {
                 break;
             }
         }
@@ -1041,7 +1096,7 @@ impl Geo {
         bridge::sample("blast", 0.26);
         bridge::hat(0.12, 0.2);
         if with_bits {
-            let n = h.eaten.min(14).max(0) as usize;
+            let n = h.eaten.clamp(0, 14) as usize;
             for k in 0..n {
                 let a = (k as f64 / n as f64) * TAU;
                 let spd = 230.0 + self.rng.f() * 90.0;
@@ -1052,6 +1107,8 @@ impl Geo {
                     r: 5.0,
                     spd,
                     pv: 1,
+                    // a beat to react: they burst out right next to you
+                    fade: 0.3,
                     ..Default::default()
                 });
             }
@@ -1088,7 +1145,7 @@ impl Geo {
         }
         let thrusting = ax != 0.0 || ay != 0.0;
 
-        let guest = self.net.last_input;
+        let guest = self.net.input();
         let n_ships = self.ships.len();
         for i in 0..n_ships {
             let (sax, say, firing) = if i == 0 {
@@ -1100,10 +1157,6 @@ impl Geo {
                 self.ships[1].firing = firing;
                 // without this the guest's ship keeps its spawn heading, so it
                 // drifts toward one fixed point and fires the same way forever
-                if guest.aim_x != 0.0 || guest.aim_y != 0.0 {
-                    self.ships[1].aim_x = guest.aim_x as f64;
-                    self.ships[1].aim_y = guest.aim_y as f64;
-                }
             }
             let m = sax.hypot(say).max(1.0);
             let k = (dt * 14.0).min(1.0);
@@ -1140,6 +1193,13 @@ impl Geo {
                     s.vy = -s.vy.abs() * 0.55;
                 }
                 s.fire_t -= dt;
+                // the guest sends its aim as an offset from its ship, applied
+                // here after the move: an absolute point would be built from
+                // the guest's lagging copy of the ship and skew every shot
+                if i == 1 && (guest.aim_x != 0.0 || guest.aim_y != 0.0) {
+                    s.aim_x = s.x + guest.aim_x as f64;
+                    s.aim_y = s.y + guest.aim_y as f64;
+                }
                 // hold the heading when the reticle is basically on top of us
                 let ad2 = (s.aim_x - s.x).hypot(s.aim_y - s.y);
                 if ad2 > AIM_DEADZONE {
@@ -1216,12 +1276,15 @@ impl Geo {
             let s = self.ships[0];
             self.detonate_bomb(s.x, s.y);
         }
-        if self.net.is_host() && self.net.last_input.secondary() && self.ships.len() > 1 {
-            // consume the press: the wire repeats the last input until a new
-            // packet lands, and a lost packet would fire the bomb twice
-            self.net.last_input.buttons &= !2;
-            let s = self.ships[1];
-            self.detonate_bomb(s.x, s.y);
+        if self.net.is_host() && self.ships.len() > 1 {
+            // the guest sends a running count of presses rather than a
+            // one-packet edge, so a lost or overtaken packet can't eat one
+            let count = self.net.input().buttons >> 4;
+            if count != self.bomb_count {
+                self.bomb_count = count;
+                let s = self.ships[1];
+                self.detonate_bomb(s.x, s.y);
+            }
         }
         self.update_holes(dt);
         self.update_shocks(dt);
@@ -1268,7 +1331,7 @@ impl Geo {
     }
 
     fn update_enemies(&mut self, dt: f64, w: f64, h: f64) {
-        let (tx, ty) = (self.ships[0].x, self.ships[0].y);
+        let ships = self.ship_pos();
         let mut shots: Vec<(f64, f64, f64)> = Vec::new();
         let mut blasts: Vec<(f64, f64)> = Vec::new();
         for en in &mut self.enemies {
@@ -1276,6 +1339,16 @@ impl Geo {
                 en.fade -= dt;
                 continue;
             }
+            // everything hunts whichever ship is closest
+            let (tx, ty) = ships
+                .iter()
+                .copied()
+                .min_by(|a, b| {
+                    let da = (a.0 - en.x).hypot(a.1 - en.y);
+                    let db = (b.0 - en.x).hypot(b.1 - en.y);
+                    da.total_cmp(&db)
+                })
+                .unwrap_or((w / 2.0, h / 2.0));
             let (dx, dy) = (tx - en.x, ty - en.y);
             let d = dx.hypot(dy).max(1.0);
             match en.kind {
@@ -1308,6 +1381,10 @@ impl Geo {
                     // and sidesteps so it is never a stationary target
                     en.x += (-dy / d) * en.spd * 0.45 * dt;
                     en.y += (dx / d) * en.spd * 0.45 * dt;
+                    // backing off must not take it off the board, where
+                    // bullets can't reach it but its shots still sound
+                    en.x = en.x.clamp(en.r + 6.0, w - en.r - 6.0);
+                    en.y = en.y.clamp(en.r + 6.0, h - en.r - 6.0);
                     en.face = dy.atan2(dx);
                     en.cool -= dt;
                     if en.cool <= 0.0 {
@@ -1368,19 +1445,20 @@ impl Geo {
             self.burst(x, y, Kind::Pulsar.color(), 14, 0.9);
             bridge::sample("pulse", 0.16);
             // the wave itself is what hurts, and only near the ring
-            let s = self.ships[0];
-            let d = (s.x - x).hypot(s.y - y);
-            if self.inv <= 0.0 && d < 120.0 {
-                self.ship_hit();
-                return;
+            if self.inv <= 0.0 {
+                let near = self.ships.iter().position(|s| (s.x - x).hypot(s.y - y) < 120.0);
+                if let Some(idx) = near {
+                    self.ship_hit(idx);
+                    return;
+                }
             }
         }
     }
 
     /// Sniper fire in flight.
     fn update_ebullets(&mut self, dt: f64, w: f64, h: f64) {
-        let (sx, sy) = (self.ships[0].x, self.ships[0].y);
-        let mut hit = false;
+        let ships = self.ship_pos();
+        let mut hit = None;
         let mut i = self.ebullets.len();
         while i > 0 {
             i -= 1;
@@ -1393,14 +1471,15 @@ impl Geo {
                 self.ebullets.remove(i);
                 continue;
             }
-            if self.inv <= 0.0 && (bx - sx).hypot(by - sy) < 12.0 {
+            let struck = ships.iter().position(|&(sx, sy)| (bx - sx).hypot(by - sy) < 12.0);
+            if self.inv <= 0.0 && struck.is_some() {
                 self.ebullets.remove(i);
-                hit = true;
+                hit = struck;
                 break;
             }
         }
-        if hit {
-            self.ship_hit();
+        if let Some(idx) = hit {
+            self.ship_hit(idx);
         }
     }
 
@@ -1458,17 +1537,19 @@ impl Geo {
             const PR: f64 = 250.0;
             // ship pull
             if self.inv <= 0.0 {
-                let s = self.ships[0];
-                let (dx, dy) = (hx - s.x, hy - s.y);
-                let d = dx.hypot(dy).max(1.0);
-                if d < PR {
-                    let k = 1.0 - d / PR;
-                    self.ships[0].vx += (dx / d) * 2000.0 * k * dt;
-                    self.ships[0].vy += (dy / d) * 2000.0 * k * dt;
-                }
-                if d < hr + 10.0 {
-                    self.ship_hit();
-                    return;
+                for si in 0..self.ships.len() {
+                    let s = self.ships[si];
+                    let (dx, dy) = (hx - s.x, hy - s.y);
+                    let d = dx.hypot(dy).max(1.0);
+                    if d < PR {
+                        let k = 1.0 - d / PR;
+                        self.ships[si].vx += (dx / d) * 2000.0 * k * dt;
+                        self.ships[si].vy += (dy / d) * 2000.0 * k * dt;
+                    }
+                    if d < hr + 10.0 {
+                        self.ship_hit(si);
+                        return;
+                    }
                 }
             }
             // bullets are pushed away, and chip the well
@@ -1565,9 +1646,11 @@ impl Geo {
                 let band = (-((d - s.rad).powi(2)) / (2.0 * 48.0 * 48.0)).exp();
                 ((dx / d) * band, (dy / d) * band)
             };
-            let (sx, sy) = tug(self.ships[0].x, self.ships[0].y);
-            self.ships[0].vx += sx * 1500.0 * dt;
-            self.ships[0].vy += sy * 1500.0 * dt;
+            for ship in &mut self.ships {
+                let (sx, sy) = tug(ship.x, ship.y);
+                ship.vx += sx * 1500.0 * dt;
+                ship.vy += sy * 1500.0 * dt;
+            }
             for en in &mut self.enemies {
                 let (ex, ey) = tug(en.x, en.y);
                 en.x += ex * 320.0 * dt;
@@ -1600,7 +1683,10 @@ impl Geo {
             while j > 0 {
                 j -= 1;
                 let b = self.bullets[j];
-                if (b.x - ex).hypot(b.y - ey) >= er + 4.0 {
+                // test the whole path the bullet took this frame, not just
+                // where it ended up: at 32 px a frame it can step clean
+                // over a Bit
+                if seg_dist(b.x - b.vx * dt, b.y - b.vy * dt, b.x, b.y, ex, ey) >= er + 4.0 {
                     continue;
                 }
                 // a bulwark eats anything that comes at its shielded side, so
@@ -1636,7 +1722,7 @@ impl Geo {
                 self.grid_explosive(15.0, ex, ey, 110.0);
                 self.shake = self.shake.max(5.0);
                 bridge::sample("kill", 0.1);
-                if self.kills % 4 == 0 {
+                if self.kills.is_multiple_of(4) {
                     bridge::hat(0.04, 0.05);
                 }
                 // killing a splitter does not clear the space, it doubles it
@@ -1648,7 +1734,7 @@ impl Geo {
                             y: ey + a.sin() * 14.0,
                             kind: Kind::Shard,
                             r: 7.0,
-                            spd: 190.0 + self.time * 0.8,
+                            spd: 190.0 + self.time.min(SPEED_RAMP_END) * 0.8,
                             pv: 1,
                             fade: 0.35,
                             ..Default::default()
@@ -1663,13 +1749,14 @@ impl Geo {
         if self.inv > 0.0 {
             self.inv -= dt;
         } else {
-            let (sx, sy) = (self.ships[0].x, self.ships[0].y);
-            let hit = self
-                .enemies
-                .iter()
-                .any(|e| e.fade <= 0.0 && (e.x - sx).hypot(e.y - sy) < e.r + 10.0);
-            if hit {
-                self.ship_hit();
+            let enemies = &self.enemies;
+            let hit = self.ships.iter().position(|s| {
+                enemies
+                    .iter()
+                    .any(|e| e.fade <= 0.0 && (e.x - s.x).hypot(e.y - s.y) < e.r + 10.0)
+            });
+            if let Some(idx) = hit {
+                self.ship_hit(idx);
             }
         }
     }
@@ -1795,6 +1882,29 @@ impl Geo {
     pub fn frame(&mut self, dt: f64) {
         self.g.resize();
 
+        match self.net.take_event() {
+            Some(NetEvent::Joined) => {
+                // both ends count bomb presses from zero with a new peer
+                self.bomb_count = 0;
+                self.add_second_hull();
+            }
+            Some(NetEvent::Lost) => {
+                // the other player's hull goes with them, not left to drift
+                // on a dead stick as a decoy the swarm chases
+                self.ships.truncate(1);
+                if !self.net.wants_host() {
+                    // the board we hold is a snapshot with no velocities;
+                    // carrying on locally would freeze it under the host's ship
+                    self.running = false;
+                    self.enemies.clear();
+                    self.ebullets.clear();
+                    self.holes.clear();
+                    bridge::event("geo", "left", "host");
+                }
+            }
+            None => {}
+        }
+
         if self.net.is_guest() {
             self.sync_reticle(dt);
             let s = *self.ships.get(1).unwrap_or(&self.ships[0]);
@@ -1812,14 +1922,16 @@ impl Geo {
             if self.keys_down {
                 ay += 1.0;
             }
-            let bomb = self.bomb_edge;
+            if self.bomb_edge {
+                self.bomb_count = (self.bomb_count + 1) & 0x0f;
+            }
             self.bomb_edge = false;
             self.net.send_input(&Input {
                 x: ax as f32,
                 y: ay as f32,
-                aim_x: self.local_aim.0 as f32,
-                aim_y: self.local_aim.1 as f32,
-                buttons: (s.firing as u8) | ((bomb as u8) << 1),
+                aim_x: (self.local_aim.0 - s.x) as f32,
+                aim_y: (self.local_aim.1 - s.y) as f32,
+                buttons: (s.firing as u8) | (self.bomb_count << 4),
             });
             if let Some(snap) = self.net.take_snapshot::<Snapshot>() {
                 self.apply_snapshot(snap);
@@ -2468,5 +2580,22 @@ impl Geo {
             g.stroke();
         }
         let _ = PI;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::seg_dist;
+
+    #[test]
+    fn seg_dist_catches_a_bullet_that_stepped_over_the_target() {
+        // ended 16 px past a target it flew straight through
+        assert!(seg_dist(-16.0, 0.0, 16.0, 0.0, 0.0, 0.0) < 1e-9);
+        // beside the path
+        assert!((seg_dist(-16.0, 0.0, 16.0, 0.0, 0.0, 10.0) - 10.0).abs() < 1e-9);
+        // beyond the end clamps to the endpoint
+        assert!((seg_dist(0.0, 0.0, 10.0, 0.0, 13.0, 4.0) - 5.0).abs() < 1e-9);
+        // zero-length segment
+        assert!((seg_dist(1.0, 1.0, 1.0, 1.0, 4.0, 5.0) - 5.0).abs() < 1e-9);
     }
 }

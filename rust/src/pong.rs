@@ -5,7 +5,7 @@
 
 use crate::bridge::{self, Beat};
 use crate::gfx::{Gfx, CYAN, LIME, MAGENTA, VIOLET, WHITE};
-use crate::net::{Input, Net};
+use crate::net::{Input, Net, NetEvent};
 use crate::rng::Rng;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::{PI, TAU};
@@ -16,6 +16,14 @@ const MAX_HP: i32 = 7;
 const PADDLE_W: f64 = 0.42;
 const PADDLE_H: f64 = 0.34;
 const BALL_R: f64 = 0.075;
+/// Depth speed compounds on every return (and nearly doubles on a full power
+/// hit); past this the ball crosses the tunnel faster than a paddle can react.
+const MAX_VZ: f64 = 11.0;
+/// How long a guest keeps asking the host for a rematch, so one dropped
+/// packet can't lose the request.
+const REMATCH_ASK: f64 = 0.6;
+/// Input bit the guest sets while asking for a rematch.
+const BTN_REMATCH: u8 = 4;
 
 #[derive(Clone, Copy)]
 struct Proj {
@@ -136,6 +144,10 @@ struct Snapshot {
     running: bool,
     serve_timer: f32,
     holding: bool,
+    /// host power-ups the guest has to see: the paddle it collides with, and
+    /// the shield that otherwise bounces balls out of nowhere
+    host_wide: bool,
+    host_shield: u8,
 }
 
 pub struct Pong {
@@ -173,6 +185,8 @@ pub struct Pong {
     /// guest-side view of the world, rebuilt from snapshots
     remote: Snapshot,
     secondary_edge: bool,
+    /// guest only: seconds left of asking the host for a rematch
+    rematch_t: f64,
 }
 
 impl Pong {
@@ -222,6 +236,7 @@ impl Pong {
             net: Net::new(),
             remote: Snapshot::default(),
             secondary_edge: false,
+            rematch_t: 0.0,
         };
         p.serve(1.0);
         p.running = false;
@@ -263,11 +278,20 @@ impl Pong {
             return;
         }
         if down {
-            if self.running && !self.holding {
+            if self.running && self.holding {
+                // any click serves: touch screens have no right button
+                self.launch_serve();
+            } else if self.running {
                 self.player.charging = true;
             }
         } else {
             self.player.charging = false;
+        }
+    }
+
+    pub fn key(&mut self, name: &str, down: bool) {
+        if down && name == " " && self.running {
+            self.launch_serve();
         }
     }
 
@@ -277,6 +301,11 @@ impl Pong {
 
     // ---- match flow -----------------------------------------------------
     pub fn start(&mut self) {
+        if self.net.is_guest() {
+            // the host owns the match; ask it for another one
+            self.rematch_t = REMATCH_ASK;
+            return;
+        }
         self.hp_you = MAX_HP;
         self.hp_cpu = MAX_HP;
         self.rally = 0;
@@ -477,7 +506,7 @@ impl Pong {
 
         // The far paddle is either a networked human or the built-in CPU.
         if self.net.is_host() {
-            let i = self.net.last_input;
+            let i = self.net.input();
             self.cpu.x = (i.x as f64).clamp(-1.0 + PADDLE_W / 2.0, 1.0 - PADDLE_W / 2.0);
             self.cpu.y = (i.y as f64).clamp(-1.0 + PADDLE_H / 2.0, 1.0 - PADDLE_H / 2.0);
         } else {
@@ -522,7 +551,7 @@ impl Pong {
         let bdt = if self.eff_slow > 0.0 { dt * 0.55 } else { dt };
         let mut i = 0;
         while i < self.balls.len() {
-            if self.step_ball(i, bdt, dt, pw) {
+            if self.step_ball(i, bdt, pw) {
                 // the ball was consumed (scored); indices shifted
                 return;
             }
@@ -558,7 +587,7 @@ impl Pong {
     }
 
     /// Advance one ball. Returns true if it was removed by scoring.
-    fn step_ball(&mut self, i: usize, bdt: f64, dt: f64, pw: f64) -> bool {
+    fn step_ball(&mut self, i: usize, bdt: f64, pw: f64) -> bool {
         {
             let b = &mut self.balls[i];
             b.vx += b.spin_x * bdt;
@@ -602,7 +631,9 @@ impl Pong {
             let b = &self.balls[i];
             b.z <= 0.0 && b.vz < 0.0
         };
-        if near && self.resolve_near(i, dt, pw) {
+        // the ball moved by bdt this step (slow-mo makes it shorter than
+        // dt), so that is the window the paddle rewind has to span
+        if near && self.resolve_near(i, bdt, pw) {
             return true;
         }
 
@@ -667,6 +698,7 @@ impl Pong {
                 b.vy += ry;
                 b.spin_x = pvx * (0.35 + edge * 0.45);
                 b.spin_y = pvy * (0.35 + edge * 0.45);
+                b.vz = b.vz.min(MAX_VZ);
             }
             self.rally += 1;
             self.shake = 9.0 + pow * 6.0;
@@ -714,7 +746,7 @@ impl Pong {
                 let b = &mut self.balls[i];
                 b.z = DEPTH;
                 b.power = false;
-                b.vz = -(b.vz.abs() * 1.03 + 0.08);
+                b.vz = -(b.vz.abs() * 1.03 + 0.08).min(MAX_VZ);
                 b.vx += (bx - cx) * 2.0;
                 b.vy += (by - cy) * 2.0;
                 b.spin_x *= 0.4;
@@ -770,15 +802,39 @@ impl Pong {
         self.beat = bridge::beat();
         self.t += dt;
 
+        match self.net.take_event() {
+            // a human arriving mid-match against the CPU gets a fresh match,
+            // not the CPU's half-drained core
+            Some(NetEvent::Joined) if self.net.is_host() && self.running => self.start(),
+            Some(NetEvent::Lost) => {
+                let was_running = self.running;
+                self.running = false;
+                self.holding = false;
+                self.player.charging = false;
+                if !self.net.wants_host() {
+                    // the snapshot balls have no velocity; don't strand them
+                    self.balls.clear();
+                }
+                if was_running || !self.net.wants_host() {
+                    bridge::event("pong", "left", if self.net.wants_host() { "guest" } else { "host" });
+                }
+            }
+            _ => {}
+        }
+
         if self.net.is_guest() {
             // the host owns the world; we send our paddle and draw its answer
+            let asking = self.rematch_t > 0.0;
+            self.rematch_t = (self.rematch_t - dt).max(0.0);
             let input = Input {
                 x: self.pointer_x.clamp(-1.0, 1.0) as f32,
                 y: self.pointer_y.clamp(-1.0, 1.0) as f32,
                 // pong steers with x/y alone; the aim fields are Geo's
                 aim_x: 0.0,
                 aim_y: 0.0,
-                buttons: (self.player.charging as u8) | ((self.secondary_edge as u8) << 1),
+                buttons: (self.player.charging as u8)
+                    | ((self.secondary_edge as u8) << 1)
+                    | if asking { BTN_REMATCH } else { 0 },
             };
             self.net.send_input(&input);
             self.secondary_edge = false;
@@ -791,6 +847,10 @@ impl Pong {
         }
 
         self.secondary_edge = false;
+        if self.net.is_host() && !self.running && self.net.input().buttons & BTN_REMATCH != 0 {
+            self.start();
+            bridge::event("pong", "rematch", "");
+        }
         if !self.paused {
             self.update(dt);
             self.update_fx(dt);
@@ -817,6 +877,8 @@ impl Pong {
             running: self.running,
             serve_timer: self.serve_timer as f32,
             holding: self.holding,
+            host_wide: self.eff_wide > 0.0,
+            host_shield: self.eff_shield.clamp(0, 255) as u8,
         }
     }
 
@@ -825,6 +887,15 @@ impl Pong {
     fn apply_snapshot(&mut self, s: Snapshot) {
         self.hp_you = s.hp_cpu;
         self.hp_cpu = s.hp_you;
+        if self.running && !s.running {
+            // the host's end_match never runs here; report it from our side
+            let won = self.hp_cpu <= 0;
+            bridge::event(
+                "pong",
+                "over",
+                &format!("{}|{}|{}", if won { 1 } else { 0 }, self.hp_you, self.hp_cpu),
+            );
+        }
         self.running = s.running;
         self.rally = s.rally as i32;
         self.serve_timer = s.serve_timer as f64;
@@ -978,12 +1049,18 @@ impl Pong {
         }
     }
 
+    /// The far paddle is wide only when it is the host's, under its power-up.
+    fn cpu_w(&self) -> f64 {
+        PADDLE_W * if self.net.is_guest() && self.remote.host_wide { 1.5 } else { 1.0 }
+    }
+
     fn draw_cpu_paddle(&self) {
         let g = &self.g;
+        let cw = self.cpu_w();
         g.line_cap("butt");
         g.line_join("miter");
         self.rect3d(
-            PADDLE_W / 2.0,
+            cw / 2.0,
             PADDLE_H / 2.0,
             self.cpu.x,
             self.cpu.y,
@@ -995,10 +1072,10 @@ impl Pong {
         );
         g.line_cap("round");
         let q = [
-            self.project(self.cpu.x - PADDLE_W / 2.0, self.cpu.y - PADDLE_H / 2.0, DEPTH),
-            self.project(self.cpu.x + PADDLE_W / 2.0, self.cpu.y - PADDLE_H / 2.0, DEPTH),
-            self.project(self.cpu.x + PADDLE_W / 2.0, self.cpu.y + PADDLE_H / 2.0, DEPTH),
-            self.project(self.cpu.x - PADDLE_W / 2.0, self.cpu.y + PADDLE_H / 2.0, DEPTH),
+            self.project(self.cpu.x - cw / 2.0, self.cpu.y - PADDLE_H / 2.0, DEPTH),
+            self.project(self.cpu.x + cw / 2.0, self.cpu.y - PADDLE_H / 2.0, DEPTH),
+            self.project(self.cpu.x + cw / 2.0, self.cpu.y + PADDLE_H / 2.0, DEPTH),
+            self.project(self.cpu.x - cw / 2.0, self.cpu.y + PADDLE_H / 2.0, DEPTH),
         ];
         g.alpha(0.12);
         g.fill_color(MAGENTA);
@@ -1088,16 +1165,22 @@ impl Pong {
     }
 
     fn draw_shield(&self) {
-        if self.eff_shield > 0 && self.running {
+        // on the guest the shield is the host's, guarding the far end
+        let (shield, z) = if self.net.is_guest() {
+            (self.remote.host_shield as i32, DEPTH - 0.02)
+        } else {
+            (self.eff_shield, 0.02)
+        };
+        if shield > 0 && self.running {
             let sp = 0.22 + 0.05 * (self.t * 2.2).sin();
             self.rect3d(
                 0.99,
                 0.99,
                 0.0,
                 0.0,
-                0.02,
+                z,
                 "#6a9fd8",
-                1.5 + self.eff_shield as f64 * 0.8,
+                1.5 + shield as f64 * 0.8,
                 10.0,
                 sp,
             );

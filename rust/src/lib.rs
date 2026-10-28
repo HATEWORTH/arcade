@@ -43,11 +43,13 @@ pub fn tick(game: &str, dt: f64) {
     match game {
         "pong" => PONG.with(|c| {
             if let Some(g) = c.borrow_mut().as_mut() {
+                g.net.age(dt);
                 g.frame(dt);
             }
         }),
         "geo" => GEO.with(|c| {
             if let Some(g) = c.borrow_mut().as_mut() {
+                g.net.age(dt);
                 g.frame(dt);
             }
         }),
@@ -135,12 +137,18 @@ pub fn button(game: &str, button: i32, down: bool) {
 /// Keyboard edges, lower-cased key names.
 #[wasm_bindgen]
 pub fn key(game: &str, name: &str, down: bool) {
-    if game == "geo" {
-        GEO.with(|c| {
+    match game {
+        "pong" => PONG.with(|c| {
             if let Some(g) = c.borrow_mut().as_mut() {
                 g.key(name, down);
             }
-        });
+        }),
+        "geo" => GEO.with(|c| {
+            if let Some(g) = c.borrow_mut().as_mut() {
+                g.key(name, down);
+            }
+        }),
+        _ => {}
     }
 }
 
