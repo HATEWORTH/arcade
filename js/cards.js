@@ -15,7 +15,7 @@
 
   const stageEl = document.getElementById('stage');
   const C = { view: 'menu', chips: 200, mx: -1, my: -1 };
-  try { C.chips = parseInt(localStorage.getItem('cardChips'), 10) || 200; } catch (e) {}
+  try { C.chips = Math.floor(Number(localStorage.getItem('cardChips'))) || 200; } catch (e) {}
   function saveChips() {
     try { localStorage.setItem('cardChips', String(C.chips)); } catch (e) {}
   }
@@ -209,7 +209,12 @@
     HU.curP = 0; HU.curC = 0;
     if (winner === 'p') { C.chips += HU.pot; A.sweep(500, 60, 0.4, 'sawtooth', 0.06); }
     else if (winner === 'c') { HU.cpu += HU.pot; A.bleep(200, 0.14, 'sawtooth', 0.04); }
-    else { C.chips += HU.pot / 2; HU.cpu += HU.pot / 2; A.bleep(400, 0.08, 'triangle', 0.03); }
+    else {
+      // whole chips only — any odd chip goes to the house
+      const half = Math.floor(HU.pot / 2);
+      C.chips += half; HU.cpu += HU.pot - half;
+      A.bleep(400, 0.08, 'triangle', 0.03);
+    }
     HU.msg = winner === 'p' ? reason + '  +' + HU.pot : winner === null ? reason + '  ·  SPLIT' : reason;
     HU.pot = 0;
     HU.state = 'done';
@@ -221,19 +226,33 @@
   }
   function doCheckCall(who) {
     const need = highBet() - (who === 'p' ? HU.curP : HU.curC);
-    if (who === 'p') { const pay = Math.min(need, C.chips); C.chips -= pay; HU.curP += pay; HU.actedP = true; }
-    else { const pay = Math.min(need, HU.cpu); HU.cpu -= pay; HU.curC += pay; HU.actedC = true; }
+    const pay = Math.min(need, who === 'p' ? C.chips : HU.cpu);
+    if (who === 'p') { C.chips -= pay; HU.curP += pay; HU.actedP = true; }
+    else { HU.cpu -= pay; HU.curC += pay; HU.actedC = true; }
+    // a short all-in call: the part of the bet it can't cover goes back
+    // to the bettor, and the board runs out
+    if (pay < need) {
+      const excess = need - pay;
+      if (who === 'p') { HU.curC -= excess; HU.cpu += excess; }
+      else { HU.curP -= excess; C.chips += excess; }
+      HU.allIn = true;
+    }
     A.bleep(need > 0 ? 600 : 440, 0.025, 'triangle', 0.025);
     afterAction(who);
   }
+  // a raise is one unit over the high bet, capped by the effective stack
+  // so the other side can always call it in full
+  function raiseTarget(who) {
+    const mine = who === 'p' ? HU.curP + C.chips : HU.curC + HU.cpu;
+    const theirs = who === 'p' ? HU.curC + HU.cpu : HU.curP + C.chips;
+    return Math.min(highBet() + unit(), mine, theirs);
+  }
   function canRaise(who) {
-    const stack = who === 'p' ? C.chips : HU.cpu;
-    const cur = who === 'p' ? HU.curP : HU.curC;
-    return HU.raises < 4 && stack >= (highBet() - cur) + unit();
+    return HU.raises < 4 && raiseTarget(who) > highBet();
   }
   function doRaise(who) {
     if (!canRaise(who)) { doCheckCall(who); return; }
-    const target = highBet() + unit();
+    const target = raiseTarget(who);
     if (who === 'p') { C.chips -= target - HU.curP; HU.curP = target; HU.actedP = true; HU.actedC = false; }
     else { HU.cpu -= target - HU.curC; HU.curC = target; HU.actedC = true; HU.actedP = false; }
     HU.raises++;
@@ -258,7 +277,12 @@
   }
   function afterAction(who) {
     saveChips();
-    if (HU.actedP && HU.actedC && HU.curP === HU.curC) { advanceStreet(); return; }
+    if (HU.actedP && HU.actedC && HU.curP === HU.curC) {
+      // someone's stack is empty: nothing left to bet, so run it out
+      if (C.chips === 0 || HU.cpu === 0) HU.allIn = true;
+      advanceStreet();
+      return;
+    }
     if (who === 'p') cpuLater(); else HU.state = 'player';
   }
   function advanceStreet() {
@@ -469,7 +493,8 @@
       const x0 = W / 2 - (4 * bw + 3 * bg) / 2;
       HU.btns.push(lcdButton('FOLD [F]', x0, byb, bw, bh2, true));
       HU.btns.push(lcdButton(facing ? 'CALL ' + (highBet() - HU.curP) + ' [C]' : 'CHECK [C]', x0 + bw + bg, byb, bw, bh2, true));
-      HU.btns.push(lcdButton((highBet() > 0 ? 'RAISE ' : 'BET ') + unit() + ' [R]', x0 + 2 * (bw + bg), byb, bw, bh2, canRaise('p')));
+      const step = canRaise('p') ? raiseTarget('p') - highBet() : unit();
+      HU.btns.push(lcdButton((highBet() > 0 ? 'RAISE ' : 'BET ') + step + ' [R]', x0 + 2 * (bw + bg), byb, bw, bh2, canRaise('p')));
       HU.btns.push(lcdButton('ALL IN [A]', x0 + 3 * (bw + bg), byb, bw, bh2, C.chips > 0));
     } else if (HU.state === 'done') {
       HU.btns.push(lcdButton('DEAL', W / 2 - bw / 2, byb, bw, bh2, true));
@@ -480,11 +505,13 @@
   function pokerClick(x, y) {
     for (const b of HU.btns) {
       if (inRect(x, y, b)) {
-        if (b.label.startsWith('FOLD')) doFold('p');
+        // buttons are from the last frame, so re-check the state
+        if (b.label === 'DEAL') { if (HU.state === 'done') newHand(); }
+        else if (HU.state !== 'player') return;
+        else if (b.label.startsWith('FOLD')) doFold('p');
         else if (b.label.startsWith('CALL') || b.label.startsWith('CHECK')) doCheckCall('p');
         else if (b.label.startsWith('RAISE') || b.label.startsWith('BET')) doRaise('p');
         else if (b.label.startsWith('ALL IN')) doAllIn('p');
-        else newHand();
         return;
       }
     }
@@ -498,6 +525,7 @@
     while (v > 21 && aces > 0) { v -= 10; aces--; }
     return v;
   }
+  const bjNatural = hand => hand.length === 2 && bjValue(hand) === 21;
   function startBlackjack() {
     comp();
     BJ.bet = 25;
@@ -509,18 +537,28 @@
     BJ.msg = '';
     BJ.canDouble = C.chips >= BJ.bet;
     A.bleep(520, 0.04, 'triangle', 0.03);
-    if (bjValue(BJ.player) === 21) {
-      if (bjValue(BJ.dealer) === 21) { BJ.msg = 'PUSH'; C.chips += BJ.bet; }
-      else { BJ.msg = 'BLACKJACK  +' + (BJ.bet * 1.5); C.chips += BJ.bet * 2.5; A.sweep(500, 60, 0.4, 'sawtooth', 0.06); }
+    // naturals settle on the deal (the dealer peeks)
+    const pN = bjNatural(BJ.player), dN = bjNatural(BJ.dealer);
+    if (pN || dN) {
+      if (pN && dN) { BJ.msg = 'PUSH'; C.chips += BJ.bet; A.bleep(400, 0.08, 'triangle', 0.03); }
+      else if (pN) {
+        const win = Math.floor(BJ.bet * 1.5); // 3:2, whole chips
+        BJ.msg = 'BLACKJACK  +' + win; C.chips += BJ.bet + win;
+        A.sweep(500, 60, 0.4, 'sawtooth', 0.06);
+      } else { BJ.msg = 'DEALER BLACKJACK'; A.bleep(200, 0.14, 'sawtooth', 0.04); }
       saveChips();
       BJ.phase = 'done';
     }
   }
   function bjResolve() {
+    if (BJ.phase !== 'play') return;
     while (bjValue(BJ.dealer) < 17) BJ.dealer.push(BJ.deck.pop());
     const p = bjValue(BJ.player), d = bjValue(BJ.dealer);
-    if (d > 21 || p > d) { BJ.msg = 'YOU WIN  +' + BJ.bet; C.chips += BJ.bet * 2; A.sweep(500, 60, 0.4, 'sawtooth', 0.06); }
-    else if (p === d) { BJ.msg = 'PUSH'; C.chips += BJ.bet; A.bleep(400, 0.08, 'triangle', 0.03); }
+    // a two-card 21 beats any drawn 21
+    const pN = bjNatural(BJ.player), dN = bjNatural(BJ.dealer);
+    const edge = pN !== dN ? (pN ? 1 : -1) : d > 21 || p > d ? 1 : p === d ? 0 : -1;
+    if (edge > 0) { BJ.msg = 'YOU WIN  +' + BJ.bet; C.chips += BJ.bet * 2; A.sweep(500, 60, 0.4, 'sawtooth', 0.06); }
+    else if (edge === 0) { BJ.msg = 'PUSH'; C.chips += BJ.bet; A.bleep(400, 0.08, 'triangle', 0.03); }
     else { BJ.msg = 'DEALER WINS'; A.bleep(200, 0.14, 'sawtooth', 0.04); }
     saveChips();
     BJ.phase = 'done';
@@ -590,7 +628,7 @@
         if (b.label.startsWith('HIT')) bjHit();
         else if (b.label.startsWith('STAND')) bjResolve();
         else if (b.label.startsWith('DOUBLE')) bjDouble();
-        else startBlackjack();
+        else if (BJ.phase === 'done') startBlackjack();
         return;
       }
     }
@@ -765,7 +803,8 @@
     launchEl.classList.remove('hidden');
     window.MODE = 'menu';
   }
-  document.getElementById('pickCards').addEventListener('click', () => {
+  document.getElementById('pickCards').addEventListener('click', e => {
+    e.currentTarget.blur(); // a focused hidden button re-clicks on Enter/Space
     window.MODE = 'cards';
     A.setStyle('openttd');
     stageEl.classList.add('freecursor');
@@ -777,11 +816,15 @@
   });
   const startFns = { poker: startPoker, blackjack: startBlackjack, solitaire: startSolitaire };
   for (const view of ['poker', 'blackjack', 'solitaire']) {
-    document.getElementById('pick' + view[0].toUpperCase() + view.slice(1)).addEventListener('click', () => {
+    document.getElementById('pick' + view[0].toUpperCase() + view.slice(1)).addEventListener('click', e => {
+      e.currentTarget.blur(); // a focused hidden button re-clicks on Enter/Space
       C.view = view;
       menuEl.classList.add('hidden');
       A.audio(); A.startMusic();
-      startFns[view]();
+      // a hand left mid-play via Esc resumes instead of forfeiting its bet
+      const live = (view === 'poker' && (HU.state === 'player' || HU.state === 'cpu')) ||
+        (view === 'blackjack' && BJ.phase === 'play' && BJ.player.length > 0);
+      if (!live) startFns[view]();
     });
   }
   addEventListener('keydown', e => {
