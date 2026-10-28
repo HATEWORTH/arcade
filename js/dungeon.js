@@ -1092,6 +1092,11 @@
     floor: 1, t: 0, shake: 0,
   };
   const keys = {};
+  // drop every held input — a keyup that lands elsewhere never reaches us
+  function releaseInput() {
+    for (const k in keys) keys[k] = false;
+    D.block = false;
+  }
   const idx = (x, y) => y * MW + x;
   // tile values: 0 wall, 1 floor, 2 closed boss door (solid)
   const solid = (x, y) => x < 0 || y < 0 || x >= MW || y >= MH || D.tiles[idx(x, y)] !== 1;
@@ -1200,8 +1205,9 @@
     st.arc = Math.min(3, st.arc + st.arcAdd);
     st.knock *= st.knockMult;
     st.blk += st.blkAdd;
-    st.bolts = 1 + st.addBolts +
-      D.relics.filter(r => r.spell === 'bolt').length - (st.spells.includes('bolt') ? 1 : 0);
+    // the first tome only teaches Firebolt (unless the class already knows it)
+    const tomes = D.relics.filter(r => r.spell === 'bolt').length;
+    st.bolts = 1 + st.addBolts + Math.max(0, tomes - (cls.spell === 'bolt' ? 0 : 1));
     D.st = st;
     D.hero.maxHp = st.maxHp;
     D.hero.hp = Math.min(D.hero.hp, st.maxHp);
@@ -1283,7 +1289,7 @@
     if (D.pendingLvls > 0) openLevelChoice();
     else {
       D.lvlChoices = null;
-      ARCADE_LOCK.lock();
+      if (D.running && !D.over && !D.paused && !D.inv) ARCADE_LOCK.lock();
     }
   }
   const activeSpell = () => {
@@ -1370,7 +1376,7 @@
       '.........',
       '.........',
       '...RRR...',
-      '...R.R...',
+      '...RRR...',
       '...RRR...',
       '.........',
       '.........',
@@ -1756,8 +1762,11 @@
     D.hotbar[1] = makeConsumable(1, 0, 'food');
     D.inv = false; D.over = false; D.block = false;
     D.poisonT = 0; D.poisonDmg = 0;
+    D.hasteT = 0; D.hurtT = 0; D.atkT = 0; D.atkAnim = 0; D.castT = 0; D.novaT = 0;
+    D.shake = 0; D.bannerT = 0; D.stairMsgT = 0; D.interact = false;
     D.lootChest = null; D.drag = null;
     D.msgs.length = 0;
+    releaseInput();
     recalc();
     D.mana = D.st.manaMax;
     generate();
@@ -1773,6 +1782,7 @@
     D.running = false;
     D.over = true;
     D.inv = false;
+    D.lvlChoices = null; D.pendingLvls = 0;
     ARCADE_LOCK.unlock();
     A.bleep(220, 0.25, 'sawtooth', 0.06);
     setTimeout(() => A.bleep(150, 0.35, 'sawtooth', 0.06), 160);
@@ -1780,12 +1790,14 @@
   function togglePause() {
     if (!D.running) return;
     D.paused = !D.paused;
+    releaseInput();
     if (D.paused) ARCADE_LOCK.unlock(); else ARCADE_LOCK.lock();
     pauseEl.classList.toggle('hidden', !D.paused);
     if (D.paused) A.suspend(); else A.resume();
   }
   function quitToMenu() {
     D.running = false; D.paused = false; D.inv = false; D.over = false;
+    releaseInput();
     stageEl.classList.remove('freecursor');
     ARCADE_LOCK.unlock();
     A.setStyle('neon');
@@ -1916,6 +1928,7 @@
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();
   });
   addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+  addEventListener('blur', releaseInput);
   addEventListener('pointermove', e => {
     if (window.MODE === 'dungeon' && !D.running && !ARCADE_LOCK.locked()) {
       D.invMx = e.clientX; D.invMy = e.clientY;
@@ -2029,7 +2042,9 @@
       return;
     }
     A.bleep(340, 0.05, 'square', 0.03);
-    for (const en of D.enemies) {
+    // snapshot: kills splice the list and splits push fresh blobs into it
+    for (const en of D.enemies.slice()) {
+      if (en.hp <= 0 || !D.enemies.includes(en)) continue;
       const dx = en.x - D.hero.x, dy = en.y - D.hero.y;
       const d = Math.hypot(dx, dy);
       if (d > D.st.range + ETYPES[en.type].r) continue;
@@ -2123,7 +2138,7 @@
     floatText(en.x, en.y - 20, 'BOOM', ex.col);
     A.sweep(500, 60, 0.35, 'sawtooth', 0.07);
     const i = D.enemies.indexOf(en);
-    if (i >= 0) { D.enemies.splice(i, 1); gainXp(Math.round(en.maxHp / 4)); }
+    if (i >= 0) { D.enemies.splice(i, 1); gainXp(Math.round(en.maxHp / 4)); checkSealCleared(en); }
   }
   // ---- bosses: each one fights its own way, and harder once bloodied -----
   function bossBrain(en, dt, dx, dy, d) {
@@ -2239,7 +2254,8 @@
       if (D.mana < 22) { say('Not enough mana', '#5aa2e8'); return; }
       D.mana -= 22;
       const R2 = 130;
-      for (const en of D.enemies) {
+      for (const en of D.enemies.slice()) {
+        if (en.hp <= 0 || !D.enemies.includes(en)) continue;
         const d = Math.hypot(en.x - D.hero.x, en.y - D.hero.y);
         if (d > R2 + ETYPES[en.type].r) continue;
         damageEnemy(en, Math.max(1, Math.round((7 + D.floor * 2) * D.st.spellMult)), false);
@@ -2325,12 +2341,15 @@
       } else if (roll < 0.10) {
         D.drops.push({ x: en.x, y: en.y, it: makeItem(pick(GEAR_KINDS), D.floor) });
       }
-      // room cleared? the doors release
-      if (D.sealedRoom && en.homeRoom === D.sealedRoom &&
-          !D.enemies.some(x => x.homeRoom === D.sealedRoom)) {
-        D.sealedRoom.cleared = true;
-        openSeal(false);
-      }
+      checkSealCleared(en);
+    }
+  }
+  // room cleared? the doors release
+  function checkSealCleared(en) {
+    if (D.sealedRoom && en.homeRoom === D.sealedRoom &&
+        !D.enemies.some(x => x.homeRoom === D.sealedRoom)) {
+      D.sealedRoom.cleared = true;
+      openSeal(false);
     }
   }
   // Shift: a short dash with full invulnerability — the Isaac-style skill out
@@ -2740,7 +2759,11 @@
           if (slot) {
             const old = D.equip[slot];
             D.equip[slot] = p.it;
-            if (old) addToBag(old);
+            // a full bag leaves the old piece on the floor, not in the void
+            if (old && D.bag.indexOf(null) < 0) {
+              D.drops.push({ x: D.hero.x, y: D.hero.y, it: old, cool: 1.4 });
+              say('Bag full — dropped ' + old.name, '#a4372e');
+            } else if (old) addToBag(old);
             recalc();
           } else if (!addToBag(p.it)) {
             p.taken = false;
@@ -2780,11 +2803,15 @@
     for (let i = D.drops.length - 1; i >= 0; i--) {
       const dr = D.drops[i];
       dr.cool = Math.max(0, (dr.cool || 0) - dt);
+      dr.fullT = Math.max(0, (dr.fullT || 0) - dt);
       if (dr.cool > 0) continue;
       if (Math.hypot(D.hero.x - dr.x, D.hero.y - dr.y) < 26) {
         if (dr.relic) {
           gainRelic(dr.relic);
           D.drops.splice(i, 1);
+        } else if (D.bag.indexOf(null) < 0) {
+          // standing on it with a full bag: say so now and then, not every frame
+          if (dr.fullT <= 0) { dr.fullT = 1.5; say('Bag full!', '#a4372e'); }
         } else if (addToBag(dr.it)) {
           say('Picked up ' + dr.it.name + ' (' + RARITIES[dr.it.ri].name + ')', RARITIES[dr.it.ri].color);
           A.bleep(640, 0.05, 'triangle', 0.035);
@@ -4155,7 +4182,7 @@
       });
       ctx.font = '600 12px ' + MONO;
       ctx.fillStyle = '#8a8f80';
-      ctx.fillText('WASD MOVES · MOUSE AIMS · LMB SWINGS · RMB BLOCKS · F CASTS · TAB BAG', W / 2, y0 + chh2 + 44);
+      ctx.fillText('WASD MOVES · MOUSE AIMS · LMB SWINGS · RMB BLOCKS · F CASTS · TAB BAG · Q MENU', W / 2, y0 + chh2 + 44);
       ctx.textAlign = 'left';
       drawPointer(D.invMx, D.invMy);
       ctx.textAlign = 'center';
@@ -4170,7 +4197,7 @@
       ctx.fillText('YOU DIED', W / 2, H / 2 - 10);
       ctx.fillStyle = '#c8cdd7';
       ctx.font = '600 14px ' + MONO;
-      ctx.fillText('floor ' + D.floor + ' · ' + D.hero.gold + ' gold · ' + D.relics.length + ' relics · Enter or click to retry', W / 2, H / 2 + 26);
+      ctx.fillText('floor ' + D.floor + ' · ' + D.hero.gold + ' gold · ' + D.relics.length + ' relics · Enter or click to retry · Q menu', W / 2, H / 2 + 26);
     }
     ctx.textAlign = 'left';
     ctx.globalAlpha = 1;
