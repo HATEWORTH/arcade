@@ -201,8 +201,11 @@
     scoreLineEl.innerHTML = 'Score ' + T.score + ' &middot; ' + T.lines + ' lines &middot; level ' + T.level;
     A.bleep(220, 0.25, 'sawtooth', 0.06);
     setTimeout(() => A.bleep(150, 0.35, 'sawtooth', 0.06), 160);
-    setTimeout(() => endEl.classList.remove('hidden'), 500);
+    // cancelled by start()/quitToMenu(): a click or Q inside this half
+    // second must not leave GAME OVER over the next run or the menu
+    endTimer = setTimeout(() => endEl.classList.remove('hidden'), 500);
   }
+  let endTimer = 0;
 
   // set up a fresh board without starting play — shown frozen after picking
   function prime() {
@@ -215,6 +218,7 @@
     spawn();
   }
   function start() {
+    clearTimeout(endTimer);
     prime();
     T.running = true;
     ARCADE_LOCK.lock();
@@ -243,6 +247,7 @@
     start();
   });
   function quitToMenu() {
+    clearTimeout(endTimer);
     T.running = false; T.paused = false;
     ARCADE_LOCK.unlock();
     A.setStyle('neon');
@@ -259,6 +264,7 @@
     A.setStyle('medieval');
     launchEl.classList.add('hidden');
     endEl.classList.add('hidden');
+    startEl.classList.remove('hidden');
     prime();
   });
   addEventListener('pointerdown', () => {
@@ -270,7 +276,10 @@
     if (window.MODE !== 'tetris') return;
     if (e.key === 'Escape') { togglePause(); return; }
     if ((e.key === 'q' || e.key === 'Q') && (T.paused || !T.running)) { quitToMenu(); return; }
+    if (e.key === 'Enter' && !T.running && !T.paused) { start(); return; }
     if (!T.running || T.paused) return;
+    // held keys still slide, but a held drop or spin must not machine-gun
+    if (e.repeat && (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'x' || e.key === 'X' || e.key === 'z' || e.key === 'Z')) { e.preventDefault(); return; }
     if (e.key === 'ArrowLeft') move(-1);
     else if (e.key === 'ArrowRight') move(1);
     else if (e.key === 'ArrowUp' || e.key === 'x' || e.key === 'X') rotate(1);
@@ -284,10 +293,12 @@
   function tick(dt) {
     const interval = Math.max(0.07, 0.8 - (T.level - 1) * 0.07);
     T.dropT += dt * (T.soft ? 10 : 1);
-    if (T.soft) T.score += Math.floor(dt * 10) > 0 ? 1 : 0;
     while (T.dropT >= interval) {
       T.dropT -= interval;
-      if (!collides(T.cur.m, T.cur.x, T.cur.y + 1)) { stampHeat(T.cur.m, T.cur.x, T.cur.y, 0.5); T.cur.y++; }
+      if (!collides(T.cur.m, T.cur.x, T.cur.y + 1)) {
+        stampHeat(T.cur.m, T.cur.x, T.cur.y, 0.5); T.cur.y++;
+        if (T.soft) T.score += 1; // a point per row soft-dropped
+      }
       else { lock(); break; }
     }
   }

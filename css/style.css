@@ -234,7 +234,12 @@
     background: radial-gradient(ellipse at center, rgba(5,5,7,.25) 0%, rgba(5,5,7,.82) 78%);
     transition: opacity .45s ease;
   }
-  .overlay.hidden { opacity: 0; pointer-events: none; }
+  /* visibility too, after the fade: an overlay that is only transparent keeps
+     its buttons focusable, and Enter/Space would re-click a game you left */
+  .overlay.hidden {
+    opacity: 0; pointer-events: none; visibility: hidden;
+    transition: opacity .45s ease, visibility 0s linear .45s;
+  }
 
   .title {
     font-size: clamp(2.4rem, 9vw, 5.6rem);
@@ -304,6 +309,9 @@
   }
   .overlay.strategy .title em { color: #e0459b; text-shadow: none; }
   .overlay.strategy .sub { color: #8f8f9a; }
+  /* pong's rules run long; a wider, tighter block keeps them off the ball */
+  #startOverlay .sub { max-width: min(68ch, 92vw); letter-spacing: .22em; line-height: 1.9; }
+  #startOverlay { background: radial-gradient(ellipse at center, rgba(5,5,7,.78) 0%, rgba(5,5,7,.9) 78%); }
   .overlay.strategy .prompt {
     color: #ececf1;
     text-shadow: none;

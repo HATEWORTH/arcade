@@ -18,6 +18,13 @@ window.ARCADE_SETTINGS = (() => {
     particles: 1,   // 0.25 .. 1.5
     glow: 1,        // 0 or 1 — the expensive one on weak machines
   };
+  // the slider ranges, enforced on load too so a hand-edited or stale save
+  // can't hand a game a 500x sensitivity or a negative volume
+  const RANGE = {
+    sens: [0.25, 3], music: [0, 1], sfx: [0, 1],
+    shake: [0, 1.5], particles: [0.25, 1.5], glow: [0, 1],
+  };
+  const clamp = (k, n) => Math.min(RANGE[k][1], Math.max(RANGE[k][0], n));
 
   let values = Object.assign({}, DEFAULTS);
   try {
@@ -25,7 +32,7 @@ window.ARCADE_SETTINGS = (() => {
     if (raw) {
       const saved = JSON.parse(raw);
       for (const k in DEFAULTS) {
-        if (typeof saved[k] === 'number' && isFinite(saved[k])) values[k] = saved[k];
+        if (typeof saved[k] === 'number' && isFinite(saved[k])) values[k] = clamp(k, saved[k]);
       }
     }
   } catch (e) { /* private mode, corrupt json — defaults are fine */ }
@@ -44,10 +51,10 @@ window.ARCADE_SETTINGS = (() => {
     if (!(k in DEFAULTS)) return;
     const n = Number(v);
     if (!isFinite(n)) return;
-    values[k] = n;
+    values[k] = clamp(k, n);
     save();
     for (const fn of listeners) {
-      try { fn(k, n); } catch (e) { console.error('settings listener failed', e); }
+      try { fn(k, values[k]); } catch (e) { console.error('settings listener failed', e); }
     }
   }
 
@@ -147,12 +154,17 @@ addEventListener('DOMContentLoaded', () => {
     S.reset();
     paint();
   });
-  // Esc backs out to the pause menu instead of unpausing, and clicks inside
-  // the panel are the panel's business — the games listen on window for
-  // "click to start" and "click resumes"
+  // While open the panel owns the keyboard: Esc backs out to the pause menu
+  // instead of unpausing, and nothing else reaches the games — a Q here used
+  // to quit underneath the panel, and closing it then put the pause menu
+  // back over the launch screen with no game left to answer its buttons.
+  // Clicks inside the panel are likewise the panel's business — the games
+  // listen on window for "click to start" and "click resumes". Swallowing
+  // propagation leaves the sliders' own arrow-key default actions intact.
   addEventListener('keydown', e => {
-    if (isOpen && e.key === 'Escape') {
-      e.stopPropagation();
+    if (!isOpen) return;
+    e.stopPropagation();
+    if (e.key === 'Escape') {
       e.preventDefault();
       hide();
     }

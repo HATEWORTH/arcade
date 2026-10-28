@@ -106,6 +106,7 @@
       A.bleep(1200 + S.level * 60, 0.06, 'square', 0.05);
       setTimeout(() => A.bleep(1600 + S.level * 60, 0.05, 'square', 0.04), 45);
       spawnFood();
+      if (!S.food) { die(true); return; } // nowhere left to put a signal
     } else {
       const tail = S.body.pop();
       heat[tail.y][tail.x] = Math.max(heat[tail.y][tail.x], 0.5);
@@ -113,8 +114,11 @@
     }
   }
 
-  function die() {
+  function die(won) {
     S.running = false;
+    verdictEl.textContent = won ? 'BOARD CLEARED' : 'SIGNAL LOST';
+    verdictEl.classList.toggle('lose', !won);
+    verdictEl.classList.toggle('win', !!won);
     ARCADE_LOCK.unlock();
     const { cell, bx, by } = cellPx();
     // the whole body shatters
@@ -126,8 +130,11 @@
     scoreLineEl.innerHTML = 'Score ' + S.score + ' &middot; length ' + S.body.length + ' &middot; level ' + S.level;
     A.bleep(220, 0.25, 'sawtooth', 0.06);
     setTimeout(() => A.bleep(150, 0.35, 'sawtooth', 0.06), 160);
-    setTimeout(() => endEl.classList.remove('hidden'), 500);
+    // cancelled by start()/quitToMenu(), like Tetris's
+    endTimer = setTimeout(() => endEl.classList.remove('hidden'), 500);
   }
+  let endTimer = 0;
+  const verdictEl = endEl.querySelector('.verdict');
 
   // set up a fresh run without starting it — shown frozen after picking
   function prime() {
@@ -144,6 +151,7 @@
     spawnFood();
   }
   function start() {
+    clearTimeout(endTimer);
     prime();
     S.running = true;
     ARCADE_LOCK.lock();
@@ -172,6 +180,7 @@
     start();
   });
   function quitToMenu() {
+    clearTimeout(endTimer);
     S.running = false; S.paused = false;
     ARCADE_LOCK.unlock();
     A.setStyle('neon');
@@ -188,6 +197,7 @@
     A.setStyle('snake');
     launchEl.classList.add('hidden');
     endEl.classList.add('hidden');
+    startEl.classList.remove('hidden');
     prime();
   });
   addEventListener('pointerdown', () => {
@@ -416,7 +426,7 @@
     {
       const mini = 12;
       ctx.globalAlpha = 0.6 + 0.25 * Math.sin(t * 4);
-      ctx.fillStyle = PINK;
+      ctx.fillStyle = S.foodColor;
       ctx.fillRect(bx + bw - mini, fy + 24, mini, mini);
     }
 

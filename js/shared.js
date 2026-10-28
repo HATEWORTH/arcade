@@ -101,6 +101,13 @@ addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('pointerdown', e => e.stopPropagation());
     btn.addEventListener('click', () => dispatchEvent(new CustomEvent(evt)));
   }
+  // a menu button that keeps focus after its overlay hides turns the next
+  // Enter or Space into a second click on it — dealing twice, or restarting
+  // the game you just picked
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('.overlay button');
+    if (b) b.blur();
+  });
 });
 
 // ---- shared screen fill -------------------------------------------------
